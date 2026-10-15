@@ -34,14 +34,14 @@ function healthIssues(h) {
 }
 
 function statusLine(j) {
-  const n = j.candidates?.length || 0;
-  const approved = j.candidates?.filter((c) => c.status === "approved").length || 0;
+  const n = j.candidateCount ?? j.candidates?.length ?? 0;
+  const approved = j.approvedCount ?? j.candidates?.filter((c) => c.status === "approved").length ?? 0;
   const rendered = j.candidates?.filter((c) => c.render?.status === "done").length || 0;
   switch (j.stage) {
     case "ready":
-      return approved ? `${approved} approved of ${n}` : `Ready to review, ${plural(n, "clip")}`;
+      return approved ? `${approved} approved of ${n}` : n ? `Ready to review, ${plural(n, "clip")}` : "Ready to review";
     case "done":
-      return `Rendered ${plural(rendered, "clip")}`;
+      return rendered ? `Rendered ${plural(rendered, "clip")}` : approved ? `Rendered ${plural(approved, "clip")}` : "Rendered";
     case "rendering":
       return "Rendering";
     case "error":

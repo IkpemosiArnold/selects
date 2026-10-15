@@ -56,7 +56,7 @@ export default function ModelControl({ models, value, onChange, duration }) {
           ))}
         </div>
       </div>
-      {sorted.length <= 5 && (
+      {sorted.length <= 3 && (
         <div className="mc-names mono" aria-hidden="true">
           {sorted.map((s, i) => (
             <button

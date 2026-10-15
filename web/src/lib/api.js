@@ -7,7 +7,7 @@ async function j(res) {
     let msg = `${res.status} ${res.statusText}`;
     try {
       const body = await res.json();
-      msg = body.message || body.error || msg;
+      msg = [body.message || body.error || msg, body.hint].filter(Boolean).join(" ");
     } catch {}
     const err = new Error(msg);
     err.status = res.status;
@@ -16,7 +16,7 @@ async function j(res) {
   return res.status === 204 || res.status === 202 ? null : res.json();
 }
 
-const EVENTS = ["stage", "progress", "words", "candidates", "render", "error"];
+const EVENTS = ["job", "stage", "progress", "words", "candidates", "render", "error"];
 
 function createHttpApi() {
   const get = (p) => fetch(p).then(j);

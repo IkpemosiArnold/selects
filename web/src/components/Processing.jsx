@@ -108,7 +108,7 @@ export default function Processing({ job, words, onResume }) {
   const active = job.stage === "transcribing" && !isErr;
 
   // Honest numbers: prefer what the server measured; otherwise derive them.
-  let rtfText = tr.note;
+  let rtfText = tr.note || (tr.speed ? `transcribing at ${tr.speed}x real time` : null);
   let eta = tr.etaSec;
   if (!rtfText && tr.startedAt && reached > 0) {
     const elapsed = (Date.now() - Date.parse(tr.startedAt)) / 1000;

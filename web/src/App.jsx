@@ -138,14 +138,28 @@ function JobView({ jobId, view }) {
     })();
     const off = api.events(jobId, (type, data) => {
       if (!alive) return;
-      if (type === "words" && Array.isArray(data)) {
+      if (type === "job" && data?.id) {
+        setJob(data);
+      } else if (type === "words" && Array.isArray(data)) {
         setWords((w) => w.concat(data));
       } else if (type === "progress" && data) {
-        const key = STAGE_KEY[data.stage] || data.stage;
-        setJob((j) => (j ? { ...j, stages: { ...j.stages, [key]: { ...j.stages[key], ...data, stage: undefined } } } : j));
+        // Core sends { name: "transcribe", ...StageState, speed }; the mock sends { stage }.
+        const key = data.name || STAGE_KEY[data.stage] || data.stage;
+        if (!key) return;
+        const { name, stage, ...state } = data;
+        setJob((j) => (j ? { ...j, stages: { ...j.stages, [key]: { ...j.stages?.[key], ...state } } } : j));
       } else if (type === "stage" && data) {
         if (data.id && data.stages) setJob(data);
-        else setJob((j) => (j ? { ...j, ...data } : j));
+        else
+          setJob((j) => {
+            if (!j) return j;
+            const next = { ...j };
+            if (data.stage) next.stage = data.stage;
+            if (data.stages) next.stages = data.stages;
+            if (data.name && data.state) next.stages = { ...j.stages, [data.name]: data.state };
+            if ("error" in data) next.error = data.error;
+            return next;
+          });
         if (data.stage === "ready" || data.stage === "done") refetch();
       } else if (type === "candidates") {
         refetch();
@@ -200,7 +214,10 @@ function JobView({ jobId, view }) {
 
   const processing = ["queued", "probing", "transcribing", "candidates", "judging"].includes(job.stage) ||
     (job.stage === "error" && job.error?.stage !== "render" && !job.candidates?.length);
-  if (processing) return <Processing job={job} words={words} onResume={async () => setJob(await api.resume(jobId))} />;
+  if (processing) return <Processing job={job} words={words} onResume={async () => {
+    await api.resume(jobId);
+    await refetch();
+  }} />;
 
   const renderView = view === "render" || (job.stage === "rendering" && view !== "review");
   if (renderView || (job.stage === "done" && view !== "review")) {

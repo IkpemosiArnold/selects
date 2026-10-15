@@ -100,7 +100,13 @@ export default function Detail({ job, candidate, total, words, sentences, player
       <div className="detail-head">
         <p className="dh-meta mono">
           <span className="dh-rank">
-            {c.rank ?? "?"}<span className="dim"> of {total}</span>
+            {c.rank != null ? (
+              <>
+                {c.rank}<span className="dim"> of {total}</span>
+              </>
+            ) : (
+              <span className="dim">Not ranked</span>
+            )}
           </span>
           <span>
             {tc(c.start)} <span className="dim">to</span> {tc(c.end)}
@@ -126,11 +132,15 @@ export default function Detail({ job, candidate, total, words, sentences, player
         <p>{c.hook || c.text?.slice(0, 120)}</p>
       </blockquote>
 
-      <dl className="scores" aria-label="Rubric scores from the model">
-        {RUBRIC.map(([k, label]) => (
-          <Score key={k} label={label} value={c.scores?.[k]} />
-        ))}
-      </dl>
+      {RUBRIC.some(([k]) => c.scores?.[k] != null) ? (
+        <dl className="scores" aria-label="Rubric scores from the model">
+          {RUBRIC.map(([k, label]) => (
+            <Score key={k} label={label} value={c.scores?.[k]} />
+          ))}
+        </dl>
+      ) : (
+        <p className="dim">Not scored yet. The model has not judged this moment.</p>
+      )}
 
       <div className="reason">
         <p className="reason-by mono">Why {job.settings?.model || "the model"} picked it</p>
