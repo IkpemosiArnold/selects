@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.selects/
+jobs/
+media/
+eval/media/
+eval/cache/
+*.wav
+*.mp4
+*.mov
+*.webm
+*.mkv
+cookies*.txt
+.env
+.DS_Store
