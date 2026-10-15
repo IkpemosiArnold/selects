@@ -4,12 +4,19 @@
   "description": "Pull the best clips from a long video on your own laptop. Local whisper.cpp + Gemma via Ollama. Nothing leaves your machine.",
   "type": "module",
   "license": "MIT",
-  "bin": { "selects": "bin/selects.mjs" },
-  "engines": { "node": ">=20" },
+  "bin": {
+    "selects": "bin/selects.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "selects": "node bin/selects.mjs",
     "serve": "node src/server/server.mjs",
     "test": "node --test src/**/*.test.mjs eval/*.test.mjs",
     "eval": "node eval/run-eval.mjs"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.11"
   }
 }
