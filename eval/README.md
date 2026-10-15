@@ -1,0 +1,53 @@
+# Selects eval
+
+Question: can a free open model on a 2017 laptop pick clips as well as humans do?
+
+This folder measures that. Every method picks its top 5 clips (20 to 60 s) from the **same candidate windows** (built by `src/core/candidates.mjs` from whisper sentence boundaries), and the picks are compared with moments people chose.
+
+## Ground truth
+
+1. **YouTube Most Replayed (proxy, primary).** YouTube publishes a replay heatmap for popular videos: about 100 equal segments, each with a relative intensity from 0 to 1. `eval/heatmap.mjs` turns it into labels:
+   1. Drop segments in the first and last 3% of the video (at least 30 s). The start is inflated by everyone pressing play, and the end by end screens.
+   2. Threshold = the 75th percentile of the remaining values. A peak is a local maximum at or above it.
+   3. Grow each peak over neighbouring segments that stay at or above half its height above the median (full width at half maximum), then clamp to 20 to 60 s around the peak segment.
+   4. Keep the highest peaks first, skipping any that overlap a kept one, up to 5 per video.
+
+   This is a proxy for "what viewers rewatch or seek to". It is not the same as "what makes a good short", and it is only accurate to one segment (about 9 to 27 s for these videos).
+2. **Human picks.** `node eval/label.mjs` opens a local page where Arnold marks his own best 5 moments per video (keys: Space, J, L, I, O, A). Labels are saved into the manifest with `source: "human"`. Label blind: do not look at the heatmap or the model's picks first.
+
+## Dataset
+
+`eval/datasets/manifest.json` lists each video's URL, licence, licence URL, the evidence for the licence (the `license` field of yt-dlp's info JSON), and its labels. Only videos marked **Creative Commons Attribution** on YouTube (CC BY 3.0) with a heatmap and a length of 15 to 45 minutes are included. Trimmed info JSON (title, licence, heatmap) is kept in `eval/datasets/info/`. Audio is downloaded at the lowest available bitrate into `eval/media/` (gitignored).
+
+```
+node eval/fetch-datasets.mjs fetch <youtube ids...>   # info + audio in one yt-dlp call (needs Chrome cookies)
+node eval/fetch-datasets.mjs build                    # rebuild the manifest from cached info
+node eval/fetch-datasets.mjs video <id>               # 720p video for the demo
+```
+
+## Methods
+
+- `random`: random scores on the same candidates, averaged over 200 seeds, so it reports the chance level.
+- `energy`: no LLM. Mean loudness, loudness variation and words per second per window (z-scored and averaged), the signals cheap clippers use.
+- `judge:<model>`: `src/core/judge.mjs` scores each window with a local Ollama model on the rubric in `src/core/prompts/judge.md`, then `src/core/rank.mjs` picks the top 5 with overlap suppression.
+- `best possible from candidate pool`: the ceiling. If no candidate window overlaps a label at IoU 0.5, no picker can hit it.
+
+## Metrics (`eval/metrics.mjs`)
+
+- Temporal IoU = overlap / union of two windows.
+- hit@k: 1 if any of the top k picks has IoU 0.5 or more with any label, per video, then averaged.
+- precision@5: share of the top 5 picks that hit a label. recall@5: share of labels found by the top 5.
+- mean best IoU: for each of the top 5 picks, its best IoU with any label, averaged. Less brittle than the 0.5 cut-off.
+- 95% confidence intervals: percentile bootstrap over videos (2,000 resamples), shown only when n is 3 or more. Paired bootstrap for "judge minus baseline" on the same videos.
+- Wall time per stage per video (transcribe, judge per model) is recorded on first run and kept in the cache.
+
+## Running
+
+```
+node eval/run-eval.mjs                 # all videos, all installed judge models
+node eval/run-eval.mjs --limit 4       # the 4 shortest videos
+node eval/run-eval.mjs --report        # rebuild results from caches only
+node --test eval/*.test.mjs
+```
+
+Heavy steps take `.selects/heavy.lock` (shared with the other builders) and wait while someone else holds it. Outputs: `eval/results/results.json`, `eval/results/RESULTS.md`, and `eval/results/curves/<id>.json` (interest curve per method, heatmap and labels, for the chart).
