@@ -1,0 +1,143 @@
+// HTTP API against a job built with mocked whisper and judge.
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import http from "node:http";
+import os from "node:os";
+import path from "node:path";
+import { after, before, test } from "node:test";
+import { talk } from "../core/test/fixtures.mjs";
+
+const home = fs.mkdtempSync(path.join(os.tmpdir(), "selects-server-"));
+process.env.SELECTS_HOME = home;
+process.env.SELECTS_OLLAMA_URL = "http://127.0.0.1:9"; // nothing listens there: health reports ollama false fast
+const { createJob, runJob } = await import("../core/job.mjs");
+const { startServer } = await import("./server.mjs");
+
+const WORDS = talk(100);
+const video = path.join(home, "talk.mp4");
+let server;
+let base;
+let job;
+
+function req(method, p, { body, headers = {} } = {}) {
+  return new Promise((resolve, reject) => {
+    const r = http.request(base + p, { method, headers: { ...(body ? { "content-type": "application/json" } : {}), ...headers } }, (res) => {
+      const chunks = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("end", () => {
+        const text = Buffer.concat(chunks).toString("utf8");
+        let json = null;
+        try {
+          json = JSON.parse(text);
+        } catch {}
+        resolve({ status: res.statusCode, headers: res.headers, text, json });
+      });
+    });
+    r.on("error", reject);
+    if (body) r.write(JSON.stringify(body));
+    r.end();
+  });
+}
+
+before(async () => {
+  fs.writeFileSync(video, Buffer.from("0123456789".repeat(100)));
+  job = createJob(video, { model: "mock", k: 3 });
+  job = await runJob(job.id, {
+    deps: {
+      probe: async (p) => ({ path: p, name: "talk.mp4", duration: WORDS[WORDS.length - 1].e + 1, width: 1920, height: 1080, fps: 25 }),
+      thumbs: async () => null,
+      transcribe: async () => WORDS,
+      judge: async (cs) => cs.map((c, i) => ({ ...c, scores: { hook: 4, standalone: 4, payoff: 3, clarity: 3 }, total: 0.7 - i * 0.01, reason: "Fine." })),
+    },
+  });
+  server = await startServer({ port: 0, quiet: true });
+  base = `http://127.0.0.1:${server.address().port}`;
+});
+after(() => {
+  server?.close();
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
+test("health reports whisper, ollama, models and disk", async () => {
+  const r = await req("GET", "/api/health");
+  assert.equal(r.status, 200);
+  for (const k of ["ok", "whisper", "ollama", "models", "diskFreeGb"]) assert.ok(k in r.json, k);
+  assert.equal(r.json.ollama, false);
+});
+
+test("lists and gets jobs; words; 404 for unknown", async () => {
+  const list = await req("GET", "/api/jobs");
+  assert.equal(list.json[0].id, job.id);
+  const one = await req("GET", `/api/jobs/${job.id}`);
+  assert.equal(one.json.stage, "ready");
+  assert.equal(one.json.candidates.length, 3);
+  const words = await req("GET", `/api/jobs/${job.id}/words`);
+  assert.equal(words.json.length, WORDS.length);
+  assert.equal((await req("GET", "/api/jobs/j_nope")).status, 404);
+  assert.equal((await req("GET", "/api/nothing")).status, 404);
+});
+
+test("PATCH approves and snaps a trim", async () => {
+  const c = job.candidates[0];
+  const r = await req("PATCH", `/api/jobs/${job.id}/candidates/${c.id}`, { body: { status: "approved", end: c.end - 2.2 } });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.status, "approved");
+  assert.equal(r.json.trimmed, true);
+  assert.ok(WORDS.some((w) => w.e === r.json.end), "end snapped to a word end");
+  const bad = await req("PATCH", `/api/jobs/${job.id}/candidates/${c.id}`, { body: { status: "maybe" } });
+  assert.equal(bad.status, 400);
+});
+
+test("POST /api/jobs rejects a missing file with a message and hint", async () => {
+  const r = await req("POST", "/api/jobs", { body: { path: path.join(home, "missing.mp4") } });
+  assert.equal(r.status, 400);
+  assert.match(r.json.error, /No file/);
+  assert.ok(r.json.hint);
+});
+
+test("render needs an approved clip", async () => {
+  const fresh = await req("POST", `/api/jobs/${job.id}/render`, { body: { ids: [] } });
+  assert.equal(fresh.status, 400);
+});
+
+test("media supports Range requests", async () => {
+  const full = await req("GET", `/media/${job.id}/source`);
+  assert.equal(full.status, 200);
+  assert.equal(full.headers["accept-ranges"], "bytes");
+  assert.equal(full.text.length, 1000);
+  const part = await req("GET", `/media/${job.id}/source`, { headers: { range: "bytes=10-19" } });
+  assert.equal(part.status, 206);
+  assert.equal(part.headers["content-range"], "bytes 10-19/1000");
+  assert.equal(part.text, "0123456789");
+  const tail = await req("GET", `/media/${job.id}/source`, { headers: { range: "bytes=-5" } });
+  assert.equal(tail.text, "56789");
+  const bad = await req("GET", `/media/${job.id}/source`, { headers: { range: "bytes=5000-" } });
+  assert.equal(bad.status, 416);
+});
+
+test("SSE sends the job first", async () => {
+  const text = await new Promise((resolve, reject) => {
+    const r = http.get(`${base}/api/jobs/${job.id}/events`, (res) => {
+      assert.equal(res.headers["content-type"], "text/event-stream; charset=utf-8");
+      let buf = "";
+      res.on("data", (c) => {
+        buf += c;
+        if (buf.includes("event: job")) {
+          r.destroy();
+          resolve(buf);
+        }
+      });
+    });
+    r.on("error", (e) => (e.code === "ECONNRESET" ? null : reject(e)));
+  });
+  assert.match(text, /event: job\ndata: \{/);
+});
+
+test("cross-site writes are refused, local origins allowed", async () => {
+  const c = job.candidates[1];
+  const evil = await req("PATCH", `/api/jobs/${job.id}/candidates/${c.id}`, { body: { status: "skipped" }, headers: { origin: "https://evil.example" } });
+  assert.equal(evil.status, 403);
+  const ok = await req("PATCH", `/api/jobs/${job.id}/candidates/${c.id}`, { body: { status: "skipped" }, headers: { origin: "http://localhost:5173" } });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.headers["access-control-allow-origin"], "http://localhost:5173");
+});

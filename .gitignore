@@ -13,3 +13,4 @@ eval/cache/
 cookies*.txt
 .env
 .DS_Store
+selects-out/
