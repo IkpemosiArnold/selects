@@ -1,0 +1,92 @@
+/* Two hands on one light table: blue is what the model proposed, yellow is
+   what the person did, red is only for what they cut. */
+:root {
+  --table: #e8edeb;
+  --stock: #1d2126;
+  --ink: #1d2126;
+  /* DESIGN.md's edge grey #7D878D is 3.1:1 on the table, too faint for text.
+     It stays for ticks and rules; text uses a darker edge grey (5.7:1). */
+  --ink-2: #4f5a60;
+  --edge: #7d878d;
+  --panel: #f4f7f6;
+  --panel-2: #dde4e1;
+  --line: rgba(29, 33, 38, 0.13);
+  --line-2: rgba(29, 33, 38, 0.26);
+  --blue: #2f5fd0;
+  --blue-ink: #2a55bd;
+  --blue-wash: rgba(47, 95, 208, 0.1);
+  --blue-wash-2: rgba(47, 95, 208, 0.18);
+  --yellow: #f2be22;
+  --yellow-wash: rgba(242, 190, 34, 0.28);
+  --on-yellow: #1d2126;
+  --red: #c8402f;
+  --red-ink: #a8352a;
+  --film: #1d2126;
+  --film-perf: #e8edeb;
+  --film-print: #a9b2b7;
+  --surround: #1d2126;
+  --focus: #2f5fd0;
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 1px 2px rgba(29, 33, 38, 0.08);
+
+  --mono: "Paper Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --sans: "Atkinson Hyperlegible Next", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --t-13: 0.8125rem;
+  --t-15: 0.9375rem;
+  --t-18: 1.125rem;
+  --t-24: 1.5rem;
+  --t-40: 2.5rem;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --gutter: clamp(16px, 2.4vw, 32px);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --table: #1d2126;
+    --ink: #e8edeb;
+    --ink-2: #a3adb2;
+    --edge: #7d878d;
+    --panel: #252a30;
+    --panel-2: #2e343b;
+    --line: rgba(232, 237, 235, 0.11);
+    --line-2: rgba(232, 237, 235, 0.24);
+    --blue: #6e95f0;
+    --blue-ink: #86a7f3;
+    --blue-wash: rgba(110, 149, 240, 0.12);
+    --blue-wash-2: rgba(110, 149, 240, 0.22);
+    --yellow-wash: rgba(242, 190, 34, 0.2);
+    --red-ink: #e47a69;
+    --film: #121518;
+    --film-perf: #2b3137;
+    --film-print: #959fa5;
+    --surround: #121518;
+    --focus: #86a7f3;
+    --shadow: none;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --table: #1d2126;
+  --ink: #e8edeb;
+  --ink-2: #a3adb2;
+  --edge: #7d878d;
+  --panel: #252a30;
+  --panel-2: #2e343b;
+  --line: rgba(232, 237, 235, 0.11);
+  --line-2: rgba(232, 237, 235, 0.24);
+  --blue: #6e95f0;
+  --blue-ink: #86a7f3;
+  --blue-wash: rgba(110, 149, 240, 0.12);
+  --blue-wash-2: rgba(110, 149, 240, 0.22);
+  --yellow-wash: rgba(242, 190, 34, 0.2);
+  --red-ink: #e47a69;
+  --film: #121518;
+  --film-perf: #2b3137;
+  --film-print: #959fa5;
+  --surround: #121518;
+  --focus: #86a7f3;
+  --shadow: none;
+  color-scheme: dark;
+}
