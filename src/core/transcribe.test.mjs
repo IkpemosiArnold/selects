@@ -52,3 +52,34 @@ test("wordsFromWhisperJson averages token probabilities", () => {
     { w: "there.", s: 0.3, e: 0.7, p: 0.8 },
   ]);
 });
+
+test("loudnessFromWav gives one dBFS value per half second", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const { loudnessFromWav } = await import("./transcribe.mjs");
+  const rate = 16000;
+  const n = rate * 2; // 1 s silence-ish, 1 s loud
+  const data = Buffer.alloc(n * 2);
+  for (let i = 0; i < n; i++) data.writeInt16LE(i < rate ? 0 : Math.round(Math.sin(i / 5) * 16000), i * 2);
+  const head = Buffer.alloc(44);
+  head.write("RIFF", 0);
+  head.writeUInt32LE(36 + data.length, 4);
+  head.write("WAVEfmt ", 8);
+  head.writeUInt32LE(16, 16);
+  head.writeUInt16LE(1, 20);
+  head.writeUInt16LE(1, 22);
+  head.writeUInt32LE(rate, 24);
+  head.writeUInt32LE(rate * 2, 28);
+  head.writeUInt16LE(2, 32);
+  head.writeUInt16LE(16, 34);
+  head.write("data", 36);
+  head.writeUInt32LE(data.length, 40);
+  const f = path.join(os.tmpdir(), `selects-loud-${process.pid}.wav`);
+  fs.writeFileSync(f, Buffer.concat([head, data]));
+  const l = loudnessFromWav(f);
+  fs.rmSync(f);
+  assert.equal(l.step, 0.5);
+  assert.equal(l.db.length, 4);
+  assert.ok(l.db[0] < -100 && l.db[3] > -10, JSON.stringify(l.db));
+});

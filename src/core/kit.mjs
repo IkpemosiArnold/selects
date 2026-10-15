@@ -39,7 +39,7 @@ export async function postingKit(candidate, { model, request, signal } = {}) {
     { role: "system", content: system },
     { role: "user", content: user },
   ];
-  const ask = request || ((m) => ollamaJson({ model, messages: m, schema: SCHEMA, numPredict: 200, signal }));
+  const ask = request || ((m) => ollamaJson({ model, messages: m, schema: SCHEMA, numPredict: 120, signal }));
   const res = await ask(messages);
   const d = res.data ?? res;
   const tags = (Array.isArray(d.hashtags) ? d.hashtags : [])
