@@ -106,6 +106,18 @@ export function callStats(j, wallSec) {
 }
 
 /**
+ * Ollama's num_thread. SELECTS_THREADS overrides; "auto" (or 0) leaves it to Ollama.
+ * The default is set from an A/B measured on this machine (see notes/timings.md).
+ */
+export const DEFAULT_THREADS = null;
+export function threadOption() {
+  const env = process.env.SELECTS_THREADS;
+  if (env === "auto" || env === "0") return {};
+  const n = env ? Number(env) : DEFAULT_THREADS;
+  return Number.isInteger(n) && n > 0 ? { num_thread: n } : {};
+}
+
+/**
  * Low-level: one structured chat request to Ollama. Returns { data, stats }.
  * Options follow the measured budget: short output (num_predict 80), a 2048 context,
  * the model kept loaded for 30 minutes between calls, and temperature 0.2.
@@ -117,7 +129,7 @@ export async function ollamaJson({ model, messages, schema, timeoutMs = 60 * 60 
     format: schema,
     stream: false,
     keep_alive: "30m",
-    options: { temperature: 0.2, num_ctx: 2048, num_predict: numPredict },
+    options: { temperature: 0.2, num_ctx: 2048, num_predict: numPredict, ...threadOption() },
   };
   const t0 = Date.now();
   let res;
