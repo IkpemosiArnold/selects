@@ -141,3 +141,11 @@ test("cross-site writes are refused, local origins allowed", async () => {
   assert.equal(ok.status, 200);
   assert.equal(ok.headers["access-control-allow-origin"], "http://localhost:5173");
 });
+
+test("locate finds a dropped file by name and size", async () => {
+  process.chdir(home);
+  const r = await req("GET", `/api/locate?name=talk.mp4&size=1000`);
+  assert.equal(r.status, 200);
+  assert.equal(fs.realpathSync(r.json.path), fs.realpathSync(video));
+  assert.equal((await req("GET", `/api/locate?name=talk.mp4&size=7`)).status, 404);
+});

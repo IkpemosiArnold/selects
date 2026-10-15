@@ -2,6 +2,7 @@
 // Standard library only. Binds to 127.0.0.1: nothing here is meant to leave the laptop.
 import fs from "node:fs";
 import http from "node:http";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { REPO, ollamaModels, ollamaUrl, selectsHome, whisperBin, whisperModel } from "../core/config.mjs";
@@ -162,6 +163,48 @@ async function models() {
   return (await ollamaModels()).map((m) => ({ ...m, measuredSecPerCandidate: speeds[m.name]?.secPerCandidate ?? null }));
 }
 
+/**
+ * Find a dropped file by name and exact size in the usual places (browsers hide the folder
+ * of a dropped file). Bounded: a few folders, four levels deep, at most 8,000 entries each.
+ */
+async function locate(name, size) {
+  const home = os.homedir();
+  const roots = [path.join(selectsHome(), "media"), process.cwd(), path.join(home, "Movies"), path.join(home, "Downloads"), path.join(home, "Desktop"), path.join(home, "Documents")];
+  let visited = 0;
+  const seen = new Set();
+  async function walk(dir, depth) {
+    if (depth > 4 || visited > 8000 || seen.has(dir)) return null;
+    seen.add(dir);
+    let entries;
+    try {
+      entries = await fs.promises.readdir(dir, { withFileTypes: true });
+    } catch {
+      return null;
+    }
+    for (const e of entries) {
+      visited++;
+      if (e.isFile() && e.name === name) {
+        const f = path.join(dir, e.name);
+        try {
+          if ((await fs.promises.stat(f)).size === size) return f;
+        } catch {}
+      }
+    }
+    for (const e of entries) {
+      if (!e.isDirectory() || e.name.startsWith(".") || e.name === "node_modules" || e.name === "Library") continue;
+      const hit = await walk(path.join(dir, e.name), depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  }
+  for (const r of roots) {
+    visited = 0;
+    const hit = await walk(r, 0);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 function serveStatic(req, res, urlPath) {
   if (!fs.existsSync(WEB_DIST)) {
     res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
@@ -192,6 +235,14 @@ async function route(req, res) {
   if (p === "/api/health" && method === "GET") return sendJson(res, 200, await health());
   if (p === "/api/models" && method === "GET") return sendJson(res, 200, await models());
   if (p === "/api/queue" && method === "GET") return sendJson(res, 200, queueState());
+  if (p === "/api/locate" && method === "GET") {
+    const name = url.searchParams.get("name");
+    const size = Number(url.searchParams.get("size"));
+    if (!name || !Number.isFinite(size)) throw new HttpError(400, "Send name and size.");
+    const found = await locate(name, size);
+    if (!found) throw new HttpError(404, `Could not find ${name} in the usual folders.`, "Type the full path instead.");
+    return sendJson(res, 200, { path: found });
+  }
 
   if (p === "/api/jobs" && method === "GET") return sendJson(res, 200, listJobs());
   if (p === "/api/jobs" && method === "POST") {

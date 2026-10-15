@@ -2,6 +2,7 @@
 // each stage checkpointed so a crash, sleep or power cut resumes instead of restarting.
 import { EventEmitter } from "node:events";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { DEFAULT_SETTINGS, jobsDir, resolveModel } from "./config.mjs";
 import { makeCandidates, shortlist } from "./candidates.mjs";
@@ -51,7 +52,8 @@ const freshStage = () => ({ status: "pending", startedAt: null, endedAt: null, p
 
 /** Create a job folder for a local video. Does not start it; call runJob. */
 export function createJob(videoPath, settings = {}) {
-  const abs = path.resolve(videoPath);
+  const expanded = String(videoPath).trim().replace(/^~(?=$|\/)/, os.homedir());
+  const abs = path.resolve(expanded);
   if (!fs.existsSync(abs)) {
     const err = new Error(`No file at ${abs}.`);
     err.hint = "Check the path, or drag the file into the terminal to paste its full path.";
