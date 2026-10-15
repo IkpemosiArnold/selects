@@ -39,7 +39,7 @@ test("prefilter drops windows that open on a dangling reference", () => {
 });
 
 test("dangling opener and ending rules", () => {
-  for (const s of ["So as I said, it matters.", "and that is why.", "That one was faster.", "This one broke.", "Like I said before, no.", "Which is why we stopped."])
+  for (const s of ["So in other words, how much they lift.", "If that's the case, this is for you.", "Okay.", "Right, so.", "older, even if you lift, strength declines.", "So as I said, it matters.", "and that is why.", "That one was faster.", "This one broke.", "Like I said before, no.", "Which is why we stopped."])
     assert.ok(isDanglingOpener(s), s);
   for (const s of ["Nobody tells you this.", "The validator said yes.", "Why do we sleep?", "Thirty years of nothing."]) assert.ok(!isDanglingOpener(s), s);
   for (const s of ["and then we went to the", "We tried it and", "Let me show you on the next slide.", "There are three steps:"]) assert.ok(isDanglingEnding(s), s);

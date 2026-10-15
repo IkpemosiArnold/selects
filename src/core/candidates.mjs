@@ -10,6 +10,8 @@ const DANGLING_OPENERS = [
   /^(so,? )?(the )?(next|previous|last|other) (slide|one|point|thing)\b/i,
   /^(again|then|otherwise|meanwhile|similarly|likewise|besides|furthermore|moreover|however)\b/i,
   /^(yes|yeah|no|nope|exactly|right|correct)[,.!]/i,
+  /^(so,? )?(in other words|which means|that means|this means|in that case|because of that|for that reason)\b/i,
+  /^(so,? )?if (that|this|so)('s| is| was|,)/i,
 ];
 const BACK_REFERENCE = /\b(as i (said|mentioned)|like i said|i mentioned (earlier|before)|earlier on|earlier i|the previous slide|last slide|i just (said|showed|mentioned)|we just (saw|said|talked))\b/i;
 
@@ -25,6 +27,10 @@ const HOOKY = /\b(you|your|never|nobody|no one|everyone|secret|mistake|wrong|tru
 
 export function isDanglingOpener(sentence) {
   const t = sentence.trim();
+  // a lowercase start means whisper's sentence began mid-thought (or the recording did)
+  if (/^[a-z]/.test(t) && !/^(i|i'm|i've|i'd|i'll)\b/.test(t)) return true;
+  // a first "sentence" that is only filler ("Okay.", "Right, so.") opens on nothing
+  if (/^((okay|ok|so|right|um+|uh+|yeah|yes|alright|all right|cool|well|great|thanks|thank you)[\s,.!?]*)+$/i.test(t)) return true;
   return DANGLING_OPENERS.some((r) => r.test(t)) || BACK_REFERENCE.test(t);
 }
 
@@ -52,7 +58,9 @@ const median = (a) => {
 export function loudnessContext(loudness) {
   if (!loudness?.db?.length) return null;
   const speech = loudness.db.filter((d) => d > -60);
-  return { ...loudness, median: median(speech.length ? speech : loudness.db) };
+  const src = speech.length ? speech : loudness.db;
+  const sorted = src.slice().sort((a, b) => a - b);
+  return { ...loudness, median: median(src), p95: sorted[Math.floor(sorted.length * 0.95)] };
 }
 
 /**
@@ -81,7 +89,7 @@ export function preScore(win, ctx = null) {
   add("openingQuestion", /\?["')\]]*$/.test(first) ? 0.06 : 0);
   add("number", NUMBER.test(win.text) ? 0.03 : 0);
   add("contrast", Math.min(0.08, ((win.text.match(CONTRAST) || []).length) * 0.02));
-  add("softOpener", SOFT_OPENERS.test(first.trim()) ? -0.1 : 0);
+  add("softOpener", SOFT_OPENERS.test(first.trim()) ? -0.06 : 0);
   add("questionEnding", /\?["')\]]*$/.test(last) ? -0.08 : 0);
   add("exclaim", /!["')\]]*$/.test(last) ? 0.03 : 0);
   const wps = words.length / Math.max(1, dur);
@@ -94,11 +102,14 @@ export function preScore(win, ctx = null) {
   if (ctx?.db?.length) {
     const i0 = Math.floor(win.start / ctx.step);
     const i1 = Math.min(ctx.db.length, Math.ceil(win.end / ctx.step));
-    const seg = ctx.db.slice(i0, i1);
+    // speech bins only: silent gaps between sentences would drag the mean far down
+    const seg = ctx.db.slice(i0, i1).filter((d) => d > -60);
     if (seg.length) {
-      const mean = seg.reduce((a, b) => a + b, 0) / seg.length;
-      add("loudness", Math.max(-0.08, Math.min(0.08, (mean - ctx.median) / 20)));
-      add("peak", Math.max(...seg) > ctx.median + 10 ? 0.04 : 0);
+      // median against median: dB means are dragged down by every short dip
+      add("loudness", Math.max(-0.08, Math.min(0.08, (median(seg) - ctx.median) / 10)));
+      // a burst louder than 95% of the talk: emphasis, laughter or applause
+      const share = seg.filter((d) => d >= ctx.p95).length / seg.length;
+      add("peak", Math.min(0.06, Math.max(0, (share - 0.05) * 0.6)));
     }
   }
   const score = Math.max(0, Math.min(1, +s.toFixed(3)));
