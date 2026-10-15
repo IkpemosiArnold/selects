@@ -16,6 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 import { scoreVideo, bootstrapCI, pairedBootstrap, mean, bestIoU, tiou } from "./metrics.mjs";
 import { randomScore } from "./methods/random.mjs";
+import { spawnSync } from "node:child_process";
 import { energyScore, loudnessEnvelope } from "./methods/energy.mjs";
 
 const EVAL = dirname(fileURLToPath(import.meta.url));
@@ -26,7 +27,9 @@ const LOCK = join(ROOT, ".selects", "heavy.lock");
 const RANDOM_SEEDS = 200;
 const K = 5;
 const SETTINGS = { minLen: 20, maxLen: 60 };
-const DEFAULT_MODELS = ["gemma3-4b-hf:latest", "gemma3:1b", "qwen2.5:0.5b", "phi3:mini"];
+// Order matters: the runner judges every video with the first model before starting the next,
+// so the fast model gives a full row early and the headline model (Gemma 4B) follows overnight.
+const DEFAULT_MODELS = ["qwen2.5:0.5b", "gemma3-4b-hf:latest", "gemma3:1b", "phi3:mini"];
 
 const args = process.argv.slice(2);
 const opt = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : null);
@@ -75,7 +78,7 @@ async function core() {
   const [t, s, c, j, r, cfg] = await Promise.all(["transcribe.mjs", "sentences.mjs", "candidates.mjs", "judge.mjs", "rank.mjs", "config.mjs"].map(imp));
   return {
     transcribe: t.transcribe, toSentences: s.toSentences, makeCandidates: c.makeCandidates, shortlist: c.shortlist,
-    judge: j.judge, rank: r.rank, curve: r.curve, maxJudge: cfg.DEFAULT_SETTINGS?.maxJudge ?? 36,
+    judge: j.judge, rank: r.rank, curve: r.curve, maxJudge: cfg.DEFAULT_SETTINGS?.judgeN ?? 8,
   };
 }
 
@@ -92,17 +95,26 @@ export async function runVideo(v, C, models) {
   mkdirSync(dir, { recursive: true });
   const timingsFile = join(dir, "timings.json");
   const timings = readJson(timingsFile, {});
-  const media = resolve(ROOT, v.localPath);
+  let media = resolve(ROOT, v.localPath);
+  if (!existsSync(media)) throw new Error(`media missing: ${v.localPath} (run node eval/fetch-datasets.mjs fetch <id>)`);
+  // Long videos are evaluated on their first part only (manifest evalRange); cut a small copy.
+  if (v.evalRange) {
+    const cut = join(dir, `eval-${v.evalRange[0]}-${v.evalRange[1]}${media.slice(media.lastIndexOf("."))}`);
+    if (!existsSync(cut)) {
+      const r = spawnSync("ffmpeg", ["-v", "error", "-y", "-ss", String(v.evalRange[0]), "-t", String(v.evalRange[1] - v.evalRange[0]), "-i", media, "-vn", "-c:a", "copy", cut]);
+      if (r.status !== 0) throw new Error(`could not cut ${v.id} to ${v.evalRange}: ${r.stderr}`);
+    }
+    media = cut;
+  }
 
   // 1. transcript
   const wordsFile = join(dir, "words.json");
   let words = readJson(wordsFile);
   if (!words) {
-    if (!existsSync(media)) throw new Error(`media missing: ${v.localPath} (run node eval/fetch-datasets.mjs audio)`);
     words = await withHeavyLock(`transcribe ${v.id}`, async () => {
       log(`${v.id}: transcribing ${Math.round(v.duration / 60)} min of audio`);
       const t0 = Date.now();
-      const w = await C.transcribe(media, { cacheDir: dir, onProgress: () => {} });
+      const w = await C.transcribe(media, { cacheDir: dir, duration: v.duration, onProgress: () => {} });
       timings.transcribeSec = (Date.now() - t0) / 1000;
       return w;
     });
@@ -147,12 +159,20 @@ export async function runVideo(v, C, models) {
   if (cands.length && typeof cands[0].pre === "number") {
     const pScored = cands.map((c) => ({ ...c, total: c.pre }));
     out.methods.prescore = { preds: pick(pScored), metrics: evalPreds(pick(pScored)) };
+    // prefilter: stage 1 alone. The exact windows the judge reads, ordered by pre-score.
+    // judge:<model> minus prefilter is what the LLM adds.
+    const sScored = short.map((c) => ({ ...c, total: c.pre }));
+    out.methods.prefilter = { preds: pick(sScored), metrics: evalPreds(pick(sScored)) };
   }
 
-  // random: chance level, averaged over many seeds
-  const runs = [];
-  for (let seed = 1; seed <= RANDOM_SEEDS; seed++) runs.push(evalPreds(pick(randomScore(cands, seed))));
+  // random: chance level, averaged over many seeds, over all candidates and over the shortlist
+  const runs = [], sRuns = [];
+  for (let seed = 1; seed <= RANDOM_SEEDS; seed++) {
+    runs.push(evalPreds(pick(randomScore(cands, seed))));
+    sRuns.push(evalPreds(pick(randomScore(short, seed))));
+  }
   out.methods.random = { preds: pick(randomScore(cands, 1)), metrics: avgMetrics(runs), seeds: RANDOM_SEEDS };
+  out.methods["random:shortlist"] = { preds: [], metrics: avgMetrics(sRuns), seeds: RANDOM_SEEDS };
 
   // energy: no-LLM heuristic
   const eScored = energyScore(cands, env, words);
@@ -171,7 +191,7 @@ export async function runVideo(v, C, models) {
         let last = 0;
         const res = await C.judge(short, {
           model,
-          cacheDir: join(CACHE, "judge"),
+          cacheDir: join(dir, "judge"),
           onProgress: (p) => { const now = Date.now(); if (now - last > 60_000) { last = now; log(`${v.id} ${model}: ${Math.round((p?.progress ?? p ?? 0) * 100)}%`); } },
         });
         const sec = (Date.now() - t0) / 1000;
@@ -181,11 +201,21 @@ export async function runVideo(v, C, models) {
       log(`${v.id}: ${model} done in ${Math.round(judged.wallSec)} s (${judged.secPerCandidate.toFixed(1)} s per candidate)`);
     }
     const preds = pick(judged.candidates);
-    out.methods[key] = { preds, metrics: evalPreds(preds), judgeSec: judged.wallSec, secPerCandidate: judged.secPerCandidate };
+    out.methods[key] = { preds, metrics: evalPreds(preds), judgeSec: judged.wallSec, secPerCandidate: judged.secPerCandidate, calls: judgeCalls(join(dir, "judge"), model) };
     curves.methods[key] = C.curve(judged.candidates, v.duration, { step: 5 });
   }
   writeJson(join(RESULTS, "curves", `${v.id}.json`), curves);
   return out;
+}
+
+// Per-call Ollama stats written by src/core/judge.mjs (judge-calls.jsonl in its cacheDir).
+function judgeCalls(dir, model) {
+  const f = join(dir, "judge-calls.jsonl");
+  if (!existsSync(f)) return null;
+  const rows = readFileSync(f, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.model === model);
+  if (!rows.length) return null;
+  const avg = (k) => { const xs = rows.map((r) => r[k]).filter((x) => typeof x === "number"); return xs.length ? mean(xs) : null; };
+  return { n: rows.length, wallSec: avg("wallSec"), loadSec: avg("loadSec"), words: avg("words"), promptTokens: avg("promptTokens"), promptTokPerSec: avg("promptTokPerSec"), outTokens: avg("outTokens"), outTokPerSec: avg("outTokPerSec") };
 }
 
 function hashCands(cands) {
@@ -227,7 +257,8 @@ export function aggregate(videos) {
       const col = (k) => rows.map((v) => v.methods[m].metrics[src][k]);
       agg[src][m] = {
         n: rows.length,
-        hit3: bootstrapCI(col("hit3")), hit5: bootstrapCI(col("hit5")), p5: bootstrapCI(col("p5")), r5: bootstrapCI(col("r5")), miou5: bootstrapCI(col("miou5")),
+        hit3: bootstrapCI(col("hit3")), p3: bootstrapCI(col("p3")), hit5: bootstrapCI(col("hit5")), p5: bootstrapCI(col("p5")), r5: bootstrapCI(col("r5")), miou5: bootstrapCI(col("miou5")),
+        hit3s: rows.map((v) => v.methods[m].metrics[src].hit3), // per-video, for transparency
         judgeMinPerVideo: m.startsWith("judge:") ? mean(rows.map((v) => v.methods[m].judgeSec / 60)) : null,
         secPerCandidate: m.startsWith("judge:") ? mean(rows.map((v) => v.methods[m].secPerCandidate)) : null,
       };
@@ -235,7 +266,7 @@ export function aggregate(videos) {
     // paired comparisons on mean best IoU, same videos
     agg[src].paired = {};
     for (const m of methods.filter((x) => x.startsWith("judge:"))) {
-      for (const base of ["energy", "random"]) {
+      for (const base of ["prefilter", "energy", "random"]) {
         const rows = videos.filter((v) => v.methods[m]?.metrics?.[src] && v.methods[base]?.metrics?.[src]);
         if (rows.length < 3) continue;
         agg[src].paired[`${m} vs ${base}`] = pairedBootstrap(rows.map((v) => v.methods[m].metrics[src].miou5), rows.map((v) => v.methods[base].metrics[src].miou5));
@@ -259,12 +290,20 @@ export function report(videos, agg, manifest) {
     const rows = Object.entries(agg[src]).filter(([k]) => k !== "paired");
     if (!rows.length) { if (src === "human") L.push("## Against human picks", "", "No human labels yet. Run `node eval/label.mjs` and mark 5 moments per video.", ""); continue; }
     L.push(src === "heatmap" ? "## Against YouTube Most Replayed peaks (proxy labels)" : "## Against human picks (Arnold)", "");
-    L.push("| Method | n | hit@3 | hit@5 (95% CI) | precision@5 | recall@5 | mean best IoU (95% CI) | judge time per video | s per candidate |");
-    L.push("|---|---|---|---|---|---|---|---|---|");
-    const order = (k) => ({ random: 0, energy: 1, prescore: 2, "oracle:shortlist": 8, oracle: 9 })[k] ?? 3;
+    L.push("| Method | n | hit@3 (95% CI) | precision@3 | hit@5 | precision@5 | recall@5 | mean best IoU (95% CI) | judge time per video | s per window |");
+    L.push("|---|---|---|---|---|---|---|---|---|---|");
+    const order = (k) => ({ random: 0, energy: 1, prescore: 2, "random:shortlist": 3, prefilter: 4, "oracle:shortlist": 8, oracle: 9 })[k] ?? 5;
     for (const [m, a] of rows.sort((x, y) => order(x[0]) - order(y[0]))) {
-      const name = { oracle: "ceiling: best possible from all candidates", "oracle:shortlist": "ceiling: best possible from the judge's shortlist", random: `random (mean of ${RANDOM_SEEDS} seeds)`, energy: "energy (loudness + speech rate, no LLM)", prescore: "text rules only (Selects pre-score, no LLM)" }[m] ?? `${m} (shortlist + judge)`;
-      L.push(`| ${name} | ${a.n} | ${pct(a.hit3.mean)} | ${ci(a.hit5)} | ${pct(a.p5.mean)} | ${pct(a.r5.mean)} | ${ci(a.miou5, f2)} | ${a.judgeMinPerVideo == null ? "-" : a.judgeMinPerVideo.toFixed(1) + " min"} | ${a.secPerCandidate == null ? "-" : a.secPerCandidate.toFixed(1)} |`);
+      const name = {
+        oracle: "ceiling: best possible from all candidates",
+        "oracle:shortlist": "ceiling: best possible from the shortlist",
+        random: `random over all candidates (mean of ${RANDOM_SEEDS} seeds)`,
+        "random:shortlist": `random from the shortlist (mean of ${RANDOM_SEEDS} seeds)`,
+        energy: "energy: loudness + speech rate, no LLM",
+        prescore: "text rules over all candidates, no LLM",
+        prefilter: "**prefilter alone** (stage 1, no LLM)",
+      }[m] ?? `**prefilter + ${m}**`;
+      L.push(`| ${name} | ${a.n} | ${ci(a.hit3)} | ${pct(a.p3.mean)} | ${pct(a.hit5.mean)} | ${pct(a.p5.mean)} | ${pct(a.r5.mean)} | ${ci(a.miou5, f2)} | ${a.judgeMinPerVideo == null ? "-" : a.judgeMinPerVideo.toFixed(1) + " min"} | ${a.secPerCandidate == null ? "-" : a.secPerCandidate.toFixed(1)} |`);
     }
     L.push("");
     const paired = Object.entries(agg[src].paired || {});
@@ -283,6 +322,21 @@ export function report(videos, agg, manifest) {
     L.push(`| ${v.title.slice(0, 60)} | ${mmss(v.duration)} | ${v.nCandidates} (${v.nShortlist}) | ${v.timings.transcribeSec ? mmss(v.timings.transcribeSec) : "n/a"} | ${models.map((m) => (v.methods[m] ? mmss(v.methods[m].judgeSec) : "-")).join(" | ")} |`);
   }
   L.push("");
+
+  const costRows = models.map((m) => {
+    const cs = videos.map((v) => v.methods[m]?.calls).filter(Boolean);
+    const n = cs.reduce((t, c) => t + c.n, 0);
+    const w = (k) => { const xs = cs.filter((c) => c[k] != null); const nn = xs.reduce((t, c) => t + c.n, 0); return nn ? xs.reduce((t, c) => t + c[k] * c.n, 0) / nn : null; };
+    return { m, n, wall: w("wallSec"), load: w("loadSec"), words: w("words"), pt: w("promptTokens"), pts: w("promptTokPerSec"), ot: w("outTokens"), ots: w("outTokPerSec") };
+  }).filter((r) => r.n);
+  if (costRows.length) {
+    const f1 = (x) => (x == null ? "n/a" : x.toFixed(1));
+    L.push("## Judge cost per call (from Ollama's own counters)", "");
+    L.push("| Model | calls | words per window | prompt tokens | prompt tok/s | output tokens | output tok/s | load s | wall s per call | wall per video (" + (videos[0]?.nShortlist ?? 8) + " windows) | cost |");
+    L.push("|---|---|---|---|---|---|---|---|---|---|---|");
+    for (const r of costRows) L.push(`| ${r.m.replace("judge:", "")} | ${r.n} | ${f1(r.words)} | ${f1(r.pt)} | ${f1(r.pts)} | ${f1(r.ot)} | ${f1(r.ots)} | ${f1(r.load)} | ${f1(r.wall)} | ${r.wall == null ? "n/a" : mmss(r.wall * (videos[0]?.nShortlist ?? 8))} | $0 (local) |`);
+    L.push("", "Calls served from the cache are not counted. Load time is the model being read into memory, mostly on the first call.", "");
+  }
 
   const best = models.map((m) => [m, agg.heatmap[m]?.miou5?.mean ?? -1]).sort((a, b) => b[1] - a[1])[0]?.[0];
   if (best) {
@@ -327,17 +381,22 @@ async function main() {
 
   const prev = readJson(join(RESULTS, "results.json"), { videos: [] });
   const done = new Map(prev.videos.map((v) => [v.id, v]));
-  for (const v of todo) {
-    try {
-      done.set(v.id, await runVideo(v, C, models));
-    } catch (e) {
-      log(`${v.id}: ${e.message}`);
-      if (!REPORT_ONLY && /not available yet/.test(e.message)) throw e;
+  // Pass 0 transcribes every video (and scores the no-LLM methods); pass i adds model i for
+  // every video. Earlier work is cached, so each pass only pays for the new model.
+  const passes = REPORT_ONLY ? [models] : [[], ...models.map((_, i) => models.slice(0, i + 1))];
+  for (const ms of passes) {
+    for (const v of todo) {
+      try {
+        done.set(v.id, await runVideo(v, C, ms));
+      } catch (e) {
+        log(`${v.id}: ${e.message}`);
+        if (!REPORT_ONLY && /not available yet/.test(e.message)) throw e;
+      }
+      const videos = [...done.values()].filter((x) => manifest.some((m) => m.id === x.id));
+      const agg = aggregate(videos);
+      writeJson(join(RESULTS, "results.json"), { generatedAt: new Date().toISOString(), k: K, iouThreshold: 0.5, settings: SETTINGS, judgeN: C.maxJudge, randomSeeds: RANDOM_SEEDS, aggregate: agg, videos });
+      writeFileSync(join(RESULTS, "RESULTS.md"), report(videos, agg, manifest));
     }
-    const videos = [...done.values()].filter((x) => manifest.some((m) => m.id === x.id));
-    const agg = aggregate(videos);
-    writeJson(join(RESULTS, "results.json"), { generatedAt: new Date().toISOString(), k: K, iouThreshold: 0.5, settings: SETTINGS, randomSeeds: RANDOM_SEEDS, aggregate: agg, videos });
-    writeFileSync(join(RESULTS, "RESULTS.md"), report(videos, agg, manifest));
   }
   log("done");
 }

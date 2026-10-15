@@ -13,7 +13,9 @@
 // 3. Expand each peak over neighbouring segments while they stay at or above half its
 //    prominence over the median (a full-width-at-half-maximum rule), then clamp to
 //    [minLen, maxLen] seconds centred on the peak segment.
-// 4. Keep the highest peaks first, dropping any window that overlaps a kept one, up to maxLabels.
+// 4. For a long video evaluated on its first N minutes only, steps 1 to 3 run on the segments
+//    inside that range (the end-screen rule is then skipped).
+// 5. Keep the highest peaks first, dropping any window that overlaps a kept one, up to maxLabels.
 
 function quantile(sorted, q) {
   if (!sorted.length) return NaN;
@@ -23,12 +25,18 @@ function quantile(sorted, q) {
 }
 
 export function heatmapToLabels(heatmap, opts = {}) {
-  const { maxLabels = 5, minLen = 20, maxLen = 60, quantile: qq = 0.75, edgeFrac = 0.03, edgeMinSec = 30 } = opts;
+  const { maxLabels = 5, minLen = 20, maxLen = 60, quantile: qq = 0.75, edgeFrac = 0.03, edgeMinSec = 30, rangeEnd = null } = opts;
   if (!Array.isArray(heatmap) || heatmap.length < 5) return [];
-  const segs = [...heatmap].sort((a, b) => a.start_time - b.start_time);
+  const all = [...heatmap].sort((a, b) => a.start_time - b.start_time);
+  const fullDuration = all[all.length - 1].end_time;
+  // Evaluating only the first part of a long video: keep segments inside the range. The
+  // end-screen exclusion applies only when the range reaches the real end.
+  const clipped = rangeEnd != null && rangeEnd < fullDuration;
+  const segs = clipped ? all.filter((s) => s.end_time <= rangeEnd) : all;
+  if (segs.length < 5) return [];
   const duration = segs[segs.length - 1].end_time;
-  const edge = Math.max(edgeMinSec, edgeFrac * duration);
-  const inside = (s) => s.start_time >= edge && s.end_time <= duration - edge;
+  const edge = Math.max(edgeMinSec, edgeFrac * fullDuration);
+  const inside = (s) => s.start_time >= edge && (clipped || s.end_time <= duration - edge);
   const vals = segs.filter(inside).map((s) => s.value).sort((a, b) => a - b);
   if (!vals.length) return [];
   const thr = quantile(vals, qq);

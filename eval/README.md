@@ -12,12 +12,14 @@ This folder measures that. Every method picks its top 5 clips (20 to 60 s) from 
    3. Grow each peak over neighbouring segments that stay at or above half its height above the median (full width at half maximum), then clamp to 20 to 60 s around the peak segment.
    4. Keep the highest peaks first, skipping any that overlap a kept one, up to 5 per video.
 
+   Videos longer than 20 minutes are evaluated on their **first 15 minutes only** (manifest `evalRange`), because whisper and Gemma are slow on this laptop. Their heatmap is restricted to that range before steps 1 to 4, and the end-screen rule is skipped.
+
    This is a proxy for "what viewers rewatch or seek to". It is not the same as "what makes a good short", and it is only accurate to one segment (about 9 to 27 s for these videos).
 2. **Human picks.** `node eval/label.mjs` opens a local page where Arnold marks his own best 5 moments per video (keys: Space, J, L, I, O, A). Labels are saved into the manifest with `source: "human"`. Label blind: do not look at the heatmap or the model's picks first.
 
 ## Dataset
 
-`eval/datasets/manifest.json` lists each video's URL, licence, licence URL, the evidence for the licence (the `license` field of yt-dlp's info JSON), and its labels. Only videos marked **Creative Commons Attribution** on YouTube (CC BY 3.0) with a heatmap and a length of 15 to 45 minutes are included. Trimmed info JSON (title, licence, heatmap) is kept in `eval/datasets/info/`. Audio is downloaded at the lowest available bitrate into `eval/media/` (gitignored).
+`eval/datasets/manifest.json` lists each video's URL, licence, licence URL, the evidence for the licence (the `license` field of yt-dlp's info JSON), and its labels. Only videos marked **Creative Commons Attribution** on YouTube (CC BY 3.0) with a heatmap and a length of 10 to 45 minutes are included. Trimmed info JSON (title, licence, heatmap) is kept in `eval/datasets/info/`. Audio is downloaded at the lowest available bitrate into `eval/media/` (gitignored).
 
 ```
 node eval/fetch-datasets.mjs fetch <youtube ids...>   # info + audio in one yt-dlp call (needs Chrome cookies)
@@ -27,10 +29,15 @@ node eval/fetch-datasets.mjs video <id>               # 720p video for the demo
 
 ## Methods
 
-- `random`: random scores on the same candidates, averaged over 200 seeds, so it reports the chance level.
+Selects picks in two stages: a cheap no-LLM prefilter (`shortlist` in `src/core/candidates.mjs`, text rules plus time coverage) keeps the top 8 windows, and only those go to the model. The headline comparison is **prefilter alone** against **prefilter + judge**: same 8 windows, so the difference is what the LLM adds.
+
+- `random`: random scores over all candidates, averaged over 200 seeds (the chance level). `random:shortlist`: the same, picking from the 8 shortlisted windows.
 - `energy`: no LLM. Mean loudness, loudness variation and words per second per window (z-scored and averaged), the signals cheap clippers use.
-- `judge:<model>`: `src/core/judge.mjs` scores each window with a local Ollama model on the rubric in `src/core/prompts/judge.md`, then `src/core/rank.mjs` picks the top 5 with overlap suppression.
-- `best possible from candidate pool`: the ceiling. If no candidate window overlaps a label at IoU 0.5, no picker can hit it.
+- `prescore`: the core's text rules ranking all candidates. `prefilter`: the 8 shortlisted windows ranked by those rules (stage 1 alone).
+- `judge:<model>`: stage 1, then `src/core/judge.mjs` scores the 8 windows with a local Ollama model on the rubric in `src/core/prompts/judge.md`, and `src/core/rank.mjs` picks the top 5 with overlap suppression. Per-call seconds and token counts come from Ollama's response (`judge-calls.jsonl`) and feed the cost table.
+- `oracle` and `oracle:shortlist`: ceilings. If no window in the pool overlaps a label at IoU 0.5, no picker can hit it.
+
+With 8 windows and k = 5, any picker takes most of the shortlist, so hit@3 and precision@3 separate methods better than hit@5.
 
 ## Metrics (`eval/metrics.mjs`)
 

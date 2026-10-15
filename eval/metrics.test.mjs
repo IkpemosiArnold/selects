@@ -101,3 +101,11 @@ test("heatmapToLabels returns [] for missing heatmap", () => {
   assert.deepEqual(heatmapToLabels(null), []);
   assert.deepEqual(heatmapToLabels([]), []);
 });
+
+test("heatmapToLabels with rangeEnd keeps labels inside the range", () => {
+  const hm = fakeHeatmap(2400, [{ t: 300, v: 0.8, w: 15 }, { t: 600, v: 0.9, w: 15 }, { t: 1800, v: 1, w: 15 }]);
+  const labels = heatmapToLabels(hm, { rangeEnd: 900 });
+  assert.ok(labels.length >= 2);
+  assert.ok(labels.every((l) => l.end <= 900));
+  assert.ok(labels.some((l) => l.start <= 600 && l.end >= 600));
+});

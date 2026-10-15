@@ -25,7 +25,10 @@ const INFO = join(DS, "info");
 const MEDIA = join(EVAL, "media");
 const MANIFEST = join(DS, "manifest.json");
 const BROWSER = process.env.SELECTS_YTDLP_COOKIES_BROWSER || "chrome";
-const MIN_DUR = 15 * 60, MAX_DUR = 45 * 60;
+const MIN_DUR = 10 * 60, MAX_DUR = 45 * 60;
+// Whisper (about 1.6x real time) and Gemma 4B (minutes per window) are slow on this laptop, so
+// videos longer than 20 minutes are evaluated on their first 15 minutes only.
+const LONG = 20 * 60, CLIP_TO = 15 * 60;
 
 // YouTube offers exactly one Creative Commons option, CC BY 3.0 Unported.
 const YT_CC = { name: "CC BY 3.0", url: "https://creativecommons.org/licenses/by/3.0/" };
@@ -109,10 +112,11 @@ function build() {
       licenseEvidence: `yt-dlp info JSON license field: "${i.license}" (fetched ${i.fetchedAt.slice(0, 10)})`,
       localPath: media ? relative(ROOT, join(MEDIA, media)) : `eval/media/${i.id}.webm`,
       ...(video ? { videoPath: relative(ROOT, join(MEDIA, video)) } : {}),
-      duration: i.duration,
+      duration: i.duration > LONG ? CLIP_TO : i.duration,
+      ...(i.duration > LONG ? { evalRange: [0, CLIP_TO], fullDuration: i.duration } : {}),
       heatmapPath: relative(ROOT, join(INFO, `${i.id}.json`)),
       labels: [
-        ...heatmapToLabels(i.heatmap),
+        ...heatmapToLabels(i.heatmap, { rangeEnd: i.duration > LONG ? CLIP_TO : null }),
         ...(prev?.labels || []).filter((l) => l.source !== "heatmap"),
       ],
     });
