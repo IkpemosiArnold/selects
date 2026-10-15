@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { whisperBin, whisperModel } from "./config.mjs";
-import { readJson, run } from "./util.mjs";
+import { readJson, run, writeJsonAtomic } from "./util.mjs";
 
 const SEG_RE = /^\[(\d+):(\d+):(\d+)[.,](\d+)\s*-->\s*(\d+):(\d+):(\d+)[.,](\d+)\](?: {2})?(.*)$/; // whisper prints "]  " then the token text
 const toSec = (h, m, s, ms) => +h * 3600 + +m * 60 + +s + +ms / 1000;
@@ -105,8 +105,11 @@ export async function transcribe(videoPath, { cacheDir, duration, onProgress, on
     throw err;
   }
 
-  const nThreads = threads || Math.max(1, Math.min(8, os.cpus().length));
-  const args = ["-m", modelPath, "-f", wav, "-l", "en", "-t", String(nThreads), "-ml", "1", "-sow", "-ojf", "-of", outBase, "-pp"];
+  // Physical cores, not hyperthreads: on a dual-core laptop -t 2 beat -t 4 when measured.
+  const nThreads = threads || Number(process.env.SELECTS_WHISPER_THREADS) || Math.max(1, Math.min(8, Math.floor(os.cpus().length / 2)));
+  // Greedy decoding (-bs 1 -bo 1): measured 1.57x real time against 14.8x for the default
+  // beam search on this machine, with nearly identical text.
+  const args = ["-m", modelPath, "-f", wav, "-l", "en", "-t", String(nThreads), "-bs", "1", "-bo", "1", "-ml", "1", "-sow", "-ojf", "-of", outBase, "-pp"];
   if (process.env.SELECTS_WHISPER_ARGS) args.push(...process.env.SELECTS_WHISPER_ARGS.split(/\s+/).filter(Boolean));
 
   const t0 = Date.now();
@@ -167,6 +170,10 @@ export async function transcribe(videoPath, { cacheDir, duration, onProgress, on
         : "Check free disk space and memory, then resume the job. Your progress up to this stage is saved.";
     throw err;
   } finally {
+    // a loudness track (one value per 0.5 s) feeds the cheap pre-score; then the WAV goes
+    try {
+      if (fs.existsSync(jsonFile)) writeJsonAtomic(path.join(cacheDir, "loudness.json"), loudnessFromWav(wav));
+    } catch {}
     fs.rmSync(wav, { force: true });
   }
   if (!fs.existsSync(jsonFile)) throw Object.assign(new Error("whisper finished but wrote no JSON."), { hint: "Run `selects doctor` to check the whisper build." });
@@ -177,4 +184,52 @@ export async function transcribe(videoPath, { cacheDir, duration, onProgress, on
   const speed = duration ? duration / wall : null;
   onProgress?.({ progress: 1, speed, etaSec: 0, note: speed ? `transcribed at ${speed.toFixed(2)}x real time` : "transcribed", processed: duration ?? 0, wallSec: +wall.toFixed(1) });
   return words;
+}
+
+/**
+ * Loudness in dBFS for each `step` seconds of a 16-bit mono WAV, read in blocks so a long
+ * talk never sits in memory at once. Returns { step, db: number[] }.
+ */
+export function loudnessFromWav(file, { step = 0.5 } = {}) {
+  const fd = fs.openSync(file, "r");
+  try {
+    const head = Buffer.alloc(44);
+    fs.readSync(fd, head, 0, 44, 0);
+    const rate = head.readUInt32LE(24) || 16000;
+    // find the "data" chunk (ffmpeg may write a LIST chunk first)
+    let off = 12;
+    let dataStart = 44;
+    const hdr = Buffer.alloc(8);
+    for (let i = 0; i < 16; i++) {
+      if (fs.readSync(fd, hdr, 0, 8, off) < 8) break;
+      const id = hdr.toString("ascii", 0, 4);
+      const size = hdr.readUInt32LE(4);
+      if (id === "data") {
+        dataStart = off + 8;
+        break;
+      }
+      off += 8 + size + (size % 2);
+    }
+    const per = Math.round(rate * step);
+    const buf = Buffer.alloc(per * 2);
+    const db = [];
+    let pos = dataStart;
+    for (;;) {
+      const n = fs.readSync(fd, buf, 0, buf.length, pos);
+      if (n < 2) break;
+      pos += n;
+      let sum = 0;
+      const count = Math.floor(n / 2);
+      for (let i = 0; i < count; i++) {
+        const v = buf.readInt16LE(i * 2) / 32768;
+        sum += v * v;
+      }
+      const rms = Math.sqrt(sum / count);
+      db.push(+(20 * Math.log10(rms + 1e-9)).toFixed(1));
+      if (n < buf.length) break;
+    }
+    return { step, db };
+  } finally {
+    fs.closeSync(fd);
+  }
 }

@@ -273,8 +273,9 @@ async function runStages(id, { deps = {}, signal } = {}) {
       current = "candidates";
       begin("candidates");
       const sentences = toSentences(words);
-      const all = makeCandidates(sentences, { minLen: job.settings.minLen, maxLen: job.settings.maxLen, stride: job.settings.stride ?? 6 });
-      short = shortlist(all, { n: job.settings.maxJudge ?? 36, duration: job.source.duration });
+      const loudness = readJson(path.join(dir, "loudness.json"), null);
+      const all = makeCandidates(sentences, { minLen: job.settings.minLen, maxLen: job.settings.maxLen, stride: job.settings.stride ?? 6, loudness });
+      short = shortlist(all, { n: job.settings.judgeN ?? 8, duration: job.source.duration });
       writeJsonAtomic(candFile, { sentences: sentences.length, windows: all.length, shortlist: short });
       job.candidates = short;
       finish("candidates", `${all.length} windows passed the filter, ${short.length} go to the judge`);
@@ -365,9 +366,11 @@ export function updateCandidate(id, cid, patch = {}) {
 }
 
 /**
- * Render approved clips (or the given ids), then write a posting kit for each.
+ * Render approved clips (or the given ids). Only approved clips are ever rendered unless
+ * ids are passed. The final preset ("shorts") fills candidate.render and writes a posting
+ * kit; the fast "preview" preset fills candidate.preview and skips the kit.
  * @param {string} id
- * @param {{ids?:string[], deps?:object, signal?:AbortSignal, kit?:boolean}} opts
+ * @param {{ids?:string[], deps?:object, signal?:AbortSignal, kit?:"model"|"plain"|false, preset?:string}} opts
  */
 export function renderJob(id, opts = {}) {
   if (running.has(id)) return running.get(id);
@@ -376,16 +379,21 @@ export function renderJob(id, opts = {}) {
   return p;
 }
 
-async function renderStage(id, { ids, deps = {}, signal, kit = true } = {}) {
+async function renderStage(id, { ids, deps = {}, signal, kit, preset } = {}) {
   const d = { render: realRender, postingKit: realKit, ...deps };
-  let job = loadJob(id);
+  const job = loadJob(id);
   const dir = jobDir(id);
+  const usePreset = preset || job.settings.preset || "shorts";
+  const field = usePreset === "preview" ? "preview" : "render";
+  const kitMode = field === "preview" ? false : (kit ?? job.settings.kit ?? "model");
   const targets = job.candidates.filter((c) => (ids ? ids.includes(c.id) : c.status === "approved"));
   if (!targets.length) return job;
   const words = readJson(path.join(dir, "words.json"));
+  const prevStage = job.stage;
   job.stage = "rendering";
-  job.stages.render = { ...freshStage(), status: "running", startedAt: now() };
-  for (const c of targets) if (c.render?.status !== "done") c.render = { status: "pending", path: null, srt: null, kit: null, progress: 0 };
+  job.stages.render = { ...freshStage(), status: "running", startedAt: now(), note: `${usePreset} preset` };
+  const blank = () => ({ status: "pending", path: null, srt: null, kit: null, progress: 0 });
+  for (const c of targets) if (c[field]?.status !== "done") c[field] = blank();
   saveJob(job);
   emit(id, "stage", { stage: "rendering", name: "render", state: job.stages.render });
   let lastSave = 0;
@@ -393,50 +401,54 @@ async function renderStage(id, { ids, deps = {}, signal, kit = true } = {}) {
     let i = 0;
     for (const c of targets) {
       i++;
-      if (c.render?.status === "done" && fs.existsSync(path.join(dir, c.render.path))) continue;
-      c.render = { status: "running", path: null, srt: null, kit: null, progress: 0 };
+      if (c[field]?.status === "done" && c[field].path && fs.existsSync(path.join(dir, c[field].path))) continue;
+      c[field] = { ...blank(), status: "running" };
       saveJob(job);
-      emit(id, "render", { id: c.id, ...c.render });
+      emit(id, "render", { id: c.id, preset: usePreset, ...c[field] });
       const r = await d.render(job, c, {
-        preset: job.settings.preset,
+        preset: usePreset,
         jobDir: dir,
         words,
         signal,
         onProgress: (p) => {
-          c.render.progress = +p.progress.toFixed(3);
+          c[field].progress = +p.progress.toFixed(3);
           job.stages.render.progress = +((i - 1 + p.progress) / targets.length).toFixed(3);
           if (Date.now() - lastSave > 2000) {
             saveJob(job);
             lastSave = Date.now();
           }
-          emit(id, "render", { id: c.id, ...c.render });
+          emit(id, "render", { id: c.id, preset: usePreset, ...c[field] });
         },
       });
-      c.render = { status: "done", path: r.path, srt: r.srt, kit: null, progress: 1, reframe: r.reframe?.mode, wallSec: r.wallSec };
-      if (kit) {
+      c[field] = { status: "done", path: r.path, srt: r.srt, kit: null, progress: 1, reframe: r.reframe?.mode, wallSec: r.wallSec };
+      if (kitMode) {
         let k;
+        const k0 = Date.now();
         try {
-          k = await d.postingKit(c, { model: job.settings.model, signal });
+          k = kitMode === "model" ? await d.postingKit(c, { model: job.settings.model, signal }) : plainKit(c);
         } catch {
           k = plainKit(c);
         }
         const kitRel = `clips/${c.id}.kit.json`;
         writeJsonAtomic(path.join(dir, kitRel), { ...k, start: c.start, end: c.end, source: job.source.name, reason: c.reason, scores: c.scores });
         c.title = k.title;
-        c.render.kit = kitRel;
+        c[field].kit = kitRel;
+        c[field].kitSec = +((Date.now() - k0) / 1000).toFixed(1);
       }
       job.timings = job.timings || {};
-      job.timings.render = (job.timings.render || []).filter((t) => t.id !== c.id).concat({ id: c.id, sec: r.wallSec, clipSec: +(c.end - c.start).toFixed(1) });
+      const key = field === "preview" ? "preview" : "render";
+      job.timings[key] = (Array.isArray(job.timings[key]) ? job.timings[key] : []).filter((t) => t.id !== c.id).concat({ id: c.id, sec: r.wallSec, clipSec: +(c.end - c.start).toFixed(1), kitSec: c[field].kitSec ?? null });
       saveJob(job);
-      emit(id, "render", { id: c.id, ...c.render, title: c.title });
+      emit(id, "render", { id: c.id, preset: usePreset, ...c[field], title: c.title });
     }
-    Object.assign(job.stages.render, { status: "done", endedAt: now(), progress: 1, etaSec: 0, note: `rendered ${targets.length} clip${targets.length === 1 ? "" : "s"}` });
-    job.stage = "done";
+    Object.assign(job.stages.render, { status: "done", endedAt: now(), progress: 1, etaSec: 0, note: `rendered ${targets.length} clip${targets.length === 1 ? "" : "s"} (${usePreset})` });
+    // a preview leaves the job in review; a final render finishes it
+    job.stage = field === "preview" ? (prevStage === "done" ? "done" : "ready") : "done";
     saveJob(job);
-    emit(id, "stage", { stage: "done", name: "render", state: job.stages.render });
+    emit(id, "stage", { stage: job.stage, name: "render", state: job.stages.render });
     return job;
   } catch (e) {
-    for (const c of targets) if (c.render?.status === "running") c.render.status = "error";
+    for (const c of targets) if (c[field]?.status === "running") c[field].status = "error";
     return fail(job, "render", e);
   }
 }

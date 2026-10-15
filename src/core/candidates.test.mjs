@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { iou, isDanglingEnding, isDanglingOpener, makeCandidates, shortlist } from "./candidates.mjs";
+import { iou, isDanglingEnding, isDanglingOpener, loudnessContext, makeCandidates, preScore, shortlist } from "./candidates.mjs";
 import { toSentences } from "./sentences.mjs";
 import { talk, words } from "./test/fixtures.mjs";
 
@@ -66,10 +66,25 @@ test("shortlist covers the timeline and limits overlap", () => {
   const sents = toSentences(talk(200));
   const all = makeCandidates(sents, { minLen: 20, maxLen: 60, stride: 3 });
   const dur = sents[sents.length - 1].e;
-  const s = shortlist(all, { n: 20, maxIou: 0.4, duration: dur });
-  assert.equal(s.length, 20);
+  const s = shortlist(all, { n: 21, maxIou: 0.4, duration: dur });
+  assert.equal(s.length, 21);
   for (let i = 0; i < s.length; i++) for (let j = i + 1; j < s.length; j++) assert.ok(iou(s[i], s[j]) <= 0.4);
-  // every tenth of the video has at least one window starting in it
-  const buckets = new Set(s.map((c) => Math.floor((c.start / dur) * 10)));
-  assert.ok(buckets.size >= 9, `covered ${buckets.size} of 10`);
+  // n/3 = 7 time buckets, each with at least one window starting in it
+  const buckets = new Set(s.map((c) => Math.floor((c.start / dur) * 7)));
+  assert.equal(buckets.size, 7);
+  assert.equal(shortlist(all, { duration: dur }).length, 8, "default N is 8");
+});
+
+test("pre-score rewards hook phrases and loud moments, penalises soft openers", () => {
+  const sent = (text, s, e) => ({ text, s, e });
+  const win = (first) => ({ start: 0, end: 30, sentences: [sent(first, 0, 4), sent("We trained three times a week for a year and it worked.", 4, 30)], text: first + " We trained three times a week for a year and it worked." });
+  const hook = preScore(win("Nobody tells you how slow strength really is."));
+  const soft = preScore(win("So um this is the slide about the thing."));
+  assert.ok(hook > soft + 0.15, `${hook} vs ${soft}`);
+  const quiet = loudnessContext({ step: 0.5, db: Array(200).fill(-30) });
+  const loudDb = Array(200).fill(-30);
+  for (let i = 0; i < 60; i++) loudDb[i] = -18;
+  const loud = loudnessContext({ step: 0.5, db: loudDb });
+  const w = win("Nobody tells you how slow strength really is.");
+  assert.ok(preScore(w, loud) > preScore(w, quiet));
 });

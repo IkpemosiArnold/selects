@@ -34,6 +34,22 @@ export const PRESETS = {
   },
 };
 
+/** Scale a 1080-wide preset's caption sizes to another width. */
+function scaledCaption(c, f) {
+  return { ...c, fontSize: Math.round(c.fontSize * f), maxWidth: Math.round(c.maxWidth * f), boxHeight: Math.round(c.boxHeight * f), strokeWidth: Math.max(4, Math.round(c.strokeWidth * f)) };
+}
+
+// A fast draft for checking a cut before the slow final render: 720x1280, x264 ultrafast.
+PRESETS.preview = {
+  ...PRESETS.shorts,
+  width: 720,
+  height: 1280,
+  crf: 26,
+  x264: "ultrafast",
+  audioBitrate: "128k",
+  caption: scaledCaption(PRESETS.shorts.caption, 720 / 1080),
+};
+
 let fontReady = false;
 const FONT_FAMILY = "Selects Caption";
 function ensureFont() {
@@ -260,10 +276,11 @@ export async function render(job, candidate, { preset = "shorts", onProgress, jo
   const tmp = path.join(dir, "tmp", candidate.id);
   fs.mkdirSync(clipsDir, { recursive: true });
   fs.rmSync(tmp, { recursive: true, force: true });
-  const outRel = `clips/${candidate.id}.mp4`;
-  const srtRel = `clips/${candidate.id}.srt`;
+  const suffix = preset === "shorts" ? "" : `.${preset}`;
+  const outRel = `clips/${candidate.id}${suffix}.mp4`;
+  const srtRel = `clips/${candidate.id}.srt`; // the same for every preset
   const outAbs = path.join(dir, outRel);
-  const partAbs = path.join(clipsDir, `${candidate.id}.part.mp4`);
+  const partAbs = path.join(clipsDir, `${candidate.id}${suffix}.part.mp4`);
 
   try {
     const cw = clipWords(allWords, candidate.start, candidate.end, start);

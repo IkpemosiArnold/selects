@@ -1,5 +1,6 @@
 // The rubric judge: one Ollama request per candidate, structured JSON out, cached on disk.
 import fs from "node:fs";
+import http from "node:http";
 import path from "node:path";
 import { ollamaUrl, PROMPTS_DIR, selectsHome } from "./config.mjs";
 import { readJson, sha1, writeJsonAtomic } from "./util.mjs";
@@ -26,7 +27,7 @@ const clamp = (n) => Math.max(1, Math.min(5, Math.round(Number(n) || 1)));
 const SCHEMA = {
   type: "object",
   properties: {
-    reason: { type: "string" },
+    reason: { type: "string", maxLength: 140 },
     hook: { type: "integer", minimum: 1, maximum: 5 },
     standalone: { type: "integer", minimum: 1, maximum: 5 },
     payoff: { type: "integer", minimum: 1, maximum: 5 },
@@ -58,38 +59,88 @@ export function buildMessages(candidate) {
   ];
 }
 
-/** Low-level: one structured chat request to Ollama. Returns the parsed JSON. */
-export async function ollamaJson({ model, messages, schema, timeoutMs = 300000, numPredict = 160, signal }) {
+/**
+ * POST JSON with node:http rather than fetch: fetch gives up after 300 s without response
+ * headers, and on a throttled CPU Ollama can take longer than that to read a prompt.
+ */
+function postJson(url, body, { timeoutMs, signal }) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const data = Buffer.from(JSON.stringify(body));
+    const req = http.request(
+      { hostname: u.hostname, port: u.port || 80, path: u.pathname, method: "POST", headers: { "content-type": "application/json", "content-length": data.length } },
+      (res) => {
+        const chunks = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => resolve({ status: res.statusCode, text: Buffer.concat(chunks).toString("utf8") }));
+        res.on("error", reject);
+      },
+    );
+    const timer = setTimeout(() => req.destroy(Object.assign(new Error("timeout"), { name: "TimeoutError" })), timeoutMs);
+    const onAbort = () => req.destroy(Object.assign(new Error("aborted"), { name: "AbortError" }));
+    signal?.addEventListener("abort", onAbort, { once: true });
+    req.on("error", reject);
+    req.on("close", () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    });
+    req.end(data);
+  });
+}
+
+/** Ollama durations are nanoseconds; keep seconds and token counts for the timings table. */
+export function callStats(j, wallSec) {
+  const s = (ns) => (typeof ns === "number" ? +(ns / 1e9).toFixed(2) : null);
+  const rate = (n, ns) => (n && ns ? +(n / (ns / 1e9)).toFixed(2) : null);
+  return {
+    wallSec,
+    loadSec: s(j.load_duration),
+    promptTokens: j.prompt_eval_count ?? null,
+    promptSec: s(j.prompt_eval_duration),
+    promptTokPerSec: rate(j.prompt_eval_count, j.prompt_eval_duration),
+    outTokens: j.eval_count ?? null,
+    outSec: s(j.eval_duration),
+    outTokPerSec: rate(j.eval_count, j.eval_duration),
+    totalSec: s(j.total_duration),
+  };
+}
+
+/**
+ * Low-level: one structured chat request to Ollama. Returns { data, stats }.
+ * Options follow the measured budget: short output (num_predict 80), a 2048 context,
+ * the model kept loaded for 30 minutes between calls, and temperature 0.2.
+ */
+export async function ollamaJson({ model, messages, schema, timeoutMs = 60 * 60 * 1000, numPredict = 80, signal }) {
   const body = {
     model,
     messages,
     format: schema,
     stream: false,
-    keep_alive: "15m",
+    keep_alive: "30m",
     options: { temperature: 0.2, num_ctx: 2048, num_predict: numPredict },
   };
+  const t0 = Date.now();
   let res;
   try {
-    const sig = signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);
-    res = await fetch(`${ollamaUrl()}/api/chat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: sig });
+    res = await postJson(`${ollamaUrl()}/api/chat`, body, { timeoutMs, signal });
   } catch (e) {
-    if (signal?.aborted) throw e;
-    const err = new Error(e.name === "TimeoutError" ? `Ollama took longer than ${Math.round(timeoutMs / 1000)} s to answer.` : `Could not reach Ollama at ${ollamaUrl()}.`);
+    if (e.name === "AbortError") throw e;
+    const err = new Error(e.name === "TimeoutError" ? `Ollama took longer than ${Math.round(timeoutMs / 60000)} min to answer.` : `Could not reach Ollama at ${ollamaUrl()}.`);
     err.hint = e.name === "TimeoutError" ? "Try a smaller model with --model, or close other heavy apps, then resume." : "Start Ollama (open the Ollama app or run `ollama serve`), then resume.";
     throw err;
   }
-  if (!res.ok) {
-    const text = await res.text();
-    const err = new Error(`Ollama returned ${res.status}: ${text.slice(0, 200)}`);
-    err.hint = /not found/i.test(text) ? `Pull the model first: ollama pull ${model}` : "Check `ollama ps` and the Ollama logs, then resume.";
+  if (res.status !== 200) {
+    const err = new Error(`Ollama returned ${res.status}: ${res.text.slice(0, 200)}`);
+    err.hint = /not found/i.test(res.text) ? `Pull the model first: ollama pull ${model}` : "Check `ollama ps` and the Ollama logs, then resume.";
     throw err;
   }
-  const j = await res.json();
+  const j = JSON.parse(res.text);
   const content = j.message?.content ?? "";
+  const stats = callStats(j, +((Date.now() - t0) / 1000).toFixed(2));
   try {
-    return { data: JSON.parse(content), evalCount: j.eval_count, promptEvalCount: j.prompt_eval_count };
+    return { data: JSON.parse(content), stats };
   } catch {
-    throw Object.assign(new Error(`The model did not return valid JSON: ${content.slice(0, 120)}`), { retryable: true });
+    throw Object.assign(new Error(`The model did not return valid JSON: ${content.slice(0, 120)}`), { retryable: true, stats });
   }
 }
 
@@ -138,7 +189,8 @@ export async function judge(candidates, { model, cacheDir, onProgress, onResult,
       }
       const d = res.data ?? res;
       const scores = { hook: clamp(d.hook), standalone: clamp(d.standalone), payoff: clamp(d.payoff), clarity: clamp(d.clarity) };
-      hit = { scores, reason: tidyReason(d.reason), sec: +((Date.now() - started) / 1000).toFixed(2) };
+      hit = { scores, reason: tidyReason(d.reason), sec: +((Date.now() - started) / 1000).toFixed(2), stats: res.stats ?? null };
+      if (cacheDir && res.stats) fs.appendFileSync(path.join(cacheDir, "judge-calls.jsonl"), JSON.stringify({ at: new Date().toISOString(), model, id: c.id, words: c.text.split(/\s+/).length, ...res.stats }) + "\n");
       times.push(hit.sec);
       cache[key] = hit;
       if (cacheFile) writeJsonAtomic(cacheFile, cache);

@@ -9,8 +9,9 @@ const cand = (id, text) => ({ id, start: 0, end: 30, text, hook: text.split(".")
 
 test("the judge prompt has system and user parts and fills the clip in", () => {
   const p = loadPrompt();
-  assert.match(p.system, /HOOK/);
-  assert.match(p.system, /STANDALONE/);
+  assert.match(p.system, /hook/);
+  assert.match(p.system, /standalone/);
+  assert.ok(p.system.split(/\s+/).length < 190, "rubric stays short (under about 250 tokens)");
   const m = buildMessages(cand("c_1", "Nobody tells you this. It works."));
   assert.equal(m[0].role, "system");
   assert.match(m[1].content, /Nobody tells you this\. It works\./);

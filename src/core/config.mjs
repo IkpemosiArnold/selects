@@ -38,7 +38,7 @@ export const DEFAULT_SETTINGS = {
   minLen: 20,
   maxLen: 60,
   preset: "shorts",
-  maxJudge: 36, // how many shortlisted windows the judge reads (the slow step on a CPU)
+  judgeN: 8, // how many pre-scored windows the LLM judge reads (the slow step on a CPU)
 };
 
 /** List local Ollama models. Returns [] if Ollama is not reachable. */
