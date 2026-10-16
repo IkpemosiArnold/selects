@@ -1,0 +1,650 @@
+{
+  "generatedAt": "2026-10-16T00:27:44.165Z",
+  "k": 5,
+  "iouThreshold": 0.5,
+  "settings": {
+    "minLen": 20,
+    "maxLen": 60
+  },
+  "judgeN": 8,
+  "randomSeeds": 200,
+  "aggregate": {
+    "heatmap": {
+      "oracle": {
+        "n": 1,
+        "hit3": {
+          "mean": 1,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "p3": {
+          "mean": 1,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "hit5": {
+          "mean": 1,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "p5": {
+          "mean": 0.6,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "r5": {
+          "mean": 0.75,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "miou5": {
+          "mean": 0.6881791459138475,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "hit3s": [
+          1
+        ],
+        "judgeMinPerVideo": null,
+        "secPerCandidate": null
+      },
+      "oracle:shortlist": {
+        "n": 1,
+        "hit3": {
+          "mean": 1,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "p3": {
+          "mean": 0.6666666666666666,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "hit5": {
+          "mean": 1,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "p5": {
+          "mean": 0.4,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "r5": {
+          "mean": 0.5,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "miou5": {
+          "mean": 0.39723542568219405,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "hit3s": [
+          1
+        ],
+        "judgeMinPerVideo": null,
+        "secPerCandidate": null
+      },
+      "prescore": {
+        "n": 1,
+        "hit3": {
+          "mean": 1,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "p3": {
+          "mean": 0.6666666666666666,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "hit5": {
+          "mean": 1,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "p5": {
+          "mean": 0.4,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "r5": {
+          "mean": 0.5,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "miou5": {
+          "mean": 0.3151431937176897,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "hit3s": [
+          1
+        ],
+        "judgeMinPerVideo": null,
+        "secPerCandidate": null
+      },
+      "prefilter": {
+        "n": 1,
+        "hit3": {
+          "mean": 1,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "p3": {
+          "mean": 0.6666666666666666,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "hit5": {
+          "mean": 1,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "p5": {
+          "mean": 0.4,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "r5": {
+          "mean": 0.5,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "miou5": {
+          "mean": 0.3151431937176897,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "hit3s": [
+          1
+        ],
+        "judgeMinPerVideo": null,
+        "secPerCandidate": null
+      },
+      "random": {
+        "n": 1,
+        "hit3": {
+          "mean": 0.175,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "p3": {
+          "mean": 0.06166666666666669,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "hit5": {
+          "mean": 0.26,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "p5": {
+          "mean": 0.05799999999999996,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "r5": {
+          "mean": 0.0725,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "miou5": {
+          "mean": 0.12262320304943021,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "hit3s": [
+          0.175
+        ],
+        "judgeMinPerVideo": null,
+        "secPerCandidate": null
+      },
+      "random:shortlist": {
+        "n": 1,
+        "hit3": {
+          "mean": 0.675,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "p3": {
+          "mean": 0.2733333333333336,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "hit5": {
+          "mean": 0.94,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "p5": {
+          "mean": 0.2820000000000001,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "r5": {
+          "mean": 0.3525,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "miou5": {
+          "mean": 0.22454429737573206,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "hit3s": [
+          0.675
+        ],
+        "judgeMinPerVideo": null,
+        "secPerCandidate": null
+      },
+      "energy": {
+        "n": 1,
+        "hit3": {
+          "mean": 0,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "p3": {
+          "mean": 0,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "hit5": {
+          "mean": 0,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "p5": {
+          "mean": 0,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "r5": {
+          "mean": 0,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "miou5": {
+          "mean": 0.09847563851023654,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "hit3s": [
+          0
+        ],
+        "judgeMinPerVideo": null,
+        "secPerCandidate": null
+      },
+      "paired": {}
+    },
+    "human": {
+      "paired": {}
+    }
+  },
+  "videos": [
+    {
+      "id": "G9NabGlnDCs",
+      "title": "\"I'm a Machine\" An interview with Fabiano Caruana | GibChess",
+      "duration": 617,
+      "nWords": 1931,
+      "nCandidates": 142,
+      "labels": {
+        "heatmap": [
+          {
+            "start": 314.45,
+            "end": 334.45,
+            "source": "heatmap",
+            "weight": 1
+          },
+          {
+            "start": 462.77,
+            "end": 482.77,
+            "source": "heatmap",
+            "weight": 0.292
+          },
+          {
+            "start": 494.4,
+            "end": 519.12,
+            "source": "heatmap",
+            "weight": 0.483
+          },
+          {
+            "start": 561.65,
+            "end": 581.65,
+            "source": "heatmap",
+            "weight": 0.14
+          }
+        ],
+        "human": []
+      },
+      "methods": {
+        "oracle": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 1,
+              "p5": 0.6,
+              "r5": 0.75,
+              "miou5": 0.6881791459138475
+            }
+          }
+        },
+        "oracle:shortlist": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.6666666666666666,
+              "p5": 0.4,
+              "r5": 0.5,
+              "miou5": 0.39723542568219405
+            }
+          }
+        },
+        "prescore": {
+          "preds": [
+            {
+              "id": "c_0134",
+              "start": 552.88,
+              "end": 580.6,
+              "total": 0.658,
+              "hook": "We saw some surprising results from Iran.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0122",
+              "start": 494.8,
+              "end": 520.92,
+              "total": 0.647,
+              "hook": ">> Right, so your focus is more just on your- >> Yeah, I mean- >> The comments.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0025",
+              "start": 91.28,
+              "end": 119.72,
+              "total": 0.646,
+              "hook": ">> Talking about opening preparations now, that is one of your strengths.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0007",
+              "start": 25.8,
+              "end": 51.52,
+              "total": 0.638,
+              "hook": ">> And you were coming back here Fabi after 2011.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0064",
+              "start": 218.76,
+              "end": 273.92,
+              "total": 0.631,
+              "hook": "How would you advise them that they should use the machine?",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.6666666666666666,
+              "p5": 0.4,
+              "r5": 0.5,
+              "miou5": 0.3151431937176897
+            }
+          }
+        },
+        "prefilter": {
+          "preds": [
+            {
+              "id": "c_0134",
+              "start": 552.88,
+              "end": 580.6,
+              "total": 0.658,
+              "hook": "We saw some surprising results from Iran.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0122",
+              "start": 494.8,
+              "end": 520.92,
+              "total": 0.647,
+              "hook": ">> Right, so your focus is more just on your- >> Yeah, I mean- >> The comments.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0025",
+              "start": 91.28,
+              "end": 119.72,
+              "total": 0.646,
+              "hook": ">> Talking about opening preparations now, that is one of your strengths.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0007",
+              "start": 25.8,
+              "end": 51.52,
+              "total": 0.638,
+              "hook": ">> And you were coming back here Fabi after 2011.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0064",
+              "start": 218.76,
+              "end": 273.92,
+              "total": 0.631,
+              "hook": "How would you advise them that they should use the machine?",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.6666666666666666,
+              "p5": 0.4,
+              "r5": 0.5,
+              "miou5": 0.3151431937176897
+            }
+          }
+        },
+        "random": {
+          "preds": [
+            {
+              "id": "c_0010",
+              "start": 32.96,
+              "end": 60.2,
+              "total": 0.9948229456786066,
+              "hook": ">> I wanted to experience something a bit different from the tournaments I usually play.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0036",
+              "start": 132.12,
+              "end": 186.88,
+              "total": 0.9945340014528483,
+              "hook": "When you were 12, you moved from the US to Madrid.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0108",
+              "start": 440.96,
+              "end": 466.32,
+              "total": 0.9916538530960679,
+              "hook": "Do you keep an eye out in competition?",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0052",
+              "start": 176.88,
+              "end": 201.92,
+              "total": 0.9893774879164994,
+              "hook": "I mean, I've worked with a lot of coaches and also other players who are like, you know, less consistently than my main coaches.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0114",
+              "start": 471.56,
+              "end": 510.04,
+              "total": 0.9842514398042113,
+              "hook": ">> To quality players.",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0.175,
+              "hit5": 0.26,
+              "p3": 0.06166666666666669,
+              "p5": 0.05799999999999996,
+              "r5": 0.0725,
+              "miou5": 0.12262320304943021
+            }
+          },
+          "seeds": 200
+        },
+        "random:shortlist": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0.675,
+              "hit5": 0.94,
+              "p3": 0.2733333333333336,
+              "p5": 0.2820000000000001,
+              "r5": 0.3525,
+              "miou5": 0.22454429737573206
+            }
+          },
+          "seeds": 200
+        },
+        "energy": {
+          "preds": [
+            {
+              "id": "c_0043",
+              "start": 154.52,
+              "end": 176.88,
+              "total": 1,
+              "hook": "So I left school in the United States and I went to Spain and I started playing chess very consistently and studying chess a lot more.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0119",
+              "start": 485.92,
+              "end": 510.04,
+              "total": 0.8347784719288797,
+              "hook": "So I prefer, I mean, I don't like to see players coming very close to my rating.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0061",
+              "start": 212.64,
+              "end": 239.24,
+              "total": 0.8146418055111057,
+              "hook": ">> Now of course, computers are indispensable in today's time when it comes to preparation.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0102",
+              "start": 425,
+              "end": 451.12,
+              "total": 0.7650556499218605,
+              "hook": "I don't know, I mean, I don't think it makes a huge difference like if, because you see players who have bad poker faces who do pretty well in chess.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0141",
+              "start": 580.6,
+              "end": 610.96,
+              "total": 0.6557292831011288,
+              "hook": ">> Right now there's been a lot of talk about how the gap in reading between you and the world number one is getting really close.",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.09847563851023654
+            }
+          }
+        }
+      },
+      "timings": {
+        "transcribeSec": 201.149,
+        "candidatesSec": 0.152,
+        "nCandidates": 142
+      },
+      "nShortlist": 8
+    }
+  ]
+}

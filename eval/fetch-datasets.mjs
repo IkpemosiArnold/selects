@@ -67,7 +67,9 @@ function fetchAll(ids) {
       "--print", "pre_process:%()j",
       "--match-filters", `license~='(?i)creative commons' & heatmap & duration>=${MIN_DUR} & duration<=${MAX_DUR}`,
       "--no-simulate",
-      "-f", "ba[abr<=80]/wa",
+      // Prefer the original-language track: some channels add auto-dubbed audio tracks, and a
+      // low-bitrate filter alone once picked a non-English dub.
+      "-f", "ba[abr<=80][format_note*=original]/ba[format_note*=original]/ba[abr<=80]/wa",
       "-o", join(MEDIA, "%(id)s.%(ext)s"),
       ...todo.map((id) => (/^https?:/.test(id) ? id : `https://www.youtube.com/watch?v=${id}`)),
     ]);

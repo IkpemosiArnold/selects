@@ -118,6 +118,10 @@ export async function runVideo(v, C, models) {
       timings.transcribeSec = (Date.now() - t0) / 1000;
       return w;
     });
+    if (words.length < 10 * (v.duration / 60)) {
+      rmSync(join(dir, "whisper.json"), { force: true });
+      throw new Error(`transcript nearly empty (${words.length} words for ${Math.round(v.duration / 60)} min): wrong audio track or not English?`);
+    }
     writeJson(wordsFile, words);
     writeJson(timingsFile, timings);
     log(`${v.id}: ${words.length} words in ${Math.round(timings.transcribeSec)} s`);
@@ -316,10 +320,11 @@ export function report(videos, agg, manifest) {
 
   L.push("## Wall time per video and stage", "");
   const models = [...new Set(videos.flatMap((v) => Object.keys(v.methods).filter((m) => m.startsWith("judge:"))))];
-  L.push(`| Video | length | candidates (judged) | transcribe | ${models.map((m) => m.replace("judge:", "judge ")).join(" | ")} |`);
-  L.push(`|---|---|---|---|${models.map(() => "---").join("|")}|`);
+  const cols = ["Video", "evaluated length", "windows (judged)", "transcribe", ...models.map((m) => m.replace("judge:", "judge "))];
+  L.push(`| ${cols.join(" | ")} |`, `|${cols.map(() => "---").join("|")}|`);
   for (const v of videos) {
-    L.push(`| ${v.title.slice(0, 60)} | ${mmss(v.duration)} | ${v.nCandidates} (${v.nShortlist}) | ${v.timings.transcribeSec ? mmss(v.timings.transcribeSec) : "n/a"} | ${models.map((m) => (v.methods[m] ? mmss(v.methods[m].judgeSec) : "-")).join(" | ")} |`);
+    const title = v.title.replace(/\|/g, "/").slice(0, 60);
+    L.push(`| ${title} | ${mmss(v.duration)} | ${v.nCandidates} (${v.nShortlist}) | ${v.timings.transcribeSec ? mmss(v.timings.transcribeSec) : "n/a"} | ${models.map((m) => (v.methods[m] ? mmss(v.methods[m].judgeSec) : "-")).join(" | ")}${models.length ? " |" : ""}`);
   }
   L.push("");
 
@@ -355,11 +360,11 @@ export function report(videos, agg, manifest) {
   }
 
   L.push("## How to read this, and caveats", "");
-  L.push(`- **n is small (${videos.length} videos).** Confidence intervals are percentile bootstrap over videos; with n this small they are wide, and a difference whose interval crosses zero is not a finding.`);
+  L.push(`- **n is small (${videos.length} video${videos.length === 1 ? "" : "s"}).** Confidence intervals are percentile bootstrap over videos; with n this small they are wide, and a difference whose interval crosses zero is not a finding.`);
   L.push("- **Most Replayed is a proxy.** It records where viewers rewatch or seek to, which is not the same as where a good standalone short is. Replays also gather around slides, demos and jokes that need visual context, which an audio-only picker cannot see.");
-  L.push("- **The heatmap is coarse.** YouTube gives about 100 segments per video (one per 9 to 27 s here), so label boundaries are only accurate to a segment. Hit at IoU 0.5 is strict against such labels; the mean best IoU column and the \"best possible from candidate pool\" row show how much is reachable at all.");
+  L.push("- **The heatmap is coarse.** YouTube gives about 100 segments per video (one per 6 to 27 s for these videos), so label boundaries are only accurate to a segment. Hit at IoU 0.5 is strict against such labels; the mean best IoU column and the two ceiling rows show how much is reachable at all.");
   L.push(`- **Random is the chance level**, averaged over ${RANDOM_SEEDS} seeds on the same candidate windows, so it is not a single lucky or unlucky draw.`);
-  L.push("- **The judge reads a shortlist**, as Selects does in a real job: the cheap text pre-score picks about 36 windows spread over the video, and only those go to the model. The judge rows therefore measure the shipped pipeline (pre-score shortlist, then model). The shortlist ceiling row shows what that shortlist can reach at best.");
+  L.push("- **The judge reads a shortlist**, as Selects does in a real job: the cheap text pre-score keeps ${videos[0]?.nShortlist ?? 8} windows spread over the video, and only those go to the model. With ${videos[0]?.nShortlist ?? 8} windows and k = 5, any picker takes most of the shortlist, so hit@3 and precision@3 are the columns that separate prefilter alone from prefilter + judge. The judge rows therefore measure the shipped pipeline (pre-score shortlist, then model). The shortlist ceiling row shows what that shortlist can reach at best.");
   L.push("- **Energy** scores loudness, loudness variation and words per second, the signals cheap clippers use. It does not read the words.");
   L.push("- Judge models run locally through Ollama on CPU. Time is wall time on this laptop while other work may share the CPU; treat it as an order of magnitude.");
   L.push("- Videos are Creative Commons BY on YouTube; see `eval/datasets/manifest.json` for each URL and licence.");
