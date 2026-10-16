@@ -8,7 +8,7 @@ import { api } from "../../lib/api.js";
 import { plural, tc } from "../../lib/time.js";
 import { nudgeEdge, toSentences } from "../../lib/sentences.js";
 import { usePlayer } from "../../lib/player.js";
-import { useReducedMotion } from "../../lib/hooks.js";
+import { useMedia, useReducedMotion } from "../../lib/hooks.js";
 import { setNow, springTo, current as springNow, stop, SLOW } from "../../lib/spring.js";
 import { flatWords, useCues } from "../../lib/useCues.js";
 import { Masthead } from "../../App.jsx";
@@ -16,11 +16,18 @@ import Card, { reframeOf } from "./Card.jsx";
 import Slate from "./Slate.jsx";
 import Timeline from "./Timeline.jsx";
 import Script from "./Script.jsx";
+import Sheet, { DecisionBar } from "./Sheet.jsx";
 import { byRank, clipName, firstLine, thumbAt } from "./util.js";
 import { BlurOverlay, BlurPanel, useBlurDraft, useContentBox, trackLabelsFor, blurSummary, blurIsEmpty } from "../Blur.jsx";
 import { usePlayerTime } from "../../lib/player.js";
 
-const OPEN = -8; // degrees: the clap stick raised, ready
+const OPEN_WIDE = -8; // degrees: the clap stick raised, ready
+const OPEN_PHONE = -4; // the stick spans the whole phone, so it opens less
+const buzz = (ms) => {
+  try {
+    navigator.vibrate?.(ms);
+  } catch {}
+};
 const PEEK = { x: 0, y: 0, scale: 0.92, rotate: 2.5, opacity: 1 }; // x is set from the card width
 
 function isTyping(el) {
@@ -71,6 +78,10 @@ function LiveBlurOverlay({ player, ...rest }) {
 export default function Reel({ job, words, faces, captionsVersion, onCandidate, onRender }) {
   const player = usePlayer();
   const reduce = useReducedMotion();
+  const phone = useMedia("(max-width: 680px)");
+  const OPEN = phone ? OPEN_PHONE : OPEN_WIDE;
+  const sheetRef = useRef(null);
+  const barRef = useRef(null);
   const caps = useCues(job.id, words, captionsVersion);
   const capWords = useMemo(() => flatWords(caps.cues), [caps.cues]);
   const sentences = useMemo(() => toSentences(words), [words]);
@@ -142,7 +153,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
 
   const peekPose = () => {
     const w = cardRef.current?.offsetWidth || 400;
-    return { ...PEEK, x: w * 0.15 };
+    return { ...PEEK, x: w * (phone ? 0.05 : 0.15), rotate: phone ? 1.5 : PEEK.rotate };
   };
   const deckRef = useRef(null);
   const forward = useRef(false); // set by a decision: the next card comes forward from the peek
@@ -253,6 +264,34 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
     }
   }, [cur?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // On a phone, the first clip leans once toward Approve and back, so the
+  // swipe is shown instead of explained. Once per browser, never with
+  // reduced motion, and not after any decision.
+  const taught = useRef(false);
+  useEffect(() => {
+    if (!phone || reduce || mode !== "review" || !cur || taught.current) return;
+    if (ranked.some((c) => c.status !== "proposed")) return;
+    try {
+      if (localStorage.getItem("selects-swipe-shown")) return;
+    } catch {}
+    taught.current = true;
+    const t = setTimeout(async () => {
+      const el = cardRef.current;
+      if (!el || drag.current) return;
+      try {
+        localStorage.setItem("selects-swipe-shown", "1");
+      } catch {}
+      const stamp = leanRef.current.a;
+      if (stamp) stamp.style.opacity = 0.7;
+      leanBar(0.5);
+      await springTo(el, { x: 44, rotate: 44 / 26 }, { response: 0.42, damping: 0.8 });
+      if (stamp) stamp.style.opacity = 0;
+      leanBar(0);
+      springTo(el, { x: 0, rotate: 0 }, { response: 0.4, damping: 0.75, onRest: () => (el.style.transform = "") });
+    }, 1400);
+    return () => clearTimeout(t);
+  }, [phone, reduce, mode, cur?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ---- decisions -----------------------------------------------------------
 
   const patch = useCallback(
@@ -284,12 +323,14 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
         if (status === "approved") clap();
       }
       if (c.status !== status) patch(c, { status }, { status });
+      buzz(status === "approved" ? 12 : 6);
+      if (phone) setToast({ msg: `${status === "approved" ? "Approved" : "Skipped"} ${clipName(c).toLowerCase()}.`, kind: "ok", at: Date.now(), undo: true });
       forward.current = !!next;
       setCurrentId(next?.id ?? null);
       setSaid(`${status === "approved" ? "Approved" : "Skipped"} ${clipName(c).toLowerCase()}. ${next ? `Now ${clipName(next).toLowerCase()}: ${next.hook || ""}` : "Every clip has a decision."}`);
       if (mode === "blur") setMode("review");
     },
-    [cur, mode, nextOf, reduce, patch] // eslint-disable-line react-hooks/exhaustive-deps
+    [cur, mode, nextOf, reduce, patch, phone] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const undo = useCallback(async () => {
@@ -311,7 +352,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
       const c = cur;
       if (!c) return null;
       if (end - start < 3) {
-        flash("A clip needs at least a few seconds.", "error");
+        flash("A clip has to be at least 3 seconds long.", "error");
         return null;
       }
       history.current.push({ id: c.id, status: c.status, start: c.start, end: c.end });
@@ -402,6 +443,15 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
   // ---- swipe -----------------------------------------------------------------
 
   const drag = useRef(null);
+  // The bar's buttons fill as the card leans toward them.
+  const leanBar = (lean) => {
+    const bar = barRef.current;
+    if (!bar) return;
+    const a = bar.querySelector(".is-approve");
+    const s = bar.querySelector(".is-skip");
+    if (a) a.style.setProperty("--lean", Math.max(0, lean).toFixed(3));
+    if (s) s.style.setProperty("--lean", Math.max(0, -lean).toFixed(3));
+  };
   const onPointerDown = (e) => {
     if (mode !== "review" || e.button !== 0 || e.target.closest("button, a, .blur-layer.is-editing")) return;
     drag.current = { x0: e.clientX, y0: e.clientY, id: e.pointerId, hist: [[e.clientX, performance.now()]], locked: false };
@@ -428,6 +478,18 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
     const lean = Math.max(-1, Math.min(1, x / 120));
     if (leanRef.current.a) leanRef.current.a.style.opacity = Math.max(0, lean);
     if (leanRef.current.s) leanRef.current.s.style.opacity = Math.max(0, -lean);
+    leanBar(lean);
+    // a small detent where letting go would decide: the stamp pops, the phone ticks
+    const w = cardRef.current?.offsetWidth || 360;
+    const armed = Math.abs(x) > w * 0.32 ? Math.sign(x) : 0;
+    if (armed !== (d.armed || 0)) {
+      d.armed = armed;
+      if (armed) {
+        buzz(4);
+        const el = armed > 0 ? leanRef.current.a : leanRef.current.s;
+        if (el && !reduce) el.animate([{ scale: 1 }, { scale: 1.18 }, { scale: 1 }], { duration: 220, easing: "cubic-bezier(0.23, 1, 0.32, 1)" });
+      }
+    }
   };
   const onPointerUp = (e) => {
     const d = drag.current;
@@ -435,6 +497,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
     if (!d?.locked) return;
     if (leanRef.current.a) leanRef.current.a.style.opacity = 0;
     if (leanRef.current.s) leanRef.current.s.style.opacity = 0;
+    leanBar(0);
     const [x0, t0] = d.hist[0];
     const vx = ((e.clientX - x0) / Math.max(1, performance.now() - t0)) * 1000; // px per s
     const pose = springNow(cardRef.current);
@@ -473,17 +536,23 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
     try {
       await onRender(approved.map((c) => c.id));
     } catch (e) {
-      flash(`Rendering did not start. ${e.message}`, "error");
+      flash(`The render did not start. ${e.message}`, "error");
       setRendering(false);
     }
   };
 
+  // The pile's stills wait for the card to land; the count does not, so the
+  // pile and the Render button always say the same number.
   const pile = approved.filter((c) => !flying.includes(c.id)).slice(-3);
+  const count = approved.length;
   const rendered = ranked.filter((c) => c.render?.status === "done").length;
   const line = cur ? firstLine(cur, capWords, caps.edited) : "";
 
+  const phoneReview = phone && !!cur && mode === "review";
+  const timeline = <Timeline job={job} cands={ranked} currentId={cur?.id} onPick={pick} player={cur ? player : null} />;
+
   return (
-    <div className={"reel is-" + mode + (cur ? "" : " is-done")}>
+    <div className={"reel is-" + mode + (cur ? "" : " is-done") + (phone ? " is-phone" : "")}>
       <Masthead job={job}>
         <div className="pile" ref={pileRef} aria-live="polite">
           <span className="pile-stack" aria-hidden="true">
@@ -493,12 +562,12 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
             {!pile.length && <span className="pile-empty" />}
           </span>
           <span className="pile-count">
-            <b>{approved.length - flying.length}</b> approved
+            <b>{count}</b> approved
             {skipped.length > 0 && <span className="pile-skipped">, {skipped.length} skipped</span>}
           </span>
         </div>
-        <button type="button" className="btn btn-primary btn-render" disabled={!approved.length || rendering} onClick={renderNow}>
-          {approved.length ? `Render ${plural(approved.length, "clip")}` : "Render"}
+        <button type="button" className="btn btn-primary btn-render" disabled={!count || rendering} onClick={renderNow}>
+          {count ? `Render ${plural(count, "clip")}` : "Render"}
         </button>
       </Masthead>
 
@@ -507,7 +576,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
         <p className="sr-only" role="status" aria-live="polite">{said}</p>
         {cur ? (
           <>
-            <div className="reel-left">
+            {!phoneReview && <div className="reel-left">
               {mode === "trim" ? (
                 <Script
                   job={job}
@@ -519,7 +588,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
                   onEditWord={async (ci, wi, text) => {
                     try {
                       await caps.editWord(ci, wi, text);
-                      flash("Caption fixed. Every render uses it.");
+                      flash("Word fixed. Every render uses it.");
                     } catch (e) {
                       flash(`That fix was not saved. ${e.message}`, "error");
                     }
@@ -529,7 +598,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
               ) : (
                 <Slate ref={stickRef} clip={cur} line={line} total={ranked.length} onLineClick={() => setMode("trim")} />
               )}
-            </div>
+            </div>}
 
             <div className="deck" ref={deckRef}>
               {peek && mode === "review" && (
@@ -577,7 +646,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
               </div>
             </div>
 
-            <div className="reel-right">
+            {!phoneReview && <div className="reel-right">
               {mode === "blur" ? (
                 <div className="reel-blur">
                   <div className="reel-blur-head">
@@ -618,14 +687,36 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
                   onUndo={undo}
                 />
               )}
-            </div>
+            </div>}
           </>
         ) : (
           <Done job={job} ranked={ranked} approved={approved} rendered={rendered} onPick={pick} onRender={renderNow} rendering={rendering} />
         )}
       </main>
 
-      <Timeline job={job} cands={ranked} currentId={cur?.id} onPick={pick} player={cur ? player : null} />
+      {phoneReview ? (
+        <>
+          <Sheet
+            ref={sheetRef}
+            stickRef={stickRef}
+            clip={cur}
+            line={line}
+            total={ranked.length}
+            waiting={waiting.length}
+            onNudge={nudge}
+            onTrim={() => setMode("trim")}
+            onBlur={() => setMode("blur")}
+            blurText={blurIsEmpty(blurSpec) ? null : blurSummary(blurSpec)}
+            captionsOn={captionsOn}
+            jobId={job.id}
+            fileName={job.source?.name}
+            timeline={timeline}
+          />
+          <DecisionBar ref={barRef} cur={cur} onDecide={(st) => decide(st)} />
+        </>
+      ) : (
+        (!phone || !cur) && timeline
+      )}
       {ghosts.map((g) => (
         <div
           key={g.key}
@@ -652,8 +743,20 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
 
 
       {toast && (
-        <div key={toast.at} className={"toast is-" + toast.kind} role={toast.kind === "error" ? "alert" : "status"}>
+        <div key={toast.at} className={"toast is-" + toast.kind + (toast.undo ? " has-action" : "")} role={toast.kind === "error" ? "alert" : "status"}>
           {toast.msg}
+          {toast.undo && (
+            <button
+              type="button"
+              className="toast-action"
+              onClick={() => {
+                setToast(null);
+                undo();
+              }}
+            >
+              Undo
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -665,13 +768,13 @@ function Controls({ cur, mode, waiting, total, onDecide, onNudge, onTrim, onBlur
   return (
     <section className="controls" aria-label="Decide">
       <p className="controls-left">
-        {decided ? (cur.status === "approved" ? "Approved. Approve again to keep it, or skip it now." : "Skipped. Approve it to bring it back.") : waiting === total ? `${plural(total, "clip")} to decide` : `${waiting} of ${total} still to decide`}
+        {decided ? (cur.status === "approved" ? "Approved. Skip it if you change your mind." : "Skipped. Approve it to bring it back.") : waiting === total ? `${plural(total, "clip")} to check` : `${waiting} of ${total} still to check`}
       </p>
       <button type="button" className={"decide is-approve" + (cur.status === "approved" ? " is-on" : "")} onClick={() => onDecide("approved")} disabled={mode === "trim"}>
         <span className="keycap" aria-hidden="true">A</span>
         <span className="decide-text">
           <b>Approve</b>
-          <small>Render it later</small>
+          <small>Keep it for the render</small>
         </span>
         <span className="decide-alt" aria-hidden="true">→</span>
       </button>
@@ -684,37 +787,37 @@ function Controls({ cur, mode, waiting, total, onDecide, onNudge, onTrim, onBlur
         <span className="decide-alt" aria-hidden="true">←</span>
       </button>
 
-      <div className="nudge" role="group" aria-label="Trim by a sentence">
-        <p className="nudge-h">Trim by a sentence</p>
+      <div className="nudge" role="group" aria-label="Move the start or the end by one sentence">
+        <p className="nudge-h">Move by one sentence</p>
         <div className="nudge-row">
           <span>Start</span>
-          <button type="button" onClick={() => onNudge("start", -1)} aria-label="Start a sentence earlier">
-            <kbd>,</kbd> earlier
+          <button type="button" onClick={() => onNudge("start", -1)} aria-label="Start one sentence earlier">
+            <kbd>,</kbd> Earlier
           </button>
-          <button type="button" onClick={() => onNudge("start", 1)} aria-label="Start a sentence later">
-            <kbd>.</kbd> later
+          <button type="button" onClick={() => onNudge("start", 1)} aria-label="Start one sentence later">
+            <kbd>.</kbd> Later
           </button>
         </div>
         <div className="nudge-row">
           <span>End</span>
-          <button type="button" onClick={() => onNudge("end", -1)} aria-label="End a sentence earlier">
-            <kbd>[</kbd> earlier
+          <button type="button" onClick={() => onNudge("end", -1)} aria-label="End one sentence earlier">
+            <kbd>[</kbd> Earlier
           </button>
-          <button type="button" onClick={() => onNudge("end", 1)} aria-label="End a sentence later">
-            <kbd>]</kbd> later
+          <button type="button" onClick={() => onNudge("end", 1)} aria-label="End one sentence later">
+            <kbd>]</kbd> Later
           </button>
         </div>
       </div>
 
       <div className="tools">
         <button type="button" className="tool" onClick={onTrim} aria-pressed={mode === "trim"}>
-          <kbd>T</kbd> {mode === "trim" ? "Close the script" : "Fine trim in the script"}
+          <kbd>T</kbd> {mode === "trim" ? "Close the script" : "Trim by words"}
         </button>
         <button type="button" className="tool" onClick={onBlur}>
-          <kbd>B</kbd> {blurText || "Blur a face or an area"}
+          <kbd>B</kbd> {blurText || "Blur faces or an area"}
         </button>
         <a className="tool is-link" href={`#/job/${jobId}/captions`}>
-          {captionsOn ? "Fix the captions" : "Captions are off. Turn them on"}
+          {captionsOn ? "Fix caption words" : "Captions are off. Turn them on"}
         </a>
       </div>
       <p className="hint">
@@ -728,12 +831,12 @@ function Done({ job, ranked, approved, rendered, onPick, onRender, rendering }) 
   return (
     <section className="done" aria-labelledby="done-h">
       <h2 id="done-h" className="done-big">
-        {approved.length ? `${plural(approved.length, "clip")} to render.` : ranked.length ? "Nothing approved." : "No clips were found."}
+        {approved.length ? `${plural(approved.length, "clip")} to render.` : ranked.length ? "No clips approved." : "No clips found."}
       </h2>
       <p className="done-sub">
         {ranked.length
-          ? "Every clip has a decision. Pick one to look at it again."
-          : "The model found no moment that starts and ends on a full sentence. Try shorter clip lengths in a new job."}
+          ? "You've checked every clip. Pick one to change your mind."
+          : "Gemma found no moment that starts and ends on a full sentence. Try shorter clips in a new job."}
       </p>
       {ranked.length > 0 && (
         <ol className="done-list">
@@ -746,7 +849,7 @@ function Done({ job, ranked, approved, rendered, onPick, onRender, rendering }) 
                 <span className="done-n mono">{c.rank ?? "+"}</span>
                 <span className="done-hook">{c.hook}</span>
                 <span className="done-time mono">{tc(c.start)}</span>
-                <span className="done-s">{c.status === "approved" ? "Approved" : c.status === "skipped" ? "Skipped" : "To decide"}</span>
+                <span className="done-s">{c.status === "approved" ? "Approved" : c.status === "skipped" ? "Skipped" : "To check"}</span>
               </button>
             </li>
           ))}
@@ -758,7 +861,7 @@ function Done({ job, ranked, approved, rendered, onPick, onRender, rendering }) 
             <button type="button" className="btn btn-primary btn-render btn-big" disabled={!approved.length || rendering} onClick={onRender}>
               {approved.length ? `Render ${plural(approved.length, "clip")}` : "Approve a clip to render it"}
             </button>
-            <a className="btn btn-quiet" href={`#/job/${job.id}/captions`}>Check the captions first</a>
+            <a className="btn btn-quiet" href={`#/job/${job.id}/captions`}>Fix caption words first</a>
           </>
         ) : (
           <>

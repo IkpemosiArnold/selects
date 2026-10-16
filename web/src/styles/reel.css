@@ -445,3 +445,102 @@
 @media (max-width: 820px) {
   .masthead-file .mono { display: none; }
 }
+
+/* ---------- phone review: the clip fills the screen, the slate is a bottom sheet ---------- */
+.sheet, .decide-bar, .sheet-scrim { display: none; }
+@media (max-width: 680px) {
+  .reel.is-phone { --bar-h: 76px; --peek-h: 86px; --mast-h: 57px; }
+  .reel.is-phone .masthead-file { display: none; }
+  .reel.is-phone .masthead { flex-wrap: nowrap; }
+  .reel.is-phone.is-review:not(.is-done) { height: 100dvh; min-height: 0; overflow: hidden; grid-template-rows: auto minmax(0, 1fr); }
+  .reel.is-phone.is-review:not(.is-done) .reel-stage {
+    display: flex; justify-content: center; align-items: flex-start; padding: 10px 12px 0; gap: 0;
+  }
+  .reel.is-phone.is-review:not(.is-done) .deck {
+    width: min(calc(100vw - 32px), calc((100dvh - var(--mast-h) - env(safe-area-inset-top, 0px) - var(--peek-h) - var(--bar-h) - env(safe-area-inset-bottom, 0px) - 40px) * 0.5625));
+    height: auto; aspect-ratio: 9 / 16; margin: 0; max-width: none; justify-self: auto;
+  }
+  .reel.is-phone .card-controls { bottom: 14px; left: 12px; }
+  .reel.is-phone .card-play { width: 48px; height: 48px; }
+  .reel.is-phone .card-sound { min-height: 44px; padding: 0 14px; }
+
+  .sheet-scrim { display: block; position: fixed; inset: 0; z-index: 19; background: #000; opacity: 0; pointer-events: none; }
+  .sheet {
+    display: flex; flex-direction: column; gap: 0; position: fixed; left: 0; right: 0; z-index: 20;
+    bottom: calc(var(--bar-h) + env(safe-area-inset-bottom, 0px));
+    max-height: calc(100dvh - var(--mast-h) - env(safe-area-inset-top, 0px) - var(--bar-h) - env(safe-area-inset-bottom, 0px) - 8px);
+    will-change: transform;
+  }
+  .sheet .slate-clap { margin: 0 8px -1px; flex: none; touch-action: none; cursor: grab; }
+  .sheet .slate-board { margin: 0 8px; border-radius: 0; flex: none; box-shadow: 0 0 0 1px var(--slate-rule), 0 -16px 30px -18px rgba(0, 0, 0, 0.7); }
+  .sheet-head { display: grid; grid-template-columns: minmax(0, 1fr) 58px; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+  .sheet .slate-fields { grid-template-columns: 0.95fr 1fr 1fr 0.9fr; border-bottom: 0; }
+  .sheet .slate-fields > div { padding: 9px 8px 10px 10px; }
+  .sheet .slate-fields dd { font-size: 1.0625rem; }
+  .sheet.is-open .sheet-head { border-bottom: 1px solid var(--slate-rule); }
+  .sheet-toggle {
+    display: grid; place-items: center; align-content: center; gap: 2px; min-height: 56px; padding: 0; border: 0;
+    border-left: 1px solid var(--slate-rule); background: none; color: var(--chalk); font: 600 0.75rem/1 var(--sans); cursor: pointer;
+    touch-action: manipulation;
+  }
+  .sheet-toggle svg { transition: rotate 220ms var(--ease-out); }
+  .sheet.is-open .sheet-toggle svg { rotate: 180deg; }
+  .sheet-toggle:focus-visible { outline-color: var(--yellow); outline-offset: -4px; }
+  .sheet .slate-line { font-size: 1.5rem; padding: 14px 14px 18px; }
+  .sheet .slate-line.is-mid { font-size: 1.3rem; }
+  .sheet .slate-line.is-long { font-size: 1.125rem; }
+  .sheet-body {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; background: var(--table);
+    padding: 20px 16px 28px; display: grid; gap: 24px; align-content: start;
+  }
+  .sheet-body .slate-why { gap: 10px; padding: 0; }
+  .why-h { font-size: var(--t-13); font-weight: 650; color: var(--ink-2); }
+  .sheet-body .slate-why h3.why-h { margin-top: 8px; }
+  .sheet-body .slate-reason { font-size: 1.0625rem; max-width: none; }
+  .sheet-body .nudge { margin: 0; padding-top: 18px; }
+  .sheet-body .tools { margin: 0; gap: 8px; }
+  .sheet-body .tool { min-height: 48px; padding: 0 14px; border-color: var(--line-2); font-size: 1rem; }
+  .sheet-body .tool.is-link { padding-left: 14px; }
+  .sheet-where { display: grid; gap: 6px; }
+  .sheet-left { font-size: var(--t-15); }
+  .sheet-where .timeline { padding: 6px 0 0; border-top: 0; }
+
+  .decide-bar {
+    display: grid; grid-template-columns: 1fr 1.35fr; gap: 10px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 22;
+    padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px)); background: var(--table); border-top: 1px solid var(--line);
+  }
+  .bar-btn {
+    --lean: 0;
+    display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 54px; border-radius: 14px;
+    font: 700 1.0625rem/1 var(--sans); border: 1.5px solid var(--line-2); background: transparent; color: var(--ink); cursor: pointer;
+    touch-action: manipulation; user-select: none; -webkit-user-select: none;
+    scale: calc(1 + var(--lean) * 0.06); transition: transform 120ms var(--ease-out), scale 90ms linear;
+  }
+  .bar-btn:active { transform: scale(0.96); }
+  .bar-btn.is-approve {
+    background: var(--yellow); border-color: var(--yellow); color: var(--on-yellow);
+    box-shadow: 0 0 0 calc(var(--lean) * 7px) var(--yellow-wash);
+  }
+  .bar-btn.is-skip { border-color: color-mix(in srgb, var(--red-ink) calc(var(--lean) * 100%), var(--line-2)); color: color-mix(in srgb, var(--red-ink) calc(var(--lean) * 100%), var(--ink)); }
+  .bar-btn.is-skip.is-on { border-color: var(--red-ink); }
+  .bar-btn.is-approve.is-on { box-shadow: inset 0 0 0 2px var(--on-yellow); }
+  .bar-btn:focus-visible { outline-offset: 3px; }
+
+  .reel.is-phone .toast { bottom: calc(var(--bar-h) + var(--peek-h) + 14px + env(safe-area-inset-bottom, 0px)); }
+
+  /* trim and blur on a phone: a smaller clip on top, the tool below */
+  .reel.is-phone.is-trim .reel-stage, .reel.is-phone.is-blur .reel-stage { grid-template-columns: minmax(0, 1fr); grid-template-areas: "deck" "left" "right"; gap: 14px; }
+  .reel.is-phone.is-trim .deck, .reel.is-phone.is-blur .deck { width: auto; height: 34dvh; aspect-ratio: 9 / 16; justify-self: center; margin: 0; }
+  .reel.is-phone.is-blur .deck { height: 48dvh; }
+  .reel.is-phone.is-trim .reel-left { height: auto; min-height: 50dvh; }
+  .reel.is-phone.is-blur .reel-left { display: none; }
+  .reel.is-phone.is-blur .reel-right { max-width: none; }
+}
+@media (max-width: 680px) and (prefers-reduced-motion: reduce) {
+  .bar-btn, .sheet-toggle svg { transition: none; }
+}
+.toast.has-action { display: flex; align-items: center; gap: 16px; padding-right: 6px; white-space: nowrap; }
+.toast-action {
+  min-height: 36px; padding: 0 12px; border: 0; border-radius: 4px; background: transparent; color: inherit;
+  font: 700 var(--t-15)/1 var(--sans); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; touch-action: manipulation;
+}
