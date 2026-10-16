@@ -81,7 +81,7 @@ test("GPU path scales in stored orientation, then turns the frame upright", asyn
   const { videoGraph, uprightFilter } = await import("./render.mjs");
   const src = { width: 3840, height: 2160, rotation: 270, uprightWidth: 2160, uprightHeight: 3840, fps: 59.94 };
   const g = videoGraph({ src, W: 1080, H: 1920, reframe: "scale", gpu: true });
-  assert.match(g, /^\[0:v:0\]fps=30,scale_vt=w=1920:h=1080,hwdownload,format=nv12,transpose=clock,setsar=1\[pre\]/);
+  assert.match(g, /^\[0:v:0\]fps=30,scale_vt=w=1920:h=1080,hwdownload,format=nv12,transpose=clock,format=yuv420p,setsar=1\[pre\]/);
   assert.equal(uprightFilter(90), "transpose=cclock");
   assert.equal(uprightFilter(0), "");
 });

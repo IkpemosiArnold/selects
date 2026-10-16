@@ -270,7 +270,9 @@ export function videoGraph({ src, W, H, reframe, blur = [], fps = 30, vmap = "0:
     const turned = Math.abs(((src.rotation || 0) % 180)) === 90;
     const [cw, ch] = turned ? [work.h, work.w] : [work.w, work.h];
     const up = uprightFilter(src.rotation);
-    pre = `[${vmap}]${rate}scale_vt=w=${cw}:h=${ch},hwdownload,format=nv12${up ? `,${up}` : ""},setsar=1[pre]`;
+    // planar 4:2:0 after the download: crop, boxblur and overlay on semi-planar nv12 left
+    // the chroma of blurred boxes empty (solid green), seen on the first blurred caption render
+    pre = `[${vmap}]${rate}scale_vt=w=${cw}:h=${ch},hwdownload,format=nv12${up ? `,${up}` : ""},format=yuv420p,setsar=1[pre]`;
   } else {
     // autorotate has already turned the frames upright; scale also squares non-square pixels
     pre = `[${vmap}]${rate}scale=${work.w}:${work.h},setsar=1[pre]`;
