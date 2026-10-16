@@ -6,7 +6,7 @@
 //
 // Keys: Space play/pause, J back 5 s, L forward 5 s, I mark in, O mark out, A add moment,
 // 1/2/3 playback speed. Click a transcript line to jump there.
-// Label blind: do not look at YouTube's "Most Replayed" graph or any model output first.
+// Use Chrome (the audio is Opus in WebM). Label blind: do not look at YouTube's "Most Replayed" graph or any model output first.
 import http from "node:http";
 import { createReadStream, existsSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
@@ -52,7 +52,7 @@ const server = http.createServer((req, res) => {
     if (req.method === "GET" && url.pathname === "/") return send(res, 200, PAGE, "text/html; charset=utf-8");
     if (req.method === "GET" && url.pathname === "/api/videos") {
       return send(res, 200, readManifest().map((v) => ({
-        id: v.id, title: v.title, duration: v.duration, hasMedia: existsSync(mediaPath(v)),
+        id: v.id, title: v.title, duration: v.duration, evalRange: v.evalRange || null, hasMedia: existsSync(mediaPath(v)),
         isVideo: /\.(mp4|webm)$/.test(mediaPath(v)) && !!v.videoPath,
         human: (v.labels || []).filter((l) => l.source === "human"),
       })));
@@ -114,6 +114,7 @@ video,audio{width:100%;margin:10px 0;max-height:420px;background:#000}
 <p>Pick the 5 stretches (20 to 60 s each) you would post as shorts. Label blind: do not look at YouTube's Most Replayed graph or Selects' picks first.
 Keys: <kbd>Space</kbd> play, <kbd>J</kbd>/<kbd>L</kbd> 5 s, <kbd>I</kbd> in, <kbd>O</kbd> out, <kbd>A</kbd> add, <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> speed.</p>
 <div class="row"><select id="pick"></select><span id="status" class="t"></span></div>
+<p id="range" class="warn"></p>
 <div id="player"></div>
 <div class="row"><span class="t">Now <b id="now">0:00</b></span><span class="t">In <b id="in">-</b></span><span class="t">Out <b id="out">-</b></span>
 <button id="bin">Mark in (I)</button><button id="bout">Mark out (O)</button><button id="badd" class="primary">Add moment (A)</button><span id="lenmsg"></span></div>
@@ -130,6 +131,7 @@ async function load(){videos=await (await fetch("/api/videos")).json();
 async function open(id){cur=videos.find(v=>v.id===id);marks={in:null,out:null};moments=cur.human.map(l=>({start:l.start,end:l.end,note:l.note||""}));
  $("player").innerHTML=cur.hasMedia?(cur.isVideo?'<video id="m" controls preload="metadata" src="/media/'+id+'"></video>':'<audio id="m" controls preload="metadata" src="/media/'+id+'"></audio>'):'<p class="warn">Media not downloaded for this video.</p>';
  media=$("m"); if(media)media.ontimeupdate=tick; render();
+ $("range").textContent=cur.evalRange?"Only the first "+fmt(cur.evalRange[1])+" of this video is evaluated. Pick your 5 moments inside it.":"";
  const words=await (await fetch("/api/words/"+id)).json(); sentences=[];let s=null;
  for(const w of words){if(!s)s={s:w.s,e:w.e,text:""};s.text+=w.w;s.e=w.e;if(/[.?!]$/.test(w.w.trim())){sentences.push(s);s=null}}if(s)sentences.push(s);
  $("tx").innerHTML=sentences.length?sentences.map((x,i)=>'<span data-i="'+i+'">'+x.text.replace(/</g,"&lt;")+" </span>").join(""):'<p>No transcript cached yet. It appears after the eval runner transcribes this video.</p>';}
@@ -141,7 +143,8 @@ function render(){$("in").textContent=fmt(marks.in);$("out").textContent=fmt(mar
  $("status").textContent=moments.length+" of 5 marked";}
 $("moments").onclick=(e)=>{const d=e.target.dataset;if(d.del!=null){moments.splice(+d.del,1);render()}if(d.play!=null&&media){media.currentTime=moments[+d.play].start;media.play()}};
 const mark=(k)=>{if(media){marks[k]=Math.round(media.currentTime*10)/10;render()}};
-function add(){if(marks.in==null||marks.out==null||marks.out<=marks.in){alert("Mark in and out first (out after in).");return}moments.push({start:marks.in,end:marks.out});marks={in:null,out:null};render()}
+function add(){if(marks.in==null||marks.out==null||marks.out<=marks.in){alert("Mark in and out first (out after in).");return}
+ if(cur.evalRange&&marks.out>cur.evalRange[1]){alert("This moment ends after "+fmt(cur.evalRange[1])+", outside the evaluated part.");return}moments.push({start:marks.in,end:marks.out});marks={in:null,out:null};render()}
 $("bin").onclick=()=>mark("in");$("bout").onclick=()=>mark("out");$("badd").onclick=add;
 $("save").onclick=async()=>{const r=await (await fetch("/api/labels/"+cur.id,{method:"POST",body:JSON.stringify({labels:moments})})).json();$("saved").textContent=r.ok?"Saved "+r.saved+" moments":"Error: "+r.error;cur.human=moments.slice()};
 document.onkeydown=(e)=>{if(e.target.tagName==="SELECT"||!media)return;const k=e.key.toLowerCase();
