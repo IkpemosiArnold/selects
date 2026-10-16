@@ -44,7 +44,7 @@ export function QualityLine({ q }) {
   );
 }
 
-function OverrideForm({ job, busy, onGo, withModel, compact, consequence }) {
+function OverrideForm({ job, busy, onGo, withModel, compact, consequence, primary = true }) {
   const id = useId();
   const used = job.language?.used || job.settings?.language || "en";
   const [lang, setLang] = useState(used === "auto" ? "en" : used);
@@ -90,7 +90,7 @@ function OverrideForm({ job, busy, onGo, withModel, compact, consequence }) {
         </label>
       )}
       <div className="lq-form-go">
-        <button type="submit" className="btn btn-primary" disabled={busy}>
+        <button type="submit" className={primary ? "btn btn-primary" : "btn"} disabled={busy}>
           {busy ? "Starting" : "Transcribe again"}
         </button>
       </div>
@@ -244,7 +244,7 @@ export default function LanguageQuality({ job, onRetranscribe, onForce, variant 
           </button>
         )}
       </div>
-      {stopped ? <OverrideForm job={job} busy={busy} onGo={go} withModel={true} /> : open && <OverrideForm job={job} busy={busy} onGo={go} withModel compact />}
+      {stopped ? <OverrideForm job={job} busy={busy} onGo={go} withModel={true} primary={!suggestQuick.length} /> : open && <OverrideForm job={job} busy={busy} onGo={go} withModel compact />}
       {stopped && onForce && (job.error?.suggest?.force || q?.verdict === "unreliable") && (
         <p className="lq-force">
           <button type="button" className="btn btn-quiet" disabled={busy} onClick={onForce}>
