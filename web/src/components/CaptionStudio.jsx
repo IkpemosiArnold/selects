@@ -5,7 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api.js";
 import { tc, plural, aboutMinutes } from "../lib/time.js";
 import { usePlayer, usePlayerTime, usePlaying } from "../lib/player.js";
-import { cueAt, isEdited } from "../lib/cues.js";
+import { cueAt, isEdited, tokensOf, tokenTimes } from "../lib/cues.js";
+import { display } from "../lib/burn.js";
 import { copyText } from "../lib/hooks.js";
 import { Masthead } from "../App.jsx";
 import CaptionEditor, { useCaptions } from "./CaptionEditor.jsx";
@@ -19,16 +20,44 @@ function naturalSize(job) {
   return { w, h };
 }
 
-function CurrentCue({ items, player, captionsOn }) {
+// The cue on screen, drawn the way the render burns it: short-form bold words
+// with the spoken one in yellow, or classic subtitles with an outline.
+function CurrentCue({ items, player, captionsOn, style }) {
   const t = usePlayerTime(player);
   if (!captionsOn || !items?.length) return null;
   const i = cueAt(items, t);
   if (i < 0) return null;
+  const it = items[i];
+  if (style === "bold") {
+    const toks = tokensOf(it.text);
+    const times = tokenTimes(it, toks);
+    let on = 0;
+    times.forEach((x, k) => {
+      if (x.s <= t + 0.02) on = k;
+    });
+    return (
+      <div className="burn" aria-hidden="true">
+        <p>
+          {toks.map((x, k) => (
+            <span key={k} className={k === on ? "is-on" : ""}>
+              {display(x.t)}{" "}
+            </span>
+          ))}
+        </p>
+      </div>
+    );
+  }
   return (
     <p className="sp-caption" aria-hidden="true">
-      <span>{items[i].text}</span>
+      {it.text}
     </p>
   );
+}
+
+function captionStyle(job, natural) {
+  const st = job.settings?.captionStyle;
+  if (st === "bold" || st === "subtitle") return st;
+  return natural.w / natural.h < 1 ? "bold" : "subtitle";
 }
 
 function StudioPreview({ job, player, items, blur, faces, blurEditing, armed, onArmed, selected, onSelect, captionsOn }) {
@@ -72,7 +101,7 @@ function StudioPreview({ job, player, items, blur, faces, blurEditing, armed, on
         ) : (
           <img className="sp-media" src={api.frameUrl(job.id, t)} alt="" draggable={false} />
         )}
-        <CurrentCue items={items} player={player} captionsOn={captionsOn} />
+        <CurrentCue items={items} player={player} captionsOn={captionsOn} style={captionStyle(job, natural)} />
         <BlurOverlay
           spec={blur.spec}
           onChange={blur.change}
@@ -202,8 +231,8 @@ function OutputPanel({ job, onRender, busy }) {
             {o.status === "pending" ? "Waiting to start" : `Rendering ${Math.round((o.progress || 0) * 100)}%`}
             {o.etaSec ? <span className="dim">, {aboutMinutes(o.etaSec)} left</span> : null}
           </p>
-          <div className="rr-bar is-wide" role="progressbar" aria-label="Captioned video render" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((o.progress || 0) * 100)}>
-            <div className="rr-fill" style={{ transform: `scaleX(${o.progress || 0})` }} />
+          <div className="rp-bar" role="progressbar" aria-label="Captioned video render" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((o.progress || 0) * 100)}>
+            <div className="rp-fill" style={{ transform: `scaleX(${o.progress || 0})` }} />
           </div>
         </div>
       )}

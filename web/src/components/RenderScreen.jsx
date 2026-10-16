@@ -4,6 +4,8 @@ import { tc, secs, plural, aboutMinutes } from "../lib/time.js";
 import { copyText } from "../lib/hooks.js";
 import { Masthead } from "../App.jsx";
 import { frameSvg } from "../mock/frames.js";
+import { thumbAt } from "./reel/util.js";
+import { PlayIcon } from "./reel/Card.jsx";
 import { LICENCES, needsMediaReminder } from "../lib/licences.js";
 
 const REMINDER = "Check slides and on-screen media: a talk's licence may not cover every figure.";
@@ -27,8 +29,10 @@ function CopyButton({ text, label, done = "Copied" }) {
   );
 }
 
+// One rendered clip as a take: the MP4 itself at 9:16 (its first frame until
+// you play it), with the posting kit beside it.
 function Row({ job, c, kit }) {
-  const [open, setOpen] = useState(false);
+  const [playing, setPlaying] = useState(false);
   const r = c.render || { status: "pending", progress: 0 };
   const len = c.end - c.start;
   const done = r.status === "done";
@@ -39,71 +43,69 @@ function Row({ job, c, kit }) {
   // What gets pasted: the caption with its credit line, then the hashtags.
   const fullCaption = [kit?.caption ?? captionBody, hashtags.join(" ")].filter(Boolean).join("\n\n");
   const file = kit?.file || r.path;
+  const pct = Math.round((r.progress || 0) * 100);
   return (
-    <li className={"rr is-" + r.status}>
-      <div className="rr-main">
-        <span className="rr-rank mono">{c.rank}</span>
-        <div className="rr-text">
-          <p className="rr-hook mono">{title || c.hook}</p>
-          <p className="rr-meta mono dim">
-            {tc(c.start)} to {tc(c.end)}, {secs(len)}
-          </p>
-        </div>
-        <div className="rr-state">
-          {r.status === "running" && (
-            <span className="mono">
-              {Math.round((r.progress || 0) * 100)}%{r.etaSec ? <span className="dim">, {aboutMinutes(r.etaSec)} left</span> : null}
-            </span>
-          )}
-          {r.status === "pending" && <span className="dim">Waiting</span>}
-          {done && r.stale && <span className="rr-stale">Captions or blur changed. Re-render to apply.</span>}
-          {r.status === "error" && <span className="is-error">{r.message || r.error || "This clip did not render."}</span>}
-          {done && (
-            <button type="button" className="btn btn-chip" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-              {open ? "Hide" : "Play"}
-            </button>
-          )}
-        </div>
+    <li className={"take is-" + r.status}>
+      <div className="take-card">
+        {done && clip ? (
+          <video
+            src={playing ? clip : `${clip}#t=0.4`}
+            preload="metadata"
+            playsInline
+            controls={playing}
+            autoPlay={playing}
+            muted={!playing}
+            aria-label={`Clip ${c.rank ?? ""} as rendered`}
+          />
+        ) : done ? (
+          <img src={frameSvg(Math.floor((c.start / (job.source?.duration || 1)) * 60) + 1)} alt="" />
+        ) : (
+          thumbAt(job, c.start + 0.4) && <img className="take-poster" src={thumbAt(job, c.start + 0.4)} alt="" />
+        )}
+        {done && !playing && clip && (
+          <button type="button" className="take-play" onClick={() => setPlaying(true)} aria-label={`Play clip ${c.rank ?? ""}`}>
+            <PlayIcon playing={false} />
+          </button>
+        )}
+        {!done && r.status !== "error" && (
+          <div className="take-progress" role="progressbar" aria-label={`Clip ${c.rank} render`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+            <span style={{ transform: `scaleY(${r.progress || 0})` }} />
+            <b className="mono">{r.status === "pending" ? "Waiting" : `${pct}%`}</b>
+          </div>
+        )}
       </div>
-      {!done && r.status !== "error" && (
-        <div className="rr-bar" role="progressbar" aria-label={`Clip ${c.rank} render`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((r.progress || 0) * 100)}>
-          <div className="rr-fill" style={{ transform: `scaleX(${r.progress || 0})` }} />
-        </div>
-      )}
-      {done && (
-        <div className="rr-kit">
-          {open && (
-            <div className="rr-player">
-              {clip ? (
-                <video src={clip} controls autoPlay playsInline />
-              ) : (
-                <img src={frameSvg(Math.floor((c.start / (job.source?.duration || 1)) * 60) + 1)} alt="" />
-              )}
-            </div>
-          )}
-          <div className="rr-fields">
+      <div className="take-body">
+        <p className="take-meta mono">
+          Clip {c.rank ?? "+"}, {tc(c.start)} to {tc(c.end)}, {secs(len)}
+          {r.status === "running" && r.etaSec ? <span className="dim">, {aboutMinutes(r.etaSec)} left</span> : null}
+        </p>
+        <h2 className="take-title">{title || c.hook}</h2>
+        {done && r.stale && <p className="take-stale">Captions or blur changed since this render. Render it again to apply them.</p>}
+        {r.status === "error" && <p className="take-error">{r.message || r.error || "This clip did not render."}</p>}
+        {done && (
+          <dl className="take-kit">
             <div className="kit-field">
-              <p className="label">Title</p>
-              <p className="kit-title">{title || "No title yet"}</p>
+              <dt className="label">Title</dt>
+              <dd className="kit-title">{title || "No title yet"}</dd>
               <CopyButton text={title} label="Copy title" />
             </div>
             <div className="kit-field">
-              <p className="label">Caption</p>
-              <div className="kit-caption">
+              <dt className="label">Caption</dt>
+              <dd className="kit-caption">
                 <p>{captionBody || (kit === null ? "Loading the posting kit" : "No caption in the kit")}</p>
                 {hashtags.length > 0 && <p className="kit-tags">{hashtags.join(" ")}</p>}
-                {kit?.attribution && <p className="kit-credit">Copying adds the credit line above.</p>}
-              </div>
+                {kit?.attribution && <p className="kit-credit">Copying adds the credit line.</p>}
+              </dd>
               <CopyButton text={fullCaption} label="Copy caption" />
             </div>
             <div className="kit-field">
-              <p className="label">File</p>
-              <p className="mono kit-path">{file}</p>
+              <dt className="label">File</dt>
+              <dd className="mono kit-path">{file}</dd>
               <CopyButton text={file} label="Copy path" />
             </div>
-          </div>
-        </div>
-      )}
+          </dl>
+        )}
+      </div>
     </li>
   );
 }
@@ -339,7 +341,7 @@ export default function RenderScreen({ job, refetch }) {
           </div>
         )}
 
-        <ol className="render-list">
+        <ol className="takes">
           {list.map((c) => (
             <Row key={c.id} job={job} c={c} kit={kits[c.id] === undefined ? null : kits[c.id] || undefined} />
           ))}

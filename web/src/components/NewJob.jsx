@@ -4,6 +4,7 @@ import { tc, plural } from "../lib/time.js";
 import { Masthead, MiddleTruncate, go } from "../App.jsx";
 import ModelControl from "./ModelControl.jsx";
 import QueueList from "./QueueList.jsx";
+import { thumbAt } from "./reel/util.js";
 import { measuredRates } from "../lib/estimate.js";
 import { LICENCES } from "../lib/licences.js";
 import { LANGUAGES } from "../lib/languages.js";
@@ -89,6 +90,18 @@ export default function NewJob() {
   const [error, setError] = useState(null);
   const [hint, setHint] = useState(null);
   const fileRef = useRef(null);
+  // The list carries summaries; the stills and clips come from each job (a few small requests).
+  const [full, setFull] = useState({});
+  useEffect(() => {
+    let alive = true;
+    for (const j of jobs.slice(0, 24)) {
+      if (full[j.id] && full[j.id].updatedAt === j.updatedAt) continue;
+      api.getJob(j.id).then((x) => alive && x && setFull((m) => ({ ...m, [j.id]: { thumbs: x.thumbs, candidates: x.candidates, updatedAt: x.updatedAt } }))).catch(() => {});
+    }
+    return () => {
+      alive = false;
+    };
+  }, [jobs]); // eslint-disable-line react-hooks/exhaustive-deps
   const pathRef = useRef(null);
 
   useEffect(() => {
@@ -365,17 +378,34 @@ export default function NewJob() {
         {jobs.length > 0 && (
           <section className="recent" aria-labelledby="recent-h">
             <h2 id="recent-h" className="h-18">On this laptop</h2>
-            <ul>
-              {jobs.map((j) => (
-                <li key={j.id}>
-                  <a href={`#/job/${j.id}`} className="recent-row">
-                    <span className="recent-name" title={j.source?.path}><MiddleTruncate text={j.source?.name} /></span>
-                    <span className="mono dim">{tc(j.source?.duration)}</span>
-                    <span className={"recent-status" + (j.stage === "error" ? " is-error" : "")}>{statusLine(j)}</span>
-                    <span className="mono dim recent-date">{new Date(j.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}</span>
-                  </a>
-                </li>
-              ))}
+            <ul className="shelf">
+              {jobs.map((summary) => {
+                const j = full[summary.id] ? { ...summary, ...full[summary.id] } : summary;
+                const clips = (j.candidates || []).filter((c) => c.status === "approved").slice(0, 3);
+                const poster = thumbAt(j, (j.source?.duration || 0) * 0.3);
+                return (
+                  <li key={j.id}>
+                    <a href={`#/job/${j.id}`} className={"shelf-item" + (j.stage === "error" ? " is-error" : "")}>
+                      <span className="shelf-card" aria-hidden="true">
+                        {poster && <img src={poster} alt="" loading="lazy" />}
+                        {clips.length > 0 && (
+                          <span className="shelf-clips">
+                            {clips.map((c, i) => (
+                              <img key={c.id} src={thumbAt(j, c.start + 0.4) || undefined} alt="" style={{ "--i": i }} loading="lazy" />
+                            ))}
+                          </span>
+                        )}
+                        <span className="shelf-dur mono">{tc(j.source?.duration)}</span>
+                      </span>
+                      <span className="shelf-name" title={j.source?.path}>
+                        <MiddleTruncate text={j.source?.name} tail={10} />
+                      </span>
+                      <span className="shelf-status">{statusLine(j)}</span>
+                      <span className="shelf-date mono">{new Date(j.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}</span>
+                    </a>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         )}
