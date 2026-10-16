@@ -8,6 +8,7 @@ import { thumbAt } from "./reel/util.js";
 import { measuredRates } from "../lib/estimate.js";
 import { LICENCES } from "../lib/licences.js";
 import { LANGUAGES, languageName } from "../lib/languages.js";
+import { MADE_FOR, madeForById } from "../lib/madeFor.js";
 
 
 
@@ -82,8 +83,19 @@ export default function NewJob() {
   const [jobs, setJobs] = useState([]);
   const [path, setPath] = useState("");
   const [model, setModel] = useState(null);
+  const [madeFor, setMadeFor] = useState("shorts");
+  const [ownLengths, setOwnLengths] = useState(false);
   const [minLen, setMinLen] = useState(20);
   const [maxLen, setMaxLen] = useState(60);
+  const preset = madeForById(madeFor);
+  const pickMadeFor = (id) => {
+    const m = madeForById(id);
+    setMadeFor(id);
+    if (m && !ownLengths) {
+      setMinLen(m.minLen);
+      setMaxLen(m.maxLen);
+    }
+  };
   const [k, setK] = useState(5);
   const [judgeN, setJudgeN] = useState(8);
   const [mode, setMode] = useState("clips");
@@ -186,7 +198,7 @@ export default function NewJob() {
         language,
         ...(mode === "caption"
           ? {}
-          : { model, k: Number(k), minLen: Number(minLen), maxLen: Number(maxLen), judgeN: Number(judgeN), preset: "shorts" }),
+          : { model, k: Number(k), minLen: Number(minLen), maxLen: Number(maxLen), judgeN: Number(judgeN), preset: "shorts", madeFor: ownLengths ? "custom" : madeFor }),
         ...(credit.trim() ? { credit: credit.trim() } : {}),
         ...(license && license !== "other" ? { license } : {}),
         ...(sourceUrl.trim() ? { sourceUrl: sourceUrl.trim() } : {}),
@@ -208,6 +220,9 @@ export default function NewJob() {
   };
 
   const rates = measuredRates(jobs);
+  // Started and not finished: still working, or stopped. Queued jobs show in the queue.
+  const queued = new Set((queue?.items || []).map((q) => q.jobId));
+  const unfinished = jobs.filter((j) => !queued.has(j.id) && (["probing", "language", "transcribing", "candidates", "judging", "error"].includes(j.stage) || j.resumable));
   const issues = health?.unreachable
     ? [{ what: "Selects cannot reach its local server.", fix: "Start it in a terminal, then reload this page.", code: "npm run serve" }]
     : healthIssues(health);
@@ -216,7 +231,7 @@ export default function NewJob() {
   const summary =
     mode === "caption"
       ? `Captions for the whole video, ${langLabel}.`
-      : `Up to ${plural(Number(k) || 0, "clip")}, ${minLen} to ${maxLen} seconds each, ${langLabel}. ${modelLabel(model)} picks them.`;
+      : `Up to ${plural(Number(k) || 0, "clip")}, ${langLabel}. ${modelLabel(model)} picks them.`;
   const licName = LICENCES.find(([v]) => v === license)?.[1];
   const creditSummary = credit.trim()
     ? [credit.trim(), license && license !== "other" ? licName : null].filter(Boolean).join(", ")
@@ -239,6 +254,23 @@ export default function NewJob() {
                   <p className="health-what">{x.what}</p>
                   <p className="health-fix">{x.fix}</p>
                   {x.code && <code className="health-code">{x.code}</code>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {unfinished.length > 0 && (
+          <section className="resume" aria-labelledby="resume-h">
+            <h2 id="resume-h" className="h-18">Not finished yet</h2>
+            <ul className="resume-list">
+              {unfinished.slice(0, 3).map((j) => (
+                <li key={j.id}>
+                  <a className={"resume-row" + (j.stage === "error" ? " is-error" : "")} href={`#/job/${j.id}`}>
+                    <span className="resume-name" title={j.source?.path}><MiddleTruncate text={j.source?.name || j.id} tail={10} /></span>
+                    <span className="resume-status">{statusLine(j)}</span>
+                    <span className="resume-go">{j.stage === "error" ? "Open" : "Continue"}</span>
+                  </a>
                 </li>
               ))}
             </ul>
@@ -330,6 +362,23 @@ export default function NewJob() {
             {hint && <p id="path-hint" className="field-hint">{hint}</p>}
           </div>
 
+          {mode !== "caption" && (
+            <fieldset className="made-for">
+              <legend className="field-label">Made for</legend>
+              <div className="seg seg-light seg-wide" role="radiogroup" aria-label="Made for">
+                {MADE_FOR.map((m) => (
+                  <button key={m.id} type="button" role="radio" aria-checked={!ownLengths && madeFor === m.id} className={"seg-btn" + (!ownLengths && madeFor === m.id ? " is-on" : "")} onClick={() => { setOwnLengths(false); pickMadeFor(m.id); setMinLen(m.minLen); setMaxLen(m.maxLen); }}>
+                    <span className="mf-long">{m.label}</span>
+                    <span className="mf-short">{m.short}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="field-hint">
+                {ownLengths ? `Your own lengths: ${minLen} to ${maxLen} seconds.` : `Clips of ${preset?.minLen} to ${preset?.maxLen} seconds, cut to 9:16 with captions.`}
+              </p>
+            </fieldset>
+          )}
+
           <div className="folds">
             <details className="fold">
               <summary>
@@ -370,14 +419,20 @@ export default function NewJob() {
                     <p className="brief-line">
                       Up to
                       <input className="input num mono" type="number" inputMode="numeric" min={1} max={30} value={k} onChange={(e) => setK(e.target.value)} aria-label="Most clips to suggest" />
-                      clips, each
-                      <input className="input num mono" type="number" inputMode="numeric" min={5} max={180} value={minLen} onChange={(e) => setMinLen(e.target.value)} aria-label="Shortest clip in seconds" />
-                      to
-                      <input className="input num mono" type="number" inputMode="numeric" min={10} max={180} value={maxLen} onChange={(e) => setMaxLen(e.target.value)} aria-label="Longest clip in seconds" />
-                      seconds long. Gemma reads the best
+                      clips. Gemma reads the best
                       <input className="input num mono" type="number" inputMode="numeric" min={2} max={30} value={judgeN} onChange={(e) => setJudgeN(e.target.value)} aria-label="Moments Gemma reads" />
                       moments to choose them.
                     </p>
+                    <details className="more" open={ownLengths || undefined}>
+                      <summary>More options</summary>
+                      <p className="brief-line">
+                        Clips from
+                        <input className="input num mono" type="number" inputMode="numeric" min={5} max={180} value={minLen} onChange={(e) => { setOwnLengths(true); setMinLen(e.target.value); }} aria-label="Shortest clip in seconds" />
+                        to
+                        <input className="input num mono" type="number" inputMode="numeric" min={10} max={180} value={maxLen} onChange={(e) => { setOwnLengths(true); setMaxLen(e.target.value); }} aria-label="Longest clip in seconds" />
+                        seconds long, instead of the lengths for {preset?.label || "the platform"}.
+                      </p>
+                    </details>
                     {models ? (
                       <ModelControl models={models} value={model} onChange={setModel} judgeN={Number(judgeN) || 8} rates={rates} />
                     ) : (

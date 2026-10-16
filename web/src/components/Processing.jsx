@@ -3,6 +3,8 @@ import { Masthead } from "../App.jsx";
 import { tc, aboutMinutes } from "../lib/time.js";
 import { useReducedMotion } from "../lib/hooks.js";
 import { languageName } from "../lib/languages.js";
+import { api } from "../lib/api.js";
+import { useNotifyOptIn } from "../lib/notify.js";
 
 // The core's hints name CLI flags; in the app the same advice is said plainly.
 function plainHint(h) {
@@ -19,11 +21,11 @@ function plainHint(h) {
 }
 
 const STEPS = [
-  { key: "probe", label: "Read the file" },
+  { key: "probe", label: "Open the video" },
   { key: "language", label: "Check the language" },
-  { key: "transcribe", label: "Transcribe" },
-  { key: "candidates", label: "Find moments" },
-  { key: "judge", label: "Judge with the model" },
+  { key: "transcribe", label: "Transcribe what's said" },
+  { key: "candidates", label: "Find moments that stand alone" },
+  { key: "judge", label: "Gemma picks the best" },
 ];
 
 const SHOWN = 160;
@@ -129,41 +131,45 @@ export default function Processing({ job, words, onResume }) {
   const unreliable = isErr && job.error?.stage === "transcribe" && job.transcriptQuality?.verdict === "unreliable";
 
   // Honest numbers: prefer what the server measured; otherwise derive them.
-  let rtfText = tr.note || (tr.speed ? `transcribing at ${tr.speed}x real time` : null);
+  let speed = Number(tr.speed) || Number(String(tr.note || "").match(/([\d.]+)x/)?.[1]) || null;
   let eta = tr.etaSec;
-  if (!rtfText && tr.startedAt && reached > 0) {
+  if (!speed && tr.startedAt && reached > 0) {
     const elapsed = (Date.now() - Date.parse(tr.startedAt)) / 1000;
     if (elapsed > 5) {
-      const rtf = reached / elapsed;
-      rtfText = `transcribing at ${rtf.toFixed(1)}x real time`;
-      eta ??= (dur - reached) / rtf;
+      speed = reached / elapsed;
+      eta ??= (dur - reached) / speed;
     }
   }
+  const speedText = speed ? `${speed >= 1 ? `${speed.toFixed(1)} times faster than` : `${(1 / speed).toFixed(1)} times slower than`} the video plays, on this ${api.browser ? "device" : "laptop"}.` : "";
+  const leave = api.browser
+    ? "Keep this tab open to finish faster. If you leave, it carries on when you come back."
+    : "You can close this tab. Progress is saved.";
+  const notify = useNotifyOptIn(job.id);
 
   let headline, sub;
   if (isErr) {
     headline = job.error?.message || "The job stopped.";
     sub = unreliable
       ? "Say which language is spoken, or try a bigger speech model, and Selects transcribes it again."
-      : plainHint(job.error?.hint) || "Resume to continue from the last saved step.";
+      : plainHint(job.error?.hint) || "Resume to carry on from the last saved step.";
   } else if (job.stage === "queued") {
-    headline = "Waiting for the job ahead of this one.";
-    sub = "It starts by itself. You can close the lid; progress is saved after each step.";
+    headline = "Waiting for the video ahead of this one.";
+    sub = "It starts by itself. You can close the laptop lid, and progress is saved after each step.";
   } else if (job.stage === "probing") {
-    headline = "Reading the file.";
+    headline = "Opening the video.";
     sub = `${job.source?.name}`;
   } else if (checkingLanguage) {
     headline = "Checking which language is spoken.";
-    sub = "Selects decodes a few short samples in each likely language and keeps the one whisper hears best.";
+    sub = "Selects writes out a few short samples in each likely language and keeps the one that makes the most sense.";
   } else if (job.stage === "transcribing") {
-    headline = cap(rtfText || "Transcribing") + ".";
-    sub = eta != null ? `${cap(aboutMinutes(eta))} left. You can close this tab; progress is saved.` : "Working out the speed on this laptop.";
+    headline = "Transcribing what's said.";
+    sub = eta != null ? `${cap(aboutMinutes(eta))} left. ${speedText} ${leave}` : `Timing the speed on this ${api.browser ? "device" : "laptop"}. ${leave}`;
   } else if (job.stage === "candidates") {
     headline = "Finding moments that start and end on a full sentence.";
     sub = "This takes a few seconds.";
   } else {
-    headline = cap(jd.note ? `the model is reading ${jd.note}` : "the model is reading each moment") + ".";
-    sub = jd.etaSec != null ? `${cap(aboutMinutes(jd.etaSec))} left.` : "";
+    headline = jd.note ? `Gemma is reading ${jd.note}.` : "Gemma is reading each moment.";
+    sub = `${jd.etaSec != null ? `${cap(aboutMinutes(jd.etaSec))} left. ` : ""}${leave}`;
   }
 
   const pct = job.stage === "transcribing" || isErr ? (dur ? reached / dur : 0) : job.stage === "judging" ? jd.progress || 0 : null;
@@ -231,6 +237,12 @@ export default function Processing({ job, words, onResume }) {
                 {resuming ? "Resuming" : "Resume"}
               </button>
             )}
+            {!isErr && notify.supported && (
+              <label className="ab-check notify-opt">
+                <input type="checkbox" checked={notify.on} onChange={notify.toggle} disabled={notify.denied && !notify.on} />
+                {notify.denied && !notify.on ? "Notifications are blocked for this page in your browser settings." : "Notify me when it's done"}
+              </label>
+            )}
             <ol className="steps" aria-label="Progress">
               {steps.map((s) => {
                 const state = st[s.key]?.status || "pending";
@@ -248,7 +260,7 @@ export default function Processing({ job, words, onResume }) {
         </section>
 
         <section className="proc-transcript" aria-label="Transcript so far">
-          <p className="proc-page-head">What whisper has heard so far</p>
+          <p className="proc-page-head">What Selects has heard so far</p>
           <Reveal words={words} active={active} reduce={reduce} />
         </section>
       </main>

@@ -8,6 +8,7 @@ import LanguageAsk from "./components/reel/LanguageAsk.jsx";
 import RenderScreen from "./components/RenderScreen.jsx";
 import CaptionStudio from "./components/CaptionStudio.jsx";
 import { useFaces } from "./components/Blur.jsx";
+import { useDoneNotice } from "./lib/notify.js";
 
 function useHashRoute() {
   const parse = () => {
@@ -202,6 +203,8 @@ function JobView({ jobId, view }) {
     };
   }, [jobId, refetch, facesEvent]);
 
+  useDoneNotice(job);
+
   const updateCandidate = useCallback((c) => {
     setJob((j) => (j ? { ...j, candidates: j.candidates.map((x) => (x.id === c.id ? { ...x, ...c } : x)) } : j));
   }, []);
@@ -211,9 +214,9 @@ function JobView({ jobId, view }) {
       <>
         <Masthead />
         <main className="page notice-page">
-          <h1 className="h-24">This job could not be opened</h1>
-          <p className="lede">{loadError.status === 404 ? "There is no job with that id on this laptop." : loadError.message}</p>
-          <a className="btn" href="#/">Start a new job</a>
+          <h1 className="h-24">Selects could not open this video's clips</h1>
+          <p className="lede">{loadError.status === 404 ? "Nothing with that link was found here. It may have been made on another device." : loadError.message}</p>
+          <a className="btn btn-primary" href="#/">Choose a video</a>
         </main>
       </>
     );
@@ -223,7 +226,7 @@ function JobView({ jobId, view }) {
       <>
         <Masthead />
         <main className="page loading-page" aria-busy="true">
-          <p className="mono dim">Opening the reel</p>
+          <p className="mono dim">Opening</p>
         </main>
       </>
     );
