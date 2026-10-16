@@ -48,9 +48,43 @@ What the calls show:
 - **Run 1, call 3: invalid JSON, job stopped.** The prompt asked for the reason first. Gemma wrote a long reason, ignored the schema's maxLength, hit the 80-token cap and was cut off mid-string, twice (with the retry). Fix: scores now come before the reason, and a cut-off answer keeps its four scores with the reason trimmed to whole words. Call 4 of run 2 was cut off the same way and was salvaged.
 - **A/B run 1: invalid JSON again.** Gemma closed the reason with a curly quote (”) instead of a straight one, then looped ("11 words. 11 words."). The salvage now cuts the reason at that quote.
 
-## Ollama num_thread A/B
+## Ollama num_thread A/B (16 Oct, 02:01 to 02:22 WAT, load average about 35)
 
-Pending: the run is queued behind the eval builder's transcriptions on heavy.lock.
+Same model and options as above. Four blocks alternate the setting to balance drift in machine load: Ollama's default, then num_thread 2, then the default, then 2. Each block starts with a warm-up call (a third clip, 497 prompt tokens) that absorbs the model reload a num_thread change causes. Then it sends clip A (352 prompt tokens), clip B (379) and clip A again, an identical prompt that tests prefix caching. Script: `ab2.mjs` in the session scratchpad.
+
+| Block | num_thread | Call | Wall s | Load s | Prompt tokens | Prompt s | Prompt tok/s | Output tokens | Output tok/s |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | default | warm-up | 202.0 | 38.5 | 497 | 140.4 | 3.54 | 66 | 3.14 |
+| 1 | default | A | 31.9 | 0.4 | 352 | 12.5 | 28.28 | 58 | 3.30 |
+| 1 | default | B | 37.5 | 0.4 | 379 | 17.1 | 22.19 | 64 | 3.44 |
+| 1 | default | A again | 40.5 | 0.4 | 352 | 17.7 | 19.93 | 59 | 2.83 |
+| 2 | 2 | warm-up | 115.6 | 19.4 | 497 | 76.4 | 6.50 | 66 | 3.61 |
+| 2 | 2 | A | 38.9 | 0.6 | 352 | 15.2 | 23.13 | 59 | 2.78 |
+| 2 | 2 | B | 52.1 | 0.5 | 379 | 26.9 | 14.07 | 58 | 2.50 |
+| 2 | 2 | A again | 44.4 | 1.0 | 352 | 23.2 | 15.16 | 56 | 3.21 |
+| 3 | default | warm-up | 179.3 | 17.7 | 497 | 129.6 | 3.83 | 64 | 2.21 |
+| 3 | default | A | 65.7 | 0.7 | 352 | 26.6 | 13.24 | 57 | 1.56 |
+| 3 | default | B | 51.5 | 0.4 | 379 | 21.4 | 17.73 | 64 | 2.29 |
+| 3 | default | A again | 38.0 | 0.4 | 352 | 16.3 | 21.55 | 57 | 2.94 |
+| 4 | 2 | warm-up | 152.0 | 18.1 | 497 | 113.1 | 4.39 | 66 | 3.42 |
+| 4 | 2 | A | 81.8 | 0.5 | 352 | 33.1 | 10.62 | 60 | 1.31 |
+| 4 | 2 | B | 49.9 | 0.4 | 379 | 29.3 | 12.94 | 61 | 3.32 |
+| 4 | 2 | A again | 41.9 | 0.4 | 352 | 18.3 | 19.20 | 59 | 2.76 |
+
+Medians over the 6 measured calls per setting (warm-ups excluded):
+
+| num_thread | Prompt tok/s | Output tok/s | Wall s per call |
+|---|---|---|---|
+| Ollama default | 20.7 | 2.9 | 39.2 |
+| 2 | 14.6 | 2.8 | 47.1 |
+
+Decision: keep Ollama's default. num_thread 2 was slower to read the prompt and no faster to write. `SELECTS_THREADS` can still set it.
+
+Two more findings from the same calls:
+- **No prefix-cache reuse.** "A again" is the identical prompt sent right after B, and it still evaluated all 352 prompt tokens in 16 to 23 s, about as long as the first A. On this Ollama build and model, the shared rubric is re-read on every call, so the rubric's length is a real per-call cost.
+- **The first call after a model load is slow.** Every warm-up read its prompt at 3.5 to 6.5 tok/s, against 10 to 28 tok/s for the calls after it. The reload itself (17 to 39 s) is separate from that. keep_alive 30m avoids both within a job.
+
+An earlier attempt at this A/B (01:28, one block per setting, no warm-up) was confounded: load average fell from about 250 to 28 while it ran, and it stopped when Gemma closed a JSON string with a curly quote (see "Failures").
 
 ## Earlier measurements (from review-tech-feasibility.md, not re-run here)
 
