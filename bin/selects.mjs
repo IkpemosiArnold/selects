@@ -35,6 +35,8 @@ Options
   --min <sec>       shortest clip (default 20)
   --max <sec>       longest clip (default 60)
   --judge-n <n>     how many pre-scored windows the model reads (default 8; more is slower)
+  --faithful <m>    check each pick still says what the speaker meant: model (default, one
+                    call per pick), rules (no model), or off
   --preview         render fast 720x1280 drafts instead of final 1080x1920 clips
   --plain-kit       skip the model for post titles (use the clip's first line)
   --out <dir>       where clips go (default ./selects-out/<video-name>)
@@ -128,7 +130,7 @@ function progressReporter(jobId) {
 function printCandidates(job) {
   const cs = job.candidates;
   if (!cs.length) {
-    say("No clips stood out. Try a lower --min, a higher --max, or a higher --judge-n.");
+    say("No clips stood out. Try a lower --min, a higher --max, or a higher --judge-n so Gemma reads more moments.");
     return;
   }
   say("");
@@ -140,14 +142,31 @@ function printCandidates(job) {
     say(`    "${c.hook.length > 110 ? c.hook.slice(0, 107) + "..." : c.hook}"`);
     if (c.reason) say(`    ${blue(c.reason)}`);
     if (c.listRank) say(`    ${dim(`Side by side: ${c.listRank} of ${job.listwise?.order?.length ?? "?"}${c.listReason ? `. ${c.listReason}` : ""}`)}`);
+    const f = c.faithful;
+    if (f && f.verdict !== "faithful") {
+      const label = f.verdict === "misleading" ? red("Misleading cut") : yellow("Check the cut");
+      say(`    ${label}${f.issue ? dim(` (${f.issue})`) : ""}: ${f.note}${c.demoted ? dim(" Moved to the bottom.") : ""}`);
+      if (f.fix) say(`    ${dim(`Suggested fix: ${fixText(c, f.fix)}.`)}`);
+    } else if (f) say(`    ${dim("Keeps what the speaker meant.")}`);
   }
   say("");
 }
 
+/** "start at 0:21 instead of 0:23" and/or "end at 0:51 instead of 0:46". */
+function fixText(c, fix) {
+  const parts = [];
+  if (fix.start != null) parts.push(`start at ${tc(fix.start)} instead of ${tc(c.start)}`);
+  if (fix.end != null) parts.push(`end at ${tc(fix.end)} instead of ${tc(c.end)}`);
+  return parts.join(" and ");
+}
+
 async function askApprovals(job, { yes }) {
   if (yes) {
-    for (const c of job.candidates) updateCandidate(job.id, c.id, { status: "approved" });
-    say(`Approved all ${job.candidates.length} (--yes).`);
+    // --yes never posts a cut that changes what the speaker meant: misleading clips stay unapproved
+    const ok = job.candidates.filter((c) => !c.demoted);
+    for (const c of ok) updateCandidate(job.id, c.id, { status: "approved" });
+    const held = job.candidates.length - ok.length;
+    say(`Approved ${ok.length === job.candidates.length ? "all " : ""}${ok.length} (--yes).${held ? ` Left out ${held} misleading cut${held === 1 ? "" : "s"}; review ${held === 1 ? "it" : "them"} with selects review ${job.id}.` : ""}`);
     return loadJob(job.id);
   }
   if (!process.stdin.isTTY) {
@@ -159,7 +178,14 @@ async function askApprovals(job, { yes }) {
   say("Nothing is cut until you approve it. y approves, n skips, q stops asking (the rest are skipped).");
   for (const c of job.candidates) {
     if (c.status !== "proposed") continue;
-    const a = (await rl.question(`Approve clip ${c.rank} (${tc(c.start)} to ${tc(c.end)})? [y/n/q] `)).trim().toLowerCase();
+    // a cut that may change what the speaker meant: offer the fix first, never apply it unasked
+    if (c.faithful?.fix && c.faithful.verdict !== "faithful") {
+      const f = (await rl.question(`Clip ${c.rank}: ${c.faithful.note} Fix it (${fixText(c, c.faithful.fix)})? [y/n] `)).trim().toLowerCase();
+      if (f === "y" || f === "yes") updateCandidate(job.id, c.id, { faithful: "fix" });
+      else if (c.faithful.verdict === "misleading") updateCandidate(job.id, c.id, { faithful: "accept" });
+    }
+    const cur = loadJob(job.id).candidates.find((x) => x.id === c.id);
+    const a = (await rl.question(`Approve clip ${cur.rank} (${tc(cur.start)} to ${tc(cur.end)})? [y/n/q] `)).trim().toLowerCase();
     if (a === "q") break;
     updateCandidate(job.id, c.id, { status: a === "y" || a === "yes" ? "approved" : "skipped" });
   }
@@ -271,6 +297,7 @@ async function cmdClip(video, values) {
     minLen: values.min ? +values.min : undefined,
     maxLen: values.max ? +values.max : undefined,
     judgeN: values["judge-n"] ? +values["judge-n"] : undefined,
+    faithful: values.faithful,
     kit: values["plain-kit"] ? "plain" : undefined,
     credit: values.credit,
     license: values.license,
@@ -278,6 +305,10 @@ async function cmdClip(video, values) {
     ...speechSettings(values),
   };
   if (!checkLicense(values.license)) process.exit(1);
+  if (values.faithful && !["model", "rules", "off"].includes(values.faithful)) {
+    say(red(`--faithful takes model, rules or off, not "${values.faithful}".`));
+    process.exit(1);
+  }
   let job;
   try {
     job = createJob(video, settings);
@@ -286,7 +317,7 @@ async function cmdClip(video, values) {
     if (e.hint) say(e.hint);
     process.exit(1);
   }
-  say(`${bold(job.source.name)}  ${dim(`job ${job.id}, judge ${job.settings.model}, top ${job.settings.judgeN} windows judged`)}`);
+  say(`${bold(job.source.name)}  ${dim(`job ${job.id}, ${job.settings.model} reads the best ${job.settings.judgeN} moments`)}`);
   const stop = progressReporter(job.id);
   const t0 = Date.now();
   job = await runJob(job.id);
@@ -341,7 +372,7 @@ function printSpeech(job) {
   if (L?.compared?.length) say(dim(`Decode and compare: ${L.compared.map((c) => `${c.code} ${c.meanP}${c.text?.lid608 ? ` (text reads as ${c.text.lid608.code})` : ""}`).join(", ")}${L.margin != null ? `, margin ${L.margin}` : ""}`));
   const E = L?.ensemble;
   if (E?.signals?.length) say(dim(`Language vote: ${E.signals.map((s) => `${s.id} ${s.verdict ?? "no opinion"}${s.refuted ? " (refuted)" : ""}`).join(", ")}; ${languageName(E.language)}${E.confidence != null ? ` with ${Math.round(E.confidence * 100)}% of the vote` : ""}.`));
-  if (L?.question) say(yellow(`${L.question.text} The signals disagree (${E.reasons.join("; ")}). If not, run again with --language ${L.question.choices[0] || "<code>"}.`));
+  if (L?.question) say(yellow(`${L.question.text} The language checks disagree (${E.reasons.join("; ")}). If not, run again with --language ${L.question.choices[0] || "<code>"}.`));
   if (job.accent?.routed) say(dim(`Accent: Nigerian English, so ${job.accent.model} transcribed it (${job.accent.reason}).`));
   const q = job.transcriptQuality;
   if (q) {
@@ -362,7 +393,7 @@ async function prepareFaces(job, blurSpecs) {
   try {
     const res = await detectJobFaces(job.id);
     const main = res.tracks.find((t) => t.main);
-    say(dim(`${res.tracks.length} face track${res.tracks.length === 1 ? "" : "s"} in ${res.sec} s${main ? `; main speaker ${main.id} (${tc(main.start)} to ${tc(main.end)})` : ""}.`));
+    say(dim(`Found ${res.tracks.length} face${res.tracks.length === 1 ? "" : "s"} in ${res.sec} s${main ? `; main speaker ${main.id} (${tc(main.start)} to ${tc(main.end)})` : ""}.`));
     return true;
   } catch (e) {
     say(yellow(`Face detection failed: ${e.message}`));
@@ -579,6 +610,7 @@ async function main() {
       min: { type: "string" },
       max: { type: "string" },
       "judge-n": { type: "string" },
+      faithful: { type: "string" },
       out: { type: "string" },
       port: { type: "string" },
       yes: { type: "boolean", short: "y" },

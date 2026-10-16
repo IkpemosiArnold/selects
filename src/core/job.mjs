@@ -15,6 +15,8 @@ import { attributionLine, captionWithCredit, mediaReminder, normaliseLicense, OW
 import { makeCandidates, shortlist } from "./candidates.mjs";
 import { splitNonSpeech, speechOnly } from "./nonspeech.mjs";
 import { judge as realJudge, listwise as realListwise } from "./judge.mjs";
+import { checkFaithful as realFaithful } from "./faithful.mjs";
+import { orderByFaithful } from "./faithful-core.mjs";
 import { plainKit, postingKit as realKit } from "./kit.mjs";
 import { probe as realProbe } from "./probe.mjs";
 import { curve, rank } from "./rank.mjs";
@@ -326,6 +328,7 @@ async function runStages(id, { deps = {}, signal } = {}) {
     transcribe: realTranscribe,
     judge: realJudge,
     listwise: realListwise,
+    faithful: realFaithful,
     thumbs: makeThumbs,
     decideLanguage: realDecideLanguage,
     restorePunctuation: realRestorePunctuation,
@@ -454,7 +457,7 @@ async function runStages(id, { deps = {}, signal } = {}) {
       if (!job.transcriptQuality) job.transcriptQuality = transcriptQuality(words, { duration: job.source.duration });
     }
     if (!words.length) {
-      const err = new Error("Whisper found no speech in this video.");
+      const err = new Error("Selects heard no speech in this video.");
       err.hint = "Check that the video has a voice track, and that the language is right (--language).";
       throw Object.assign(err, { stage: "transcribe" });
     }
@@ -473,7 +476,7 @@ async function runStages(id, { deps = {}, signal } = {}) {
 
     // The quality gate: clips picked from words whisper did not really hear are guesses.
     if (job.transcriptQuality.verdict === "unreliable" && job.settings.qualityGate !== false) {
-      const err = new Error(`The transcript looks unreliable (mean word confidence ${job.transcriptQuality.meanP}, ${Math.round(job.transcriptQuality.lowShare * 100)}% of words unsure), so Selects stopped before judging.`);
+      const err = new Error(`Selects could not make out enough of the words (${Math.round(job.transcriptQuality.lowShare * 100)}% were unsure, average confidence ${job.transcriptQuality.meanP}), so it stopped before Gemma picked clips.`);
       err.hint = `${job.transcriptQuality.hint} To judge it anyway, resume with --force.`;
       throw Object.assign(err, { stage: "transcribe", keepStage: true, suggest: job.transcriptQuality.suggest });
     }
@@ -507,18 +510,37 @@ async function runStages(id, { deps = {}, signal } = {}) {
         model: job.settings.model,
         cacheDir: dir,
         signal,
-        onProgress: (p) => progress("judge", { ...p, progress: (p.progress ?? 0) * 0.9 }),
+        onProgress: (p) => progress("judge", { ...p, progress: (p.progress ?? 0) * 0.8 }),
       });
       const st = judged.stats;
       if (job.settings.listwise !== false && judged.length >= 3) {
-        progress("judge", { progress: 0.9, note: "comparing the best clips side by side" });
+        progress("judge", { progress: 0.8, note: "comparing the best clips side by side" });
         const t0 = Date.now();
         const lw = await d.listwise(judged, { model: job.settings.model, n: job.settings.listN ?? 4, cacheDir: dir, signal });
         judged = lw.candidates;
         job.listwise = { order: lw.order, reasons: lw.reasons, complete: lw.complete ?? true, sec: +((Date.now() - t0) / 1000).toFixed(1) };
       }
       writeJsonAtomic(path.join(dir, "judged.json"), judged);
-      const ranked = rank(judged, { k: job.settings.k, iou: 0.3 });
+      let ranked = rank(judged, { k: job.settings.k, iou: 0.3 });
+      // Faithful cuts: does each top pick still say what the speaker meant? (about k model calls)
+      const fmode = job.settings.faithful ?? "model";
+      if (fmode !== "off" && ranked.length) {
+        progress("judge", { progress: 0.9, note: "checking each pick still says what the speaker meant" });
+        const maxLen = job.settings.maxLen ?? 60;
+        const fr = await d.faithful(ranked, {
+          words: speechOnly(words),
+          model: job.settings.model,
+          mode: fmode,
+          maxLen: Math.max(maxLen * 1.5, maxLen + 15),
+          cacheDir: dir,
+          signal,
+          onProgress: (p) => progress("judge", { ...p, progress: 0.9 + 0.1 * (p.progress ?? 0) }),
+        });
+        ranked = orderByFaithful(fr.candidates);
+        const count = (v) => ranked.filter((c) => c.faithful?.verdict === v).length;
+        job.faithful = { mode: fmode, checked: ranked.length, faithful: count("faithful"), check: count("check"), misleading: count("misleading"), ...fr.stats };
+        job.timings = { ...(job.timings || {}), faithful: fr.stats.sec };
+      }
       // keep any human decisions from an earlier run of the same windows
       const prev = new Map((job.candidates || []).map((c) => [c.id, c]));
       job.candidates = ranked.map((c) => (prev.get(c.id)?.status && prev.get(c.id).status !== "proposed" ? { ...c, status: prev.get(c.id).status } : c));
@@ -562,6 +584,20 @@ export function updateCandidate(id, cid, patch = {}) {
     err.status = 404;
     throw err;
   }
+  // faithful: "accept" keeps the cut as it is (a misleading clip goes back to its place),
+  // "fix" applies the suggested start or end, "reset" takes the acceptance back
+  let fixing = false;
+  if (patch.faithful != null) {
+    const bad = (m) => Object.assign(new Error(m), { status: 400 });
+    if (!c.faithful) throw bad("This clip has no faithful check yet.");
+    if (patch.faithful === "accept") c.faithful.accepted = true;
+    else if (patch.faithful === "reset") delete c.faithful.accepted;
+    else if (patch.faithful === "fix") {
+      if (!c.faithful.fix) throw bad("There is no suggested fix for this clip.");
+      patch = { ...patch, start: c.faithful.fix.start ?? c.start, end: c.faithful.fix.end ?? c.end };
+      fixing = true;
+    } else throw bad("faithful must be accept, fix or reset.");
+  }
   if (patch.status) {
     if (!["proposed", "approved", "skipped"].includes(patch.status)) {
       const err = new Error(`status must be proposed, approved or skipped.`);
@@ -586,10 +622,14 @@ export function updateCandidate(id, cid, patch = {}) {
       c.trimmed = true;
       c.render = null; // an old render no longer matches
     }
+    // a trim that takes in the suggested fix counts as applying it
+    const f = c.faithful?.fix;
+    if (f && (fixing || ((f.start == null || c.start <= f.start + 1e-3) && (f.end == null || c.end >= f.end - 1e-3)))) c.faithful.applied = true;
   }
+  if (c.faithful) job.candidates = orderByFaithful(job.candidates);
   saveJob(job);
   emit(id, "candidates", { ranked: true, candidates: job.candidates, changed: cid });
-  return c;
+  return job.candidates.find((x) => x.id === cid);
 }
 
 /**
