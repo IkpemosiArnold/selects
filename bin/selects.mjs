@@ -5,8 +5,9 @@ import path from "node:path";
 import readline from "node:readline/promises";
 import { parseArgs } from "node:util";
 import { FONT_PATH, ollamaModels, ollamaUrl, resolveModel, selectsHome, whisperBin, whisperModel } from "../src/core/config.mjs";
+import { attributionLine, licenseCheck, MEDIA_REMINDER, normaliseLicense } from "../src/core/attribution.mjs";
 import { WEIGHTS, measuredSpeeds } from "../src/core/judge.mjs";
-import { createJob, jobDir, jobEvents, listJobs, loadJob, renderJob, resumeJob, runJob, updateCandidate } from "../src/core/job.mjs";
+import { createJob, jobDir, jobEvents, listJobs, loadJob, renderJob, resumeJob, runJob, updateCandidate, updateJobSettings } from "../src/core/job.mjs";
 import { drainQueue, enqueue, queueState } from "../src/core/queue.mjs";
 import { diskFreeGb, run, slugify, tc } from "../src/core/util.mjs";
 
@@ -31,6 +32,9 @@ Options
   --preview         render fast 720x1280 drafts instead of final 1080x1920 clips
   --plain-kit       skip the model for post titles (use the clip's first line)
   --out <dir>       where clips go (default ./selects-out/<video-name>)
+  --credit <text>   who to credit in each post caption, for example "Jenni, EMF 2026"
+  --license <id>    the source's licence, for example CC-BY-SA-4.0 (adds the licence link)
+  --source-url <u>  where the source video lives (added to the credit)
   --yes             approve every proposed clip without asking
   -h, --help        show this help
 `;
@@ -160,9 +164,12 @@ function exportClips(job, outDir, { preview }) {
       kit = c[field].kit ? JSON.parse(fs.readFileSync(path.join(dir, c[field].kit), "utf8")) : null;
     } catch {}
     lines.push(`## ${c.rank}. ${c.title || c.hook}`, "", `- File: ${mp4}`, `- Source: ${tc(c.start)} to ${tc(c.end)} (${Math.round(c.end - c.start)} s)`, `- Scores: hook ${c.scores?.hook}, stands alone ${c.scores?.standalone}, payoff ${c.scores?.payoff}, clarity ${c.scores?.clarity} (total ${c.total})`, `- Why: ${c.reason}`);
-    if (kit) lines.push(`- Caption: ${kit.caption}`, `- Hashtags: ${kit.hashtags.map((h) => "#" + h).join(" ")}`);
+    if (kit) lines.push(`- Caption: ${kit.caption.replace(/\n+/g, " ")}`, `- Hashtags: ${kit.hashtags.map((h) => "#" + h).join(" ")}`);
     lines.push("");
   }
+  const credit = attributionLine(job.settings);
+  if (credit) lines.push(`Credit: ${credit}`, "");
+  lines.push(MEDIA_REMINDER, "");
   fs.writeFileSync(path.join(outDir, "clips.md"), lines.join("\n"));
   return done.length;
 }
@@ -187,6 +194,9 @@ async function finishJob(job, values) {
     const n = exportClips(job, outDir, values);
     say("");
     say(yellow(`Rendered ${n} clip${n === 1 ? "" : "s"} into ${outDir}`));
+    const credit = attributionLine(job.settings);
+    say(credit ? dim(`Credit added to each caption: ${credit}`) : dim("No credit set. If the source is someone else's work, add --credit and --license (selects review <job-id> --credit ...)."));
+    say(MEDIA_REMINDER);
     printTimings(job);
   } finally {
     stop();
@@ -210,6 +220,19 @@ function fail(job) {
   process.exitCode = 1;
 }
 
+/** Warn about NC and stop on ND before any work is done. Returns false to stop. */
+function checkLicense(license) {
+  if (!license) return true;
+  const id = normaliseLicense(license);
+  if (!id) {
+    say(red(`Unknown licence "${license}". Use an id like CC-BY-4.0, CC-BY-SA-4.0 or CC0-1.0.`));
+    return false;
+  }
+  const chk = licenseCheck(id);
+  for (const w of chk.warnings) say(yellow(w));
+  return true;
+}
+
 async function cmdClip(video, values) {
   const settings = {
     model: values.model || (await resolveModel()),
@@ -218,7 +241,11 @@ async function cmdClip(video, values) {
     maxLen: values.max ? +values.max : undefined,
     judgeN: values["judge-n"] ? +values["judge-n"] : undefined,
     kit: values["plain-kit"] ? "plain" : undefined,
+    credit: values.credit,
+    license: values.license,
+    sourceUrl: values["source-url"],
   };
+  if (!checkLicense(values.license)) process.exit(1);
   let job;
   try {
     job = createJob(video, settings);
@@ -243,6 +270,14 @@ async function cmdReview(id, values) {
   } catch (e) {
     say(red(e.message));
     process.exit(1);
+  }
+  const credit = {};
+  if (values.credit != null) credit.credit = values.credit;
+  if (values.license != null) credit.license = values.license;
+  if (values["source-url"] != null) credit.sourceUrl = values["source-url"];
+  if (Object.keys(credit).length) {
+    if (!checkLicense(values.license)) process.exit(1);
+    job = updateJobSettings(id, credit);
   }
   if (job.stage !== "ready" && job.stage !== "done") {
     say(`Resuming ${id} from ${job.stage}...`);
@@ -355,6 +390,9 @@ async function main() {
       yes: { type: "boolean", short: "y" },
       preview: { type: "boolean" },
       "plain-kit": { type: "boolean" },
+      credit: { type: "string" },
+      license: { type: "string" },
+      "source-url": { type: "string" },
       help: { type: "boolean", short: "h" },
     },
   });

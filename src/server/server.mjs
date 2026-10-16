@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { REPO, ollamaModels, ollamaUrl, selectsHome, whisperBin, whisperModel } from "../core/config.mjs";
 import { measuredSpeeds } from "../core/judge.mjs";
-import { createJob, isRunning, jobDir, jobEvents, listJobs, loadJob, loadWords, updateCandidate } from "../core/job.mjs";
+import { createJob, isRunning, jobDir, jobEvents, listJobs, loadJob, loadWords, updateCandidate, updateJobSettings } from "../core/job.mjs";
 import { drainQueue, enqueue, queueState } from "../core/queue.mjs";
 import { diskFreeGb } from "../core/util.mjs";
 
@@ -259,6 +259,15 @@ async function route(req, res) {
     return sendJson(res, 201, job);
   }
   if ((r = m(/^\/api\/jobs\/([^/]+)$/)) && method === "GET") return sendJson(res, 200, getJob(r[1]));
+  if ((r = m(/^\/api\/jobs\/([^/]+)$/)) && method === "PATCH") {
+    getJob(r[1]);
+    const body = await readBody(req);
+    try {
+      return sendJson(res, 200, updateJobSettings(r[1], body.settings || {}));
+    } catch (e) {
+      throw new HttpError(e.status || 400, e.message);
+    }
+  }
   if ((r = m(/^\/api\/jobs\/([^/]+)\/events$/)) && method === "GET") return sse(req, res, r[1]);
   if ((r = m(/^\/api\/jobs\/([^/]+)\/words$/)) && method === "GET") {
     getJob(r[1]);

@@ -149,3 +149,12 @@ test("locate finds a dropped file by name and size", async () => {
   assert.equal(fs.realpathSync(r.json.path), fs.realpathSync(video));
   assert.equal((await req("GET", `/api/locate?name=talk.mp4&size=7`)).status, 404);
 });
+
+test("PATCH a job's credit and licence", async () => {
+  const r = await req("PATCH", `/api/jobs/${job.id}`, { body: { settings: { credit: "Jenni, EMF 2026", license: "by-sa" } } });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.settings.license, "CC-BY-SA-4.0");
+  assert.equal(r.json.settings.credit, "Jenni, EMF 2026");
+  const bad = await req("PATCH", `/api/jobs/${job.id}`, { body: { settings: { k: 9 } } });
+  assert.equal(bad.status, 400);
+});

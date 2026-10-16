@@ -39,6 +39,9 @@ export const DEFAULT_SETTINGS = {
   maxLen: 60,
   preset: "shorts",
   judgeN: 8, // how many pre-scored windows the LLM judge reads (the slow step on a CPU)
+  credit: null, // who to credit in each posting kit, for example "Jenni, EMF 2026"
+  license: null, // the source's licence id, for example "CC-BY-SA-4.0"
+  sourceUrl: null, // where the source video lives
 };
 
 /** List local Ollama models. Returns [] if Ollama is not reachable. */

@@ -8,7 +8,7 @@ import { talk } from "./test/fixtures.mjs";
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "selects-job-"));
 process.env.SELECTS_HOME = home;
-const { createJob, jobEvents, listJobs, loadJob, renderJob, resumeJob, runJob, updateCandidate, jobDir } = await import("./job.mjs");
+const { createJob, jobEvents, listJobs, loadJob, renderJob, resumeJob, runJob, updateCandidate, updateJobSettings, jobDir } = await import("./job.mjs");
 
 const video = path.join(home, "talk.mp4");
 const WORDS = talk(120); // about 6 minutes of speech
@@ -146,4 +146,31 @@ test("approve, trim with snapping, and render only approved clips", async () => 
   const before = loadJob(job.id).stages.render;
   const again = await renderJob(job.id, { deps: { render: async () => assert.fail("should not re-render") } });
   assert.deepEqual(again.stages.render, before);
+});
+
+test("credit and licence go into the posting kit and can be changed later", async () => {
+  const job = createJob(video, { k: 2, model: "mock", credit: "Jenni, EMF 2026", license: "cc by-sa 4.0" });
+  assert.equal(loadJob(job.id).settings.license, "CC-BY-SA-4.0");
+  const ready = await runJob(job.id, { deps: mocks({ probe: 0, transcribe: 0, judge: 0 }) });
+  updateCandidate(job.id, ready.candidates[0].id, { status: "approved" });
+  const done = await renderJob(job.id, {
+    deps: {
+      render: async (_j, c, { jobDir: dir }) => {
+        fs.mkdirSync(path.join(dir, "clips"), { recursive: true });
+        fs.writeFileSync(path.join(dir, "clips", `${c.id}.mp4`), "mp4");
+        return { path: `clips/${c.id}.mp4`, srt: `clips/${c.id}.srt`, wallSec: 1 };
+      },
+      postingKit: async () => ({ title: "T", caption: "Watch this.", hashtags: [] }),
+    },
+  });
+  const kitFile = path.join(jobDir(job.id), done.candidates[0].render.kit);
+  let kit = JSON.parse(fs.readFileSync(kitFile, "utf8"));
+  assert.match(kit.caption, /^Watch this\.\n\nClip from Jenni, EMF 2026\. Licensed under CC BY-SA 4\.0: https:\/\/creativecommons\.org\/licenses\/by-sa\/4\.0\//);
+  assert.match(kit.reminder, /licence may not cover every figure/);
+  updateJobSettings(job.id, { credit: "Jenni (EMF 2026)", sourceUrl: "https://media.ccc.de/v/x" });
+  kit = JSON.parse(fs.readFileSync(kitFile, "utf8"));
+  assert.match(kit.caption, /Clip from Jenni \(EMF 2026\) \(https:\/\/media\.ccc\.de\/v\/x\)/);
+  assert.equal(kit.captionText, "Watch this.");
+  assert.throws(() => updateJobSettings(job.id, { model: "x" }), /Only credit/);
+  assert.throws(() => updateJobSettings(job.id, { license: "all rights reserved" }), /Unknown licence/);
 });

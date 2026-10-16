@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { DEFAULT_SETTINGS, jobsDir, resolveModel } from "./config.mjs";
+import { attributionLine, captionWithCredit, MEDIA_REMINDER, normaliseLicense } from "./attribution.mjs";
 import { makeCandidates, shortlist } from "./candidates.mjs";
 import { judge as realJudge } from "./judge.mjs";
 import { plainKit, postingKit as realKit } from "./kit.mjs";
@@ -63,7 +64,7 @@ export function createJob(videoPath, settings = {}) {
   const job = {
     id,
     source: { path: abs, name: path.basename(abs), duration: null, width: null, height: null, fps: null },
-    settings: { ...DEFAULT_SETTINGS, ...stripUndefined(settings) },
+    settings: { ...DEFAULT_SETTINGS, ...stripUndefined(settings), ...(settings.license ? { license: normaliseLicense(settings.license) ?? settings.license } : {}) },
     stage: "queued",
     stages: Object.fromEntries(STAGES.map((s) => [s, freshStage()])),
     error: null,
@@ -367,6 +368,63 @@ export function updateCandidate(id, cid, patch = {}) {
   return c;
 }
 
+/** Write clips/<cid>.kit.json: the model's (or plain) kit plus credit for the source. */
+function writeKit(job, c, k) {
+  const kitRel = `clips/${c.id}.kit.json`;
+  const baseCaption = k.captionText ?? k.caption;
+  writeJsonAtomic(path.join(jobDir(job.id), kitRel), {
+    title: k.title,
+    caption: captionWithCredit(baseCaption, job.settings),
+    captionText: baseCaption,
+    hashtags: k.hashtags,
+    attribution: attributionLine(job.settings),
+    reminder: MEDIA_REMINDER,
+    start: c.start,
+    end: c.end,
+    source: job.source.name,
+    reason: c.reason,
+    scores: c.scores,
+  });
+  return kitRel;
+}
+
+const SETTABLE = ["credit", "license", "sourceUrl"];
+
+/**
+ * Change a job's attribution settings (credit, license, sourceUrl). Kits already written
+ * are rewritten so their captions carry the new credit. Returns the job.
+ */
+export function updateJobSettings(id, patch = {}) {
+  const job = loadJob(id);
+  for (const key of Object.keys(patch)) {
+    if (!SETTABLE.includes(key)) {
+      const err = new Error(`Only ${SETTABLE.join(", ")} can be changed on an existing job.`);
+      err.status = 400;
+      throw err;
+    }
+  }
+  if (patch.license != null && patch.license !== "" && !normaliseLicense(patch.license)) {
+    const err = new Error(`Unknown licence "${patch.license}". Use an id like CC-BY-4.0 or CC-BY-SA-4.0.`);
+    err.status = 400;
+    throw err;
+  }
+  for (const key of SETTABLE) {
+    if (patch[key] === undefined) continue;
+    const v = patch[key] === "" ? null : patch[key];
+    job.settings[key] = key === "license" && v ? normaliseLicense(v) : v;
+  }
+  for (const c of job.candidates) {
+    const rel = c.render?.kit;
+    if (!rel) continue;
+    const file = path.join(jobDir(id), rel);
+    const k = readJson(file, null);
+    if (k) writeKit(job, c, k);
+  }
+  saveJob(job);
+  emit(id, "job", job);
+  return job;
+}
+
 /**
  * Render approved clips (or the given ids). Only approved clips are ever rendered unless
  * ids are passed. The final preset ("shorts") fills candidate.render and writes a posting
@@ -433,8 +491,7 @@ async function renderStage(id, { ids, deps = {}, signal, kit, preset } = {}) {
         } catch {
           k = plainKit(c);
         }
-        const kitRel = `clips/${c.id}.kit.json`;
-        writeJsonAtomic(path.join(dir, kitRel), { ...k, start: c.start, end: c.end, source: job.source.name, reason: c.reason, scores: c.scores });
+        const kitRel = writeKit(job, c, k);
         c.title = k.title;
         c[field].kit = kitRel;
         c[field].kitSec = +((Date.now() - k0) / 1000).toFixed(1);
