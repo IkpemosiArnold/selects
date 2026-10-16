@@ -7,7 +7,7 @@ export const LOW_P = 0.5; // a word below this is "low confidence" (faint underl
 
 // Calibrated on 16 Oct: the clean EMF talk with base.en against the elderly speaker's
 // Nigerian-accented English with base.en (see notes/timings.md, "Transcript quality").
-export const THRESHOLDS = { good: 0.7, shaky: 0.5 };
+export const THRESHOLDS = { good: 0.8, shaky: 0.65 };
 
 /**
  * Share of words that sit inside a repeated n-gram loop (whisper's hallucination mode:
@@ -68,7 +68,9 @@ export function transcriptQuality(words, { duration = null, thresholds = THRESHO
   const comp = maxChunkCompression(words.map((w) => w.w));
   const span = duration || Math.max(1, words[n - 1].e - words[0].s);
   const wordsPerMin = (n / span) * 60;
-  let score = meanP - 0.5 * Math.max(0, lowShare - 0.1) - 1.5 * Math.max(0, rep - 0.05) - 0.3 * Math.max(0, comp - 2.4);
+  // the share of unsure words separates clean from bad far better than the mean does:
+  // clean talks had 0.4% to 4.2% unsure words, the elderly speaker with base.en 20%
+  let score = meanP - Math.max(0, lowShare - 0.05) - 1.5 * Math.max(0, rep - 0.05) - 0.3 * Math.max(0, comp - 2.4);
   score = Math.max(0, Math.min(1, score));
   let verdict = score >= thresholds.good ? "good" : score >= thresholds.shaky ? "shaky" : "unreliable";
   // a long video with almost no words is suspicious however confident they are

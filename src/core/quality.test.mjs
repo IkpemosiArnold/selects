@@ -22,7 +22,7 @@ test("many low-confidence words make it unreliable, with a hint", () => {
 });
 
 test("middling confidence is shaky", () => {
-  const ws = withP(words("we went to the market early and bought some fresh tomatoes for the stew tonight"), (i) => (i % 4 === 0 ? 0.4 : 0.75));
+  const ws = withP(words("we went to the market early and bought some fresh tomatoes for the stew tonight"), (i) => (i % 10 === 0 ? 0.45 : 0.82));
   assert.equal(transcriptQuality(ws).verdict, "shaky");
 });
 
