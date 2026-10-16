@@ -10,7 +10,7 @@ import { detectFaces as realDetectFaces } from "./faces.mjs";
 import { decideLanguage as realDecideLanguage } from "./language.mjs";
 import { applyProfile } from "./profiles.mjs";
 import { transcriptQuality } from "./quality.mjs";
-import { attributionLine, captionWithCredit, MEDIA_REMINDER, normaliseLicense } from "./attribution.mjs";
+import { attributionLine, captionWithCredit, mediaReminder, normaliseLicense, OWN_FOOTAGE } from "./attribution.mjs";
 import { makeCandidates, shortlist } from "./candidates.mjs";
 import { splitNonSpeech, speechOnly } from "./nonspeech.mjs";
 import { judge as realJudge, listwise as realListwise } from "./judge.mjs";
@@ -580,7 +580,7 @@ function writeKit(job, c, k) {
     captionText: baseCaption,
     hashtags: k.hashtags,
     attribution: attributionLine(job.settings),
-    reminder: MEDIA_REMINDER,
+    reminder: mediaReminder(job.settings),
     start: c.start,
     end: c.end,
     source: job.source.name,
@@ -605,7 +605,7 @@ export function updateJobSettings(id, patch = {}) {
       throw err;
     }
   }
-  if (patch.license != null && patch.license !== "" && !normaliseLicense(patch.license)) {
+  if (patch.license != null && patch.license !== "" && patch.license !== OWN_FOOTAGE && !normaliseLicense(patch.license)) {
     const err = new Error(`Unknown licence "${patch.license}". Use an id like CC-BY-4.0 or CC-BY-SA-4.0.`);
     err.status = 400;
     throw err;
@@ -615,7 +615,7 @@ export function updateJobSettings(id, patch = {}) {
   for (const key of SETTABLE) {
     if (patch[key] === undefined) continue;
     const v = patch[key] === "" ? null : patch[key];
-    job.settings[key] = key === "license" && v ? normaliseLicense(v) : key === "blur" ? cleanBlur(v) : key === "captions" ? v !== false : v;
+    job.settings[key] = key === "license" && v ? (v === OWN_FOOTAGE ? OWN_FOOTAGE : normaliseLicense(v)) : key === "blur" ? cleanBlur(v) : key === "captions" ? v !== false : v;
   }
   refreshStale(job);
   for (const c of job.candidates) {

@@ -17,6 +17,22 @@ export const LICENSES = {
 
 export const MEDIA_REMINDER = "Check slides and on-screen media: a talk's licence may not cover every figure.";
 
+/** settings.license value for the person's own footage (not a licence id; no credit line). */
+export const OWN_FOOTAGE = "own";
+
+const filled = (v) => typeof v === "string" ? v.trim() !== "" : v != null;
+
+/**
+ * The slide and media reminder, or null when it does not apply. It applies when the job
+ * credits someone or names a licence or source link, since that means someone else's
+ * work. Own footage, or nothing set, gets no reminder. (web/src/lib/licences.js has the
+ * same rule for the render screen.)
+ */
+export function mediaReminder({ credit, license, sourceUrl } = {}) {
+  if (license === OWN_FOOTAGE) return null;
+  return filled(credit) || filled(license) || filled(sourceUrl) ? MEDIA_REMINDER : null;
+}
+
 /** Accept "CC-BY-SA-4.0", "cc by-sa 4.0", "by-sa" and similar. Returns the canonical id or null. */
 export function normaliseLicense(input) {
   if (!input) return null;

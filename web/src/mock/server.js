@@ -12,6 +12,7 @@
 import { buildTalk, makeJob, MEASURED, attributionFor } from "./fixture.js";
 import { frameSvg } from "./frames.js";
 import { cuesFromWords, applyCueEdits, toSrt, toVtt, accentedWords } from "./captions.js";
+import { needsMediaReminder } from "../lib/licences.js";
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -257,7 +258,7 @@ export function createMockApi(params) {
       ...c._kit,
       caption: [c._kit.captionText, attribution].filter(Boolean).join("\n\n"),
       attribution,
-      reminder: "Check slides and on-screen media: a talk's licence may not cover every figure.",
+      reminder: needsMediaReminder(job.settings) ? "Check slides and on-screen media: a talk's licence may not cover every figure." : null,
       file: `${dir}/clips/${c.id}.mp4`,
       srtFile: `${dir}/clips/${c.id}.srt`,
     };

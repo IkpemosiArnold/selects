@@ -5,7 +5,7 @@ import path from "node:path";
 import readline from "node:readline/promises";
 import { parseArgs } from "node:util";
 import { FONT_PATH, ollamaModels, ollamaUrl, resolveModel, selectsHome, whisperBin, whisperModel } from "../src/core/config.mjs";
-import { attributionLine, licenseCheck, MEDIA_REMINDER, normaliseLicense } from "../src/core/attribution.mjs";
+import { attributionLine, licenseCheck, mediaReminder, normaliseLicense } from "../src/core/attribution.mjs";
 import { WEIGHTS, measuredSpeeds } from "../src/core/judge.mjs";
 import { createJob, detectJobFaces, jobDir, jobEvents, listJobs, loadJob, renderJob, resumeJob, runJob, updateCandidate, updateJobSettings } from "../src/core/job.mjs";
 import { editCaptions, loadCaptions, parseSubtitles, toSrt } from "../src/core/captions.mjs";
@@ -39,7 +39,7 @@ Options
   --plain-kit       skip the model for post titles (use the clip's first line)
   --out <dir>       where clips go (default ./selects-out/<video-name>)
   --credit <text>   who to credit in each post caption, for example "Jenni, EMF 2026"
-  --license <id>    the source's licence, for example CC-BY-SA-4.0 (adds the licence link)
+  --license <id>    the source's licence, for example CC-BY-SA-4.0 (adds the licence link), or own
   --source-url <u>  where the source video lives (added to the credit)
   --yes             approve every proposed clip without asking
   --force           judge clips even when the transcript looks unreliable
@@ -197,7 +197,7 @@ function exportClips(job, outDir, { preview }) {
   }
   const credit = attributionLine(job.settings);
   if (credit) lines.push(`Credit: ${credit}`, "");
-  lines.push(MEDIA_REMINDER, "");
+  if (mediaReminder(job.settings)) lines.push(mediaReminder(job.settings), "");
   fs.writeFileSync(path.join(outDir, "clips.md"), lines.join("\n"));
   return done.length;
 }
@@ -225,7 +225,7 @@ async function finishJob(job, values) {
     say(yellow(`Rendered ${n} clip${n === 1 ? "" : "s"} into ${outDir}`));
     const credit = attributionLine(job.settings);
     say(credit ? dim(`Credit added to each caption: ${credit}`) : dim("No credit set. If the source is someone else's work, add --credit and --license (selects review <job-id> --credit ...)."));
-    say(MEDIA_REMINDER);
+    if (mediaReminder(job.settings)) say(mediaReminder(job.settings));
     printTimings(job);
   } finally {
     stop();
@@ -251,7 +251,7 @@ function fail(job) {
 
 /** Warn about NC and stop on ND before any work is done. Returns false to stop. */
 function checkLicense(license) {
-  if (!license) return true;
+  if (!license || license === "own") return true;
   const id = normaliseLicense(license);
   if (!id) {
     say(red(`Unknown licence "${license}". Use an id like CC-BY-4.0, CC-BY-SA-4.0 or CC0-1.0.`));

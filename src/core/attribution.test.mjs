@@ -32,3 +32,22 @@ test("licenseCheck blocks ND and warns on NC", () => {
   assert.equal(licenseCheck("CC-BY-NC-ND-4.0").ok, false);
   assert.equal(licenseCheck("CC-BY-NC-4.0").warnings.length, 1);
 });
+
+test("the slide reminder applies only when a credit, licence or source link is set, never for own footage", async () => {
+  const { mediaReminder, MEDIA_REMINDER } = await import("./attribution.mjs");
+  const { needsMediaReminder } = await import("../../web/src/lib/licences.js");
+  const cases = [
+    [{}, false],
+    [{ credit: null, license: null, sourceUrl: null }, false],
+    [{ license: "own" }, false],
+    [{ license: "own", credit: "Me, 2026" }, false],
+    [{ license: "CC-BY-4.0" }, true],
+    [{ credit: "Jenni, EMF 2026" }, true],
+    [{ sourceUrl: "https://media.ccc.de/v/x" }, true],
+    [{ credit: "  ", license: "", sourceUrl: "" }, false],
+  ];
+  for (const [s, want] of cases) {
+    assert.equal(mediaReminder(s), want ? MEDIA_REMINDER : null, JSON.stringify(s));
+    assert.equal(needsMediaReminder(s), want, `web: ${JSON.stringify(s)}`);
+  }
+});

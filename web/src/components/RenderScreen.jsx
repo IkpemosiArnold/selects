@@ -4,7 +4,7 @@ import { tc, secs, plural, aboutMinutes } from "../lib/time.js";
 import { copyText } from "../lib/hooks.js";
 import { Masthead } from "../App.jsx";
 import { frameSvg } from "../mock/frames.js";
-import { LICENCES } from "../lib/licences.js";
+import { LICENCES, needsMediaReminder } from "../lib/licences.js";
 
 const REMINDER = "Check slides and on-screen media: a talk's licence may not cover every figure.";
 const tag = (h) => (h.startsWith("#") ? h : "#" + h);
@@ -143,7 +143,7 @@ function CreditBlock({ job, attribution, onSaved }) {
             setSaving(true);
             setErr(null);
             try {
-              const lic = license === "own" || license === "other" ? "" : license;
+              const lic = license === "other" ? "" : license;
               await api.patchJob(job.id, { credit: credit.trim(), license: lic, sourceUrl: sourceUrl.trim() });
               setEditing(false);
               onSaved();
@@ -327,13 +327,15 @@ export default function RenderScreen({ job, refetch }) {
         {all > 0 && (
           <div className="rights-panel">
             <CreditBlock job={job} attribution={anyKit?.attribution ?? null} onSaved={() => setKitVersion((v) => v + 1)} />
-            <p className="reminder" role="note">
-              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M8 1.5l7 12.5H1z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-                <path d="M8 6v4M8 11.5v1.2" stroke="currentColor" strokeWidth="1.5" />
-              </svg>
-              {anyKit?.reminder || REMINDER}
-            </p>
+            {needsMediaReminder(job.settings) && (
+              <p className="reminder" role="note">
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M8 1.5l7 12.5H1z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+                  <path d="M8 6v4M8 11.5v1.2" stroke="currentColor" strokeWidth="1.5" />
+                </svg>
+                {anyKit?.reminder || REMINDER}
+              </p>
+            )}
           </div>
         )}
 

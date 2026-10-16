@@ -285,3 +285,34 @@ test("a plain kit takes its title from the edited first line", async () => {
   const kit = JSON.parse(fs.readFileSync(path.join(dir, done.candidates.find((x) => x.id === c.id).render.kit), "utf8"));
   assert.match(kit.title, /^Edited opener/);
 });
+
+test("kits carry the slide reminder only when the job has a credit, licence or source link", async () => {
+  const renderDeps = {
+    render: async (_j, cand, { jobDir: d }) => {
+      fs.mkdirSync(path.join(d, "clips"), { recursive: true });
+      fs.writeFileSync(path.join(d, "clips", `${cand.id}.mp4`), "mp4");
+      return { path: `clips/${cand.id}.mp4`, srt: `clips/${cand.id}.srt`, wallSec: 1 };
+    },
+    postingKit: async () => ({ title: "T", caption: "C.", hashtags: [] }),
+  };
+  const kitOf = (id) => {
+    const j = loadJob(id);
+    const c = j.candidates.find((x) => x.render?.kit);
+    return JSON.parse(fs.readFileSync(path.join(jobDir(id), c.render.kit), "utf8"));
+  };
+  for (const settings of [{}, { license: "own" }]) {
+    const job = createJob(video, { k: 2, model: "mock", qualityGate: false, ...settings });
+    const ready = await runJob(job.id, { deps: mocks({ probe: 0, transcribe: 0, judge: 0 }) });
+    updateCandidate(job.id, ready.candidates[0].id, { status: "approved" });
+    await renderJob(job.id, { deps: renderDeps });
+    assert.equal(kitOf(job.id).reminder, null, JSON.stringify(settings));
+    if (!settings.license) {
+      // adding a credit later brings the reminder back; marking it own footage removes it
+      updateJobSettings(job.id, { credit: "Jenni, EMF 2026" });
+      assert.match(kitOf(job.id).reminder, /licence may not cover every figure/);
+      updateJobSettings(job.id, { credit: "", license: "own" });
+      assert.equal(loadJob(job.id).settings.license, "own");
+      assert.equal(kitOf(job.id).reminder, null);
+    }
+  }
+});
