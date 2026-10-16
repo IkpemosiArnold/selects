@@ -24,17 +24,43 @@ export function combine(scores) {
 
 const clamp = (n) => Math.max(1, Math.min(5, Math.round(Number(n) || 1)));
 
+// Scores first, reason last: if the model runs past num_predict, only the reason is cut
+// and salvageJudge() can still read the four scores. (Gemma ignores maxLength, so a
+// reason-first answer ran out of tokens before the scores in the first real run.)
 const SCHEMA = {
   type: "object",
   properties: {
-    reason: { type: "string", maxLength: 140 },
     hook: { type: "integer", minimum: 1, maximum: 5 },
     standalone: { type: "integer", minimum: 1, maximum: 5 },
     payoff: { type: "integer", minimum: 1, maximum: 5 },
     clarity: { type: "integer", minimum: 1, maximum: 5 },
+    reason: { type: "string", maxLength: 140 },
   },
-  required: ["reason", "hook", "standalone", "payoff", "clarity"],
+  required: ["hook", "standalone", "payoff", "clarity", "reason"],
 };
+
+/**
+ * Read scores and as much of the reason as there is from a JSON answer that was cut off.
+ * Returns null unless all four scores are present.
+ */
+export function salvageJudge(text) {
+  const out = {};
+  for (const k of ["hook", "standalone", "payoff", "clarity"]) {
+    const m = String(text).match(new RegExp(`"${k}"\\s*:\\s*([1-5])`));
+    if (!m) return null;
+    out[k] = +m[1];
+  }
+  const r = String(text).match(/"reason"\s*:\s*"((?:[^"\\]|\\.)*)/);
+  let reason = r ? r[1].replace(/\\"/g, '"').trim() : "";
+  if (reason && !/[.!?]$/.test(reason)) {
+    const ws = reason.split(/\s+/).slice(0, -1); // the last word may be cut in half
+    while (ws.length && /^(the|a|an|at|of|to|and|but|or|with|for|in|on|into|from|by|that|which|is|was|its|their|this)$/i.test(ws[ws.length - 1].replace(/[,;:]$/, ""))) ws.pop();
+    reason = ws.join(" ").replace(/[,;:]$/, "");
+  }
+  out.reason = reason;
+  out.truncated = true;
+  return out;
+}
 
 let promptCache = null;
 /** Load prompts/judge.md and split it into the system and user parts. */
@@ -152,7 +178,7 @@ export async function ollamaJson({ model, messages, schema, timeoutMs = 60 * 60 
   try {
     return { data: JSON.parse(content), stats };
   } catch {
-    throw Object.assign(new Error(`The model did not return valid JSON: ${content.slice(0, 120)}`), { retryable: true, stats });
+    throw Object.assign(new Error(`The model did not return valid JSON: ${content.slice(0, 120)}`), { retryable: true, stats, content });
   }
 }
 
@@ -191,18 +217,27 @@ export async function judge(candidates, { model, cacheDir, onProgress, onResult,
     if (!hit) {
       const started = Date.now();
       let res;
+      const logCall = (stats, extra = {}) => {
+        if (cacheDir && stats) fs.appendFileSync(path.join(cacheDir, "judge-calls.jsonl"), JSON.stringify({ at: new Date().toISOString(), model, id: c.id, words: c.text.split(/\s+/).length, ...stats, ...extra }) + "\n");
+      };
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
           res = await ask(buildMessages(c));
           break;
         } catch (e) {
+          const salvaged = e.content != null ? salvageJudge(e.content) : null;
+          if (salvaged) {
+            res = { data: salvaged, stats: e.stats };
+            break;
+          }
+          logCall(e.stats, { failed: e.message.slice(0, 80) });
           if (!e.retryable || attempt === 1) throw e;
         }
       }
       const d = res.data ?? res;
       const scores = { hook: clamp(d.hook), standalone: clamp(d.standalone), payoff: clamp(d.payoff), clarity: clamp(d.clarity) };
       hit = { scores, reason: tidyReason(d.reason), sec: +((Date.now() - started) / 1000).toFixed(2), stats: res.stats ?? null };
-      if (cacheDir && res.stats) fs.appendFileSync(path.join(cacheDir, "judge-calls.jsonl"), JSON.stringify({ at: new Date().toISOString(), model, id: c.id, words: c.text.split(/\s+/).length, ...res.stats }) + "\n");
+      logCall(res.stats, d.truncated ? { truncated: true } : {});
       times.push(hit.sec);
       cache[key] = hit;
       if (cacheFile) writeJsonAtomic(cacheFile, cache);
