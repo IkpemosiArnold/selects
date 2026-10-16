@@ -47,10 +47,20 @@ function writeJson(f, data) {
 }
 
 // ---------- shared CPU lock ----------
+// Fairness: after releasing, wait at least LOCK_GAP_MS before taking the lock again, so a
+// builder polling every 60 s gets a turn. --start-after <ISO time> delays the first take.
 let holding = false;
+let lastRelease = 0;
+const LOCK_GAP_MS = 90_000;
+const START_AFTER = opt("--start-after") ? Date.parse(opt("--start-after")) : 0;
 async function withHeavyLock(what, fn) {
   if (REPORT_ONLY) throw new Error(`--report: ${what} is not cached`);
   if (process.env.SELECTS_TEST_NO_LOCK) return fn();
+  const notBefore = Math.max(START_AFTER, lastRelease + LOCK_GAP_MS);
+  if (Date.now() < notBefore) {
+    log(`yielding the CPU lock until ${new Date(notBefore).toISOString().slice(11, 19)} UTC before ${what}`);
+    await sleep(notBefore - Date.now());
+  }
   for (;;) {
     if (!existsSync(LOCK)) {
       mkdirSync(dirname(LOCK), { recursive: true });
@@ -66,7 +76,7 @@ async function withHeavyLock(what, fn) {
     log(`heavy.lock held (${owner}); waiting 60 s before ${what}`);
     await sleep(60_000);
   }
-  try { return await fn(); } finally { rmSync(LOCK, { force: true }); holding = false; }
+  try { return await fn(); } finally { rmSync(LOCK, { force: true }); holding = false; lastRelease = Date.now(); }
 }
 function isAlive(pid) { try { process.kill(pid, 0); return true; } catch { return false; } }
 for (const sig of ["SIGINT", "SIGTERM"]) process.once(sig, () => { if (holding) rmSync(LOCK, { force: true }); process.exit(130); });
@@ -193,6 +203,7 @@ export async function runVideo(v, C, models) {
         log(`${v.id}: judging ${short.length} shortlisted of ${cands.length} candidates with ${model}`);
         const t0 = Date.now();
         let last = 0;
+        mkdirSync(join(dir, "judge"), { recursive: true });
         const res = await C.judge(short, {
           model,
           cacheDir: join(dir, "judge"),
@@ -365,6 +376,8 @@ export function report(videos, agg, manifest) {
   L.push("- **The heatmap is coarse.** YouTube gives about 100 segments per video (one per 6 to 27 s for these videos), so label boundaries are only accurate to a segment. Hit at IoU 0.5 is strict against such labels; the mean best IoU column and the two ceiling rows show how much is reachable at all.");
   L.push(`- **Random is the chance level**, averaged over ${RANDOM_SEEDS} seeds on the same candidate windows, so it is not a single lucky or unlucky draw.`);
   L.push("- **The judge reads a shortlist**, as Selects does in a real job: the cheap text pre-score keeps ${videos[0]?.nShortlist ?? 8} windows spread over the video, and only those go to the model. With ${videos[0]?.nShortlist ?? 8} windows and k = 5, any picker takes most of the shortlist, so hit@3 and precision@3 are the columns that separate prefilter alone from prefilter + judge. The judge rows therefore measure the shipped pipeline (pre-score shortlist, then model). The shortlist ceiling row shows what that shortlist can reach at best.");
+  const thin = videos.filter((v) => v.nCandidates < 20);
+  if (thin.length) L.push(`- **Few candidate windows** for ${thin.map((v) => `${v.title.slice(0, 40)} (${v.nCandidates})`).join(", ")}: whisper returned little punctuation, so most windows failed the "ends mid-thought" rule. Every method then picks from almost the same few windows.`);
   L.push("- **Energy** scores loudness, loudness variation and words per second, the signals cheap clippers use. It does not read the words.");
   L.push("- Judge models run locally through Ollama on CPU. Time is wall time on this laptop while other work may share the CPU; treat it as an order of magnitude.");
   L.push("- Videos are Creative Commons BY on YouTube; see `eval/datasets/manifest.json` for each URL and licence.");

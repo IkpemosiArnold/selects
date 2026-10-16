@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-16T00:51:22.736Z",
+  "generatedAt": "2026-10-16T01:02:47.120Z",
   "k": 5,
   "iouThreshold": 0.5,
   "settings": {
@@ -11,137 +11,140 @@
   "aggregate": {
     "heatmap": {
       "oracle": {
-        "n": 3,
+        "n": 4,
         "hit3": {
-          "mean": 0.6666666666666666,
-          "lo": 0,
+          "mean": 1,
+          "lo": 1,
           "hi": 1,
-          "n": 3
+          "n": 4
         },
         "p3": {
-          "mean": 0.6666666666666666,
-          "lo": 0,
+          "mean": 1,
+          "lo": 1,
           "hi": 1,
-          "n": 3
+          "n": 4
         },
         "hit5": {
-          "mean": 0.6666666666666666,
-          "lo": 0,
+          "mean": 1,
+          "lo": 1,
           "hi": 1,
-          "n": 3
+          "n": 4
         },
         "p5": {
-          "mean": 0.4666666666666666,
-          "lo": 0,
-          "hi": 0.8000000000000002,
-          "n": 3
+          "mean": 0.85,
+          "lo": 0.7,
+          "hi": 1,
+          "n": 4
         },
         "r5": {
-          "mean": 0.5833333333333334,
-          "lo": 0,
+          "mean": 0.9375,
+          "lo": 0.8125,
           "hi": 1,
-          "n": 3
+          "n": 4
         },
         "miou5": {
-          "mean": 0.5156596615916808,
-          "lo": 0,
-          "hi": 0.8587998388611945,
-          "n": 3
+          "mean": 0.7891348804701541,
+          "lo": 0.7189578470837946,
+          "hi": 0.8436665257738805,
+          "n": 4
         },
         "hit3s": [
           1,
-          0,
+          1,
+          1,
           1
         ],
         "judgeMinPerVideo": null,
         "secPerCandidate": null
       },
       "oracle:shortlist": {
-        "n": 3,
+        "n": 4,
         "hit3": {
-          "mean": 0.3333333333333333,
+          "mean": 0.5,
           "lo": 0,
           "hi": 1,
-          "n": 3
+          "n": 4
         },
         "p3": {
-          "mean": 0.2222222222222222,
-          "lo": 0,
-          "hi": 0.6666666666666666,
-          "n": 3
-        },
-        "hit5": {
-          "mean": 0.3333333333333333,
-          "lo": 0,
-          "hi": 1,
-          "n": 3
-        },
-        "p5": {
-          "mean": 0.13333333333333333,
-          "lo": 0,
-          "hi": 0.4000000000000001,
-          "n": 3
-        },
-        "r5": {
-          "mean": 0.16666666666666666,
+          "mean": 0.25,
           "lo": 0,
           "hi": 0.5,
-          "n": 3
+          "n": 4
+        },
+        "hit5": {
+          "mean": 0.5,
+          "lo": 0,
+          "hi": 1,
+          "n": 4
+        },
+        "p5": {
+          "mean": 0.15000000000000002,
+          "lo": 0,
+          "hi": 0.30000000000000004,
+          "n": 4
+        },
+        "r5": {
+          "mean": 0.175,
+          "lo": 0,
+          "hi": 0.375,
+          "n": 4
         },
         "miou5": {
-          "mean": 0.13241180856073134,
-          "lo": 0,
-          "hi": 0.397235425682194,
-          "n": 3
+          "mean": 0.17238100159954517,
+          "lo": 0.048457283997911126,
+          "hi": 0.3225414304427311,
+          "n": 4
         },
         "hit3s": [
           1,
           0,
+          1,
           0
         ],
         "judgeMinPerVideo": null,
         "secPerCandidate": null
       },
       "prescore": {
-        "n": 3,
+        "n": 4,
         "hit3": {
-          "mean": 0.3333333333333333,
+          "mean": 0.25,
           "lo": 0,
-          "hi": 1,
-          "n": 3
+          "hi": 0.75,
+          "n": 4
         },
         "p3": {
-          "mean": 0.2222222222222222,
-          "lo": 0,
-          "hi": 0.6666666666666666,
-          "n": 3
-        },
-        "hit5": {
-          "mean": 0.3333333333333333,
-          "lo": 0,
-          "hi": 1,
-          "n": 3
-        },
-        "p5": {
-          "mean": 0.13333333333333333,
-          "lo": 0,
-          "hi": 0.4000000000000001,
-          "n": 3
-        },
-        "r5": {
           "mean": 0.16666666666666666,
           "lo": 0,
           "hi": 0.5,
-          "n": 3
+          "n": 4
+        },
+        "hit5": {
+          "mean": 0.25,
+          "lo": 0,
+          "hi": 0.75,
+          "n": 4
+        },
+        "p5": {
+          "mean": 0.1,
+          "lo": 0,
+          "hi": 0.30000000000000004,
+          "n": 4
+        },
+        "r5": {
+          "mean": 0.125,
+          "lo": 0,
+          "hi": 0.375,
+          "n": 4
         },
         "miou5": {
-          "mean": 0.10504773123922989,
-          "lo": 0,
-          "hi": 0.3151431937176897,
-          "n": 3
+          "mean": 0.09195211159406858,
+          "lo": 0.00448350780169859,
+          "hi": 0.23859914918911657,
+          "n": 4
         },
         "hit3s": [
           1,
+          0,
           0,
           0
         ],
@@ -149,45 +152,46 @@
         "secPerCandidate": null
       },
       "prefilter": {
-        "n": 3,
+        "n": 4,
         "hit3": {
-          "mean": 0.3333333333333333,
+          "mean": 0.25,
           "lo": 0,
-          "hi": 1,
-          "n": 3
+          "hi": 0.75,
+          "n": 4
         },
         "p3": {
-          "mean": 0.2222222222222222,
-          "lo": 0,
-          "hi": 0.6666666666666666,
-          "n": 3
-        },
-        "hit5": {
-          "mean": 0.3333333333333333,
-          "lo": 0,
-          "hi": 1,
-          "n": 3
-        },
-        "p5": {
-          "mean": 0.13333333333333333,
-          "lo": 0,
-          "hi": 0.4000000000000001,
-          "n": 3
-        },
-        "r5": {
           "mean": 0.16666666666666666,
           "lo": 0,
           "hi": 0.5,
-          "n": 3
+          "n": 4
+        },
+        "hit5": {
+          "mean": 0.25,
+          "lo": 0,
+          "hi": 0.75,
+          "n": 4
+        },
+        "p5": {
+          "mean": 0.1,
+          "lo": 0,
+          "hi": 0.30000000000000004,
+          "n": 4
+        },
+        "r5": {
+          "mean": 0.125,
+          "lo": 0,
+          "hi": 0.375,
+          "n": 4
         },
         "miou5": {
-          "mean": 0.10504773123922989,
-          "lo": 0,
-          "hi": 0.3151431937176897,
-          "n": 3
+          "mean": 0.09195211159406858,
+          "lo": 0.00448350780169859,
+          "hi": 0.23859914918911657,
+          "n": 4
         },
         "hit3s": [
           1,
+          0,
           0,
           0
         ],
@@ -195,138 +199,141 @@
         "secPerCandidate": null
       },
       "random": {
-        "n": 3,
+        "n": 4,
         "hit3": {
-          "mean": 0.14333333333333334,
-          "lo": 0,
-          "hi": 0.255,
-          "n": 3
+          "mean": 0.26749999999999996,
+          "lo": 0.20124999999999998,
+          "hi": 0.33375,
+          "n": 4
         },
         "p3": {
-          "mean": 0.05166666666666667,
-          "lo": 0,
-          "hi": 0.09333333333333334,
-          "n": 3
+          "mean": 0.09666666666666665,
+          "lo": 0.07250000000000001,
+          "hi": 0.11833333333333326,
+          "n": 4
         },
         "hit5": {
-          "mean": 0.225,
-          "lo": 0,
-          "hi": 0.415,
-          "n": 3
+          "mean": 0.41375,
+          "lo": 0.31,
+          "hi": 0.49375,
+          "n": 4
         },
         "p5": {
-          "mean": 0.052999999999999936,
-          "lo": 0,
-          "hi": 0.10099999999999985,
-          "n": 3
+          "mean": 0.09749999999999984,
+          "lo": 0.07149999999999991,
+          "hi": 0.1154999999999998,
+          "n": 4
         },
         "r5": {
-          "mean": 0.06624999999999999,
-          "lo": 0,
-          "hi": 0.12625,
-          "n": 3
+          "mean": 0.10743749999999988,
+          "lo": 0.08412499999999994,
+          "hi": 0.12268749999999995,
+          "n": 4
         },
         "miou5": {
-          "mean": 0.08855230625945192,
-          "lo": 0,
-          "hi": 0.14303371572892554,
-          "n": 3
+          "mean": 0.1410727894059503,
+          "lo": 0.12781727625481165,
+          "hi": 0.1521844861630985,
+          "n": 4
         },
         "hit3s": [
           0.175,
-          0,
-          0.255
+          0.255,
+          0.28,
+          0.36
         ],
         "judgeMinPerVideo": null,
         "secPerCandidate": null
       },
       "random:shortlist": {
-        "n": 3,
+        "n": 4,
         "hit3": {
-          "mean": 0.225,
+          "mean": 0.2525,
           "lo": 0,
-          "hi": 0.6750000000000002,
-          "n": 3
+          "hi": 0.5062500000000001,
+          "n": 4
         },
         "p3": {
-          "mean": 0.0911111111111112,
+          "mean": 0.09625000000000006,
           "lo": 0,
-          "hi": 0.2733333333333336,
-          "n": 3
+          "hi": 0.20500000000000018,
+          "n": 4
         },
         "hit5": {
-          "mean": 0.3133333333333333,
+          "mean": 0.3475,
           "lo": 0,
-          "hi": 0.94,
-          "n": 3
+          "hi": 0.705,
+          "n": 4
         },
         "p5": {
-          "mean": 0.09400000000000003,
+          "mean": 0.09299999999999999,
           "lo": 0,
-          "hi": 0.2820000000000001,
-          "n": 3
+          "hi": 0.21150000000000008,
+          "n": 4
         },
         "r5": {
-          "mean": 0.1175,
+          "mean": 0.11062499999999996,
           "lo": 0,
-          "hi": 0.3525,
-          "n": 3
+          "hi": 0.26437499999999997,
+          "n": 4
         },
         "miou5": {
-          "mean": 0.07484809912524402,
-          "lo": 0,
-          "hi": 0.22454429737573203,
-          "n": 3
+          "mean": 0.10862778831651823,
+          "lo": 0.03077877914985537,
+          "hi": 0.18647679748318113,
+          "n": 4
         },
         "hit3s": [
           0.675,
           0,
+          0.335,
           0
         ],
         "judgeMinPerVideo": null,
         "secPerCandidate": null
       },
       "energy": {
-        "n": 3,
+        "n": 4,
         "hit3": {
-          "mean": 0,
+          "mean": 0.25,
           "lo": 0,
-          "hi": 0,
-          "n": 3
+          "hi": 0.75,
+          "n": 4
         },
         "p3": {
-          "mean": 0,
+          "mean": 0.08333333333333333,
           "lo": 0,
-          "hi": 0,
-          "n": 3
+          "hi": 0.25,
+          "n": 4
         },
         "hit5": {
-          "mean": 0,
+          "mean": 0.5,
           "lo": 0,
-          "hi": 0,
-          "n": 3
+          "hi": 1,
+          "n": 4
         },
         "p5": {
-          "mean": 0,
+          "mean": 0.1,
           "lo": 0,
-          "hi": 0,
-          "n": 3
+          "hi": 0.2,
+          "n": 4
         },
         "r5": {
-          "mean": 0,
+          "mean": 0.1,
           "lo": 0,
-          "hi": 0,
-          "n": 3
+          "hi": 0.2,
+          "n": 4
         },
         "miou5": {
-          "mean": 0.03282521283674551,
-          "lo": 0,
-          "hi": 0.09847563851023654,
-          "n": 3
+          "mean": 0.1502312259250831,
+          "lo": 0.04923781925511827,
+          "hi": 0.2512246325950479,
+          "n": 4
         },
         "hit3s": [
           0,
           0,
+          1,
           0
         ],
         "judgeMinPerVideo": null,
@@ -655,193 +662,10 @@
       },
       "timings": {
         "transcribeSec": 201.149,
-        "candidatesSec": 0.069,
+        "candidatesSec": 0.031,
         "nCandidates": 142
       },
       "nShortlist": 8
-    },
-    {
-      "id": "ASvx-QG6o04",
-      "title": "💥7 POWERFUL Body Language Hacks for Job Interviews",
-      "duration": 646,
-      "nWords": 2316,
-      "nCandidates": 3,
-      "labels": {
-        "heatmap": [
-          {
-            "start": 77.64,
-            "end": 103.52,
-            "source": "heatmap",
-            "weight": 0.791
-          },
-          {
-            "start": 213.51,
-            "end": 265.27,
-            "source": "heatmap",
-            "weight": 0.984
-          },
-          {
-            "start": 290.86,
-            "end": 310.86,
-            "source": "heatmap",
-            "weight": 0.95
-          },
-          {
-            "start": 355.56,
-            "end": 375.56,
-            "source": "heatmap",
-            "weight": 0.668
-          },
-          {
-            "start": 400.85,
-            "end": 420.85,
-            "source": "heatmap",
-            "weight": 0.739
-          }
-        ],
-        "human": []
-      },
-      "methods": {
-        "oracle": {
-          "preds": [],
-          "metrics": {
-            "heatmap": {
-              "hit3": 0,
-              "hit5": 0,
-              "p3": 0,
-              "p5": 0,
-              "r5": 0,
-              "miou5": 0
-            }
-          }
-        },
-        "oracle:shortlist": {
-          "preds": [],
-          "metrics": {
-            "heatmap": {
-              "hit3": 0,
-              "hit5": 0,
-              "p3": 0,
-              "p5": 0,
-              "r5": 0,
-              "miou5": 0
-            }
-          }
-        },
-        "prescore": {
-          "preds": [
-            {
-              "id": "c_0001",
-              "start": 0.1,
-              "end": 24.99,
-              "total": 0.58,
-              "hook": "You are going for a job interview.",
-              "reason": null,
-              "scores": null
-            }
-          ],
-          "metrics": {
-            "heatmap": {
-              "hit3": 0,
-              "hit5": 0,
-              "p3": 0,
-              "p5": 0,
-              "r5": 0,
-              "miou5": 0
-            }
-          }
-        },
-        "prefilter": {
-          "preds": [
-            {
-              "id": "c_0001",
-              "start": 0.1,
-              "end": 24.99,
-              "total": 0.58,
-              "hook": "You are going for a job interview.",
-              "reason": null,
-              "scores": null
-            }
-          ],
-          "metrics": {
-            "heatmap": {
-              "hit3": 0,
-              "hit5": 0,
-              "p3": 0,
-              "p5": 0,
-              "r5": 0,
-              "miou5": 0
-            }
-          }
-        },
-        "random": {
-          "preds": [
-            {
-              "id": "c_0001",
-              "start": 0.1,
-              "end": 24.99,
-              "total": 0.6270739405881613,
-              "hook": "You are going for a job interview.",
-              "reason": null,
-              "scores": null
-            }
-          ],
-          "metrics": {
-            "heatmap": {
-              "hit3": 0,
-              "hit5": 0,
-              "p3": 0,
-              "p5": 0,
-              "r5": 0,
-              "miou5": 0
-            }
-          },
-          "seeds": 200
-        },
-        "random:shortlist": {
-          "preds": [],
-          "metrics": {
-            "heatmap": {
-              "hit3": 0,
-              "hit5": 0,
-              "p3": 0,
-              "p5": 0,
-              "r5": 0,
-              "miou5": 0
-            }
-          },
-          "seeds": 200
-        },
-        "energy": {
-          "preds": [
-            {
-              "id": "c_0001",
-              "start": 0.1,
-              "end": 24.99,
-              "total": 1,
-              "hook": "You are going for a job interview.",
-              "reason": null,
-              "scores": null
-            }
-          ],
-          "metrics": {
-            "heatmap": {
-              "hit3": 0,
-              "hit5": 0,
-              "p3": 0,
-              "p5": 0,
-              "r5": 0,
-              "miou5": 0
-            }
-          }
-        }
-      },
-      "timings": {
-        "transcribeSec": 182.589,
-        "candidatesSec": 0.001,
-        "nCandidates": 3
-      },
-      "nShortlist": 3
     },
     {
       "id": "CBYhVcO4WgI",
@@ -1159,8 +983,662 @@
       },
       "timings": {
         "transcribeSec": 214.167,
-        "candidatesSec": 0.028,
+        "candidatesSec": 0.025,
         "nCandidates": 234
+      },
+      "nShortlist": 8
+    },
+    {
+      "id": "iqm-XEqpayc",
+      "title": "Sheryl Sandberg Gives UC Berkeley Commencement Keynote Speech",
+      "duration": 900,
+      "nWords": 1817,
+      "nCandidates": 230,
+      "labels": {
+        "heatmap": [
+          {
+            "start": 92.52,
+            "end": 123.36,
+            "source": "heatmap",
+            "weight": 0.504
+          },
+          {
+            "start": 323.82,
+            "end": 354.66,
+            "source": "heatmap",
+            "weight": 0.689
+          },
+          {
+            "start": 508.86,
+            "end": 568.86,
+            "source": "heatmap",
+            "weight": 0.628
+          },
+          {
+            "start": 601.38,
+            "end": 632.22,
+            "source": "heatmap",
+            "weight": 1
+          },
+          {
+            "start": 678.48,
+            "end": 709.32,
+            "source": "heatmap",
+            "weight": 0.594
+          }
+        ],
+        "human": []
+      },
+      "methods": {
+        "oracle": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 1,
+              "p5": 1,
+              "r5": 1,
+              "miou5": 0.8112939505936361
+            }
+          }
+        },
+        "oracle:shortlist": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.3333333333333333,
+              "p5": 0.2,
+              "r5": 0.2,
+              "miou5": 0.1938291359916445
+            }
+          }
+        },
+        "prescore": {
+          "preds": [
+            {
+              "id": "c_0063",
+              "start": 247,
+              "end": 272,
+              "total": 0.78,
+              "hook": "Today I'm going to try to tell you what I learned in death.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0093",
+              "start": 404,
+              "end": 425,
+              "total": 0.73,
+              "hook": "Everyone who's made it through cow has already experienced some disappointment.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0169",
+              "start": 646,
+              "end": 689,
+              "total": 0.72,
+              "hook": "I poured over his medical records, asking what I could have or should have done.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0058",
+              "start": 220,
+              "end": 261,
+              "total": 0.71,
+              "hook": "I tell you all the things I've learned in life.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0188",
+              "start": 705,
+              "end": 761,
+              "total": 0.699,
+              "hook": "You know that song, \"Everything is Awesome\"?",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.04369823705518741
+            }
+          }
+        },
+        "prefilter": {
+          "preds": [
+            {
+              "id": "c_0063",
+              "start": 247,
+              "end": 272,
+              "total": 0.78,
+              "hook": "Today I'm going to try to tell you what I learned in death.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0093",
+              "start": 404,
+              "end": 425,
+              "total": 0.73,
+              "hook": "Everyone who's made it through cow has already experienced some disappointment.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0169",
+              "start": 646,
+              "end": 689,
+              "total": 0.72,
+              "hook": "I poured over his medical records, asking what I could have or should have done.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0058",
+              "start": 220,
+              "end": 261,
+              "total": 0.71,
+              "hook": "I tell you all the things I've learned in life.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0188",
+              "start": 705,
+              "end": 761,
+              "total": 0.699,
+              "hook": "You know that song, \"Everything is Awesome\"?",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.04369823705518741
+            }
+          }
+        },
+        "random": {
+          "preds": [
+            {
+              "id": "c_0198",
+              "start": 752,
+              "end": 774,
+              "total": 0.9984868622850627,
+              "hook": "That second helped me see that there were other things in my life that were not awful.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0010",
+              "start": 31,
+              "end": 71,
+              "total": 0.9948229456786066,
+              "hook": "It's my privilege to be here at Berkeley, which has produced so many Nobel Prize winners, Turing Award winners, astronauts, members of Congress, Olympic gold medalists.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0036",
+              "start": 140,
+              "end": 163,
+              "total": 0.9945340014528483,
+              "hook": "[ Applause ] She is one of the major sources of inspiration in my life.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0108",
+              "start": 454,
+              "end": 478,
+              "total": 0.9916538530960679,
+              "hook": "You will almost certain face more and deeper adversity.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0052",
+              "start": 206.07,
+              "end": 247,
+              "total": 0.9893774879164994,
+              "hook": "A commencement address is meant to be a dance between youth and wisdom.",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0.28,
+              "hit5": 0.46,
+              "p3": 0.10499999999999998,
+              "p5": 0.1119999999999998,
+              "r5": 0.1119999999999998,
+              "miou5": 0.143399495870956
+            }
+          },
+          "seeds": 200
+        },
+        "random:shortlist": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0.335,
+              "hit5": 0.45,
+              "p3": 0.11166666666666661,
+              "p5": 0.08999999999999984,
+              "r5": 0.08999999999999984,
+              "miou5": 0.14840929759063015
+            }
+          },
+          "seeds": 200
+        },
+        "energy": {
+          "preds": [
+            {
+              "id": "c_0045",
+              "start": 173,
+              "end": 198,
+              "total": 1,
+              "hook": "A day to celebrate all the hard work that got you to this moment.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0060",
+              "start": 239,
+              "end": 261,
+              "total": 0.9383207659069729,
+              "hook": "We'll still do the caps and you still have to do the photos.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0024",
+              "start": 99,
+              "end": 120,
+              "total": 0.933075933075933,
+              "hook": "One of the women who came here in search of opportunity was Rosalyn Nuss.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0135",
+              "start": 547,
+              "end": 572,
+              "total": 0.8788443616029824,
+              "hook": "A few weeks after Dave died, I was talking to my friend Phil.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0117",
+              "start": 486,
+              "end": 509,
+              "total": 0.8640949795372583,
+              "hook": "Many of you have already experienced the kind of tragedy and hardship that leaves an indelible mark.",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.3333333333333333,
+              "p5": 0.2,
+              "r5": 0.2,
+              "miou5": 0.20576764197988728
+            }
+          }
+        }
+      },
+      "timings": {
+        "transcribeSec": 204.127,
+        "candidatesSec": 0.016,
+        "nCandidates": 230
+      },
+      "nShortlist": 8
+    },
+    {
+      "id": "uFyk5UOyNqI",
+      "title": "DEF CON 32 - Inside the FBI’s Secret Encrypted Phone Company ‘Anom’ - Joseph Cox",
+      "duration": 900,
+      "nWords": 2512,
+      "nCandidates": 168,
+      "labels": {
+        "heatmap": [
+          {
+            "start": 94.56,
+            "end": 118.2,
+            "source": "heatmap",
+            "weight": 0.621
+          },
+          {
+            "start": 189.12,
+            "end": 212.76,
+            "source": "heatmap",
+            "weight": 0.384
+          },
+          {
+            "start": 307.32,
+            "end": 354.6,
+            "source": "heatmap",
+            "weight": 0.626
+          },
+          {
+            "start": 591,
+            "end": 614.64,
+            "source": "heatmap",
+            "weight": 0.545
+          },
+          {
+            "start": 709.2,
+            "end": 732.84,
+            "source": "heatmap",
+            "weight": 0.445
+          }
+        ],
+        "human": []
+      },
+      "methods": {
+        "oracle": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 1,
+              "p5": 1,
+              "r5": 1,
+              "miou5": 0.7982665865119383
+            }
+          }
+        },
+        "oracle:shortlist": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.09845944472434204
+            }
+          }
+        },
+        "prescore": {
+          "preds": [
+            {
+              "id": "c_0084",
+              "start": 504.49,
+              "end": 562.14,
+              "total": 0.682,
+              "hook": "Criminals now have, you know, WhatsApp, iMessage, but for criminals.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0034",
+              "start": 115.93,
+              "end": 145.19,
+              "total": 0.68,
+              "hook": "You take the panel off.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0059",
+              "start": 256.68,
+              "end": 298.58,
+              "total": 0.68,
+              "hook": "Briefly, what I'm going to talk about, the phone, so that's the software, the hardware, the network itself, and for the first time, the FBI front-end interface.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0073",
+              "start": 445.78,
+              "end": 501.28,
+              "total": 0.677,
+              "hook": "Even though I think most people in this room would probably agree, a lot of this is security theatre.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0016",
+              "start": 65.68,
+              "end": 92.2,
+              "total": 0.67,
+              "hook": "The FBI shuts down Phantom Secure in 2018.",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.00896701560339718
+            }
+          }
+        },
+        "prefilter": {
+          "preds": [
+            {
+              "id": "c_0084",
+              "start": 504.49,
+              "end": 562.14,
+              "total": 0.682,
+              "hook": "Criminals now have, you know, WhatsApp, iMessage, but for criminals.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0034",
+              "start": 115.93,
+              "end": 145.19,
+              "total": 0.68,
+              "hook": "You take the panel off.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0059",
+              "start": 256.68,
+              "end": 298.58,
+              "total": 0.68,
+              "hook": "Briefly, what I'm going to talk about, the phone, so that's the software, the hardware, the network itself, and for the first time, the FBI front-end interface.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0073",
+              "start": 445.78,
+              "end": 501.28,
+              "total": 0.677,
+              "hook": "Even though I think most people in this room would probably agree, a lot of this is security theatre.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0016",
+              "start": 65.68,
+              "end": 92.2,
+              "total": 0.67,
+              "hook": "The FBI shuts down Phantom Secure in 2018.",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.00896701560339718
+            }
+          }
+        },
+        "random": {
+          "preds": [
+            {
+              "id": "c_0010",
+              "start": 39.28,
+              "end": 65.68,
+              "total": 0.9948229456786066,
+              "hook": "He also sold specialized encrypted phones from a company called Phantom Secure.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0036",
+              "start": 134.83,
+              "end": 158.32,
+              "total": 0.9945340014528483,
+              "hook": "They must be a mistake.\"",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0108",
+              "start": 614.2,
+              "end": 640.27,
+              "total": 0.9916538530960679,
+              "hook": "That was the country that got the court order to do this worldwide interception.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0052",
+              "start": 211.96,
+              "end": 234.96,
+              "total": 0.9893774879164994,
+              "hook": "So for Dark Wire, I've spoken to the people who coded the phones, the people who sell them to drug traffickers themselves, the FBI agents who manage this operation, other law enforcement officials from Europe, all from the Netherlands, from Sweden, from Australia.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0114",
+              "start": 640.27,
+              "end": 662.75,
+              "total": 0.9842514398042113,
+              "hook": "You have the classic Alice and Bob sort of chat example, right?",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0.36,
+              "hit5": 0.52,
+              "p3": 0.12666666666666657,
+              "p5": 0.11899999999999979,
+              "r5": 0.11899999999999979,
+              "miou5": 0.15523474297448947
+            }
+          },
+          "seeds": 200
+        },
+        "random:shortlist": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.06155755829971074
+            }
+          },
+          "seeds": 200
+        },
+        "energy": {
+          "preds": [
+            {
+              "id": "c_0055",
+              "start": 234.96,
+              "end": 256.52,
+              "total": 1,
+              "hook": "That photo, the top one, that's me trying to slightly take a photo outside the FBI San Diego field office when there was a camera looking down at me, just making eye contact with it.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0067",
+              "start": 333.67,
+              "end": 359.05,
+              "total": 0.9808400902401901,
+              "hook": "This was a Google Pixel 4A, it also came on Pixel 2s, Pixel 3As, Samsung Galaxy's and some Chinese phones as well.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0022",
+              "start": 80.96,
+              "end": 105.48,
+              "total": 0.9768141603963946,
+              "hook": "UPS has rang up and said they need a broker to sign the paperwork off the customs.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0139",
+              "start": 724.28,
+              "end": 763.2,
+              "total": 0.9509108395391571,
+              "hook": "I'm not going to get too into the legal stuff, but the reason the FBI did that was because they didn't think they could do it legally.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0130",
+              "start": 695.23,
+              "end": 732.93,
+              "total": 0.8824264200350505,
+              "hook": "You know, echo and support, they're not really important.",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 1,
+              "p3": 0,
+              "p5": 0.2,
+              "r5": 0.2,
+              "miou5": 0.2966816232102086
+            }
+          }
+        }
+      },
+      "timings": {
+        "transcribeSec": 306.28,
+        "candidatesSec": 0.017,
+        "nCandidates": 168
       },
       "nShortlist": 8
     }

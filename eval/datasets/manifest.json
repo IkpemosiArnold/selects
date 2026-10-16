@@ -38,50 +38,6 @@
     ]
   },
   {
-    "id": "ASvx-QG6o04",
-    "title": "💥7 POWERFUL Body Language Hacks for Job Interviews",
-    "channel": "The Behavior Panel",
-    "url": "https://www.youtube.com/watch?v=ASvx-QG6o04",
-    "license": "CC BY 3.0",
-    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-16)",
-    "localPath": "eval/media/ASvx-QG6o04.webm",
-    "duration": 646,
-    "heatmapPath": "eval/datasets/info/ASvx-QG6o04.json",
-    "labels": [
-      {
-        "start": 77.64,
-        "end": 103.52,
-        "source": "heatmap",
-        "weight": 0.791
-      },
-      {
-        "start": 213.51,
-        "end": 265.27,
-        "source": "heatmap",
-        "weight": 0.984
-      },
-      {
-        "start": 290.86,
-        "end": 310.86,
-        "source": "heatmap",
-        "weight": 0.95
-      },
-      {
-        "start": 355.56,
-        "end": 375.56,
-        "source": "heatmap",
-        "weight": 0.668
-      },
-      {
-        "start": 400.85,
-        "end": 420.85,
-        "source": "heatmap",
-        "weight": 0.739
-      }
-    ]
-  },
-  {
     "id": "CBYhVcO4WgI",
     "title": "Lecture 1 - How to Start a Startup (Sam Altman, Dustin Moskovitz)",
     "channel": "YC Root Access",
@@ -219,6 +175,50 @@
         "end": 732.84,
         "source": "heatmap",
         "weight": 0.445
+      }
+    ]
+  },
+  {
+    "id": "Aj0nf3rKG_E",
+    "title": "LIVE NURSING INTERVIEW",
+    "channel": "Ashley Lorena Adkins, MSN, RN, CCRN",
+    "url": "https://www.youtube.com/watch?v=Aj0nf3rKG_E",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-16)",
+    "localPath": "eval/media/Aj0nf3rKG_E.m4a",
+    "duration": 1030,
+    "heatmapPath": "eval/datasets/info/Aj0nf3rKG_E.json",
+    "labels": [
+      {
+        "start": 288.4,
+        "end": 348.4,
+        "source": "heatmap",
+        "weight": 0.743
+      },
+      {
+        "start": 391.4,
+        "end": 412,
+        "source": "heatmap",
+        "weight": 1
+      },
+      {
+        "start": 545.9,
+        "end": 576.8,
+        "source": "heatmap",
+        "weight": 0.427
+      },
+      {
+        "start": 885.8,
+        "end": 916.7,
+        "source": "heatmap",
+        "weight": 0.675
+      },
+      {
+        "start": 957.9,
+        "end": 988.8,
+        "source": "heatmap",
+        "weight": 0.413
       }
     ]
   },
