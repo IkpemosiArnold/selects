@@ -126,9 +126,11 @@ test("approve, trim with snapping, and render only approved clips", async () => 
   const rendered = [];
   const done = await renderJob(job.id, {
     deps: {
-      render: async (_job, c, { onProgress }) => {
+      render: async (_job, c, { onProgress, jobDir: dir }) => {
         rendered.push(c.id);
         onProgress({ progress: 0.5 });
+        fs.mkdirSync(path.join(dir, "clips"), { recursive: true });
+        fs.writeFileSync(path.join(dir, "clips", `${c.id}.mp4`), "mp4");
         return { path: `clips/${c.id}.mp4`, srt: `clips/${c.id}.srt`, wallSec: 1 };
       },
       postingKit: async () => ({ title: "A title", caption: "A caption.", hashtags: ["x"] }),
@@ -140,4 +142,8 @@ test("approve, trim with snapping, and render only approved clips", async () => 
   assert.equal(c.render.status, "done");
   assert.equal(c.title, "A title");
   assert.ok(fs.existsSync(path.join(jobDir(job.id), c.render.kit)));
+  // rendering again with nothing left to do keeps the stage's timings
+  const before = loadJob(job.id).stages.render;
+  const again = await renderJob(job.id, { deps: { render: async () => assert.fail("should not re-render") } });
+  assert.deepEqual(again.stages.render, before);
 });

@@ -390,6 +390,8 @@ async function renderStage(id, { ids, deps = {}, signal, kit, preset } = {}) {
   const kitMode = field === "preview" ? false : (kit ?? job.settings.kit ?? "model");
   const targets = job.candidates.filter((c) => (ids ? ids.includes(c.id) : c.status === "approved"));
   if (!targets.length) return job;
+  const isDone = (c) => c[field]?.status === "done" && c[field].path && fs.existsSync(path.join(dir, c[field].path));
+  if (targets.every(isDone)) return job; // nothing to do: keep the stage's real timings
   const words = readJson(path.join(dir, "words.json"));
   const prevStage = job.stage;
   job.stage = "rendering";
