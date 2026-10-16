@@ -1,0 +1,65 @@
+// The models Selects Web downloads, with their sizes, licences and sources. Sizes are the
+// bytes the browser fetches (Hugging Face API, 16 Oct 2026), so the UI can say how much
+// it is about to download before it starts. Nothing here is fetched until it is needed.
+
+export const HF = "https://huggingface.co";
+
+export const MODELS = {
+  // Speech to text with word times. The "_timestamped" export carries the cross-attention
+  // outputs that word-level timestamps need.
+  whisper: {
+    id: "onnx-community/whisper-base.en_timestamped",
+    label: "Whisper base.en (speech to text)",
+    licence: "MIT (OpenAI Whisper), ONNX export by onnx-community",
+    source: `${HF}/onnx-community/whisper-base.en_timestamped`,
+    // WASM: full-precision encoder (quantising whisper's encoder costs accuracy) and an
+    // 8-bit decoder. WebGPU: the same encoder and a 4-bit decoder.
+    dtype: { wasm: { encoder_model: "fp32", decoder_model_merged: "q8" }, webgpu: { encoder_model: "fp32", decoder_model_merged: "q4" } },
+    bytes: { wasm: 82451730 + 53712196 + 4247506, webgpu: 82451730 + 123736279 + 4247506 },
+    cache: "Cache Storage, \"transformers-cache\"",
+  },
+  // The judge when the browser has WebGPU: Gemma 4 E2B through Google's web runtime
+  // (MediaPipe LLM Inference, @mediapipe/tasks-genai). Text only on the web.
+  gemma4: {
+    id: "litert-community/gemma-4-E2B-it-litert-lm",
+    file: "gemma-4-E2B-it-web.task",
+    url: `${HF}/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it-web.task`,
+    label: "Gemma 4 E2B (judge, WebGPU)",
+    licence: "Apache-2.0",
+    source: `${HF}/litert-community/gemma-4-E2B-it-litert-lm`,
+    bytes: 2003697664,
+    cache: "Cache Storage, \"selects-models\"",
+  },
+  // The judge without WebGPU: Gemma 3 1B through llama.cpp compiled to WebAssembly
+  // (wllama). Gemma 4 E2B GGUFs are 2.2 GB and more, over wllama's 2 GB per-file limit
+  // and far too slow on a CPU in a tab, so the CPU path keeps the 1B model.
+  gemma3: {
+    id: "unsloth/gemma-3-1b-it-GGUF",
+    file: "gemma-3-1b-it-Q4_0.gguf",
+    url: `${HF}/unsloth/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_0.gguf`,
+    label: "Gemma 3 1B, Q4_0 (judge, CPU)",
+    licence: "Gemma Terms of Use",
+    source: `${HF}/unsloth/gemma-3-1b-it-GGUF`,
+    bytes: 721918496,
+    cache: "Origin private file system (wllama's cache)",
+  },
+  // Text language check for the five main languages of Nigeria (plain JavaScript weights).
+  ng5: {
+    id: "olaverse/lid-lite-5",
+    url: `${HF}/olaverse/lid-lite-5/resolve/main/lid-lite-5.json`,
+    label: "lid-lite-5 (language check)",
+    licence: "Apache-2.0",
+    source: `${HF}/olaverse/lid-lite-5`,
+    bytes: 1149514,
+    cache: "Cache Storage, \"selects-models\"",
+  },
+};
+
+/** Smart mode: Gemma served by Google through the Gemini API (text of the shortlist only). */
+// The only Gemma models the Gemini API listed on 16 Oct 2026. The 26B MoE (about 4B active)
+// answered judge calls in about 2 s; the 31B dense model took up to a minute.
+export const SMART_MODELS = ["gemma-4-26b-a4b-it", "gemma-4-31b-it"];
+
+export const mb = (bytes) => `${Math.round(bytes / 1e6)} MB`;
+export const gb = (bytes) => `${(bytes / 1e9).toFixed(1)} GB`;
+export const size = (bytes) => (bytes >= 1e9 ? gb(bytes) : mb(bytes));

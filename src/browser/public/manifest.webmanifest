@@ -1,0 +1,16 @@
+{
+  "name": "Selects",
+  "short_name": "Selects",
+  "description": "Find the best short clips in a long video, on your own device. Your video is not uploaded.",
+  "start_url": "./demo.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1d2126",
+  "theme_color": "#1d2126",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

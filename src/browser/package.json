@@ -1,0 +1,21 @@
+{
+  "name": "selects-web-engine",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Selects in the browser: the same clipper, running in the visitor's tab. Nothing is uploaded.",
+  "scripts": {
+    "dev": "vite --config vite.config.mjs",
+    "build": "vite build --config vite.config.mjs",
+    "preview": "vite preview --config vite.config.mjs"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "4.3.1",
+    "@mediapipe/tasks-genai": "0.10.29",
+    "@wllama/wllama": "3.8.1",
+    "mediabunny": "1.61.5"
+  },
+  "devDependencies": {
+    "vite": "6.3.5"
+  }
+}
