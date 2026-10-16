@@ -19,7 +19,8 @@ import { plainKit, postingKit as realKit } from "./kit.mjs";
 import { probe as realProbe } from "./probe.mjs";
 import { curve, rank } from "./rank.mjs";
 import { hwaccelArgs, render as realRender, renderFull as realRenderFull } from "./render.mjs";
-import { snapTrim, toSentences } from "./sentences.mjs";
+import { restorePunctuation as realRestorePunctuation } from "./punctuate.mjs";
+import { isSparsePunctuation, snapTrim, toSentences } from "./sentences.mjs";
 import { transcribe as realTranscribe } from "./transcribe.mjs";
 import { readJson, run, sha1, writeJsonAtomic } from "./util.mjs";
 
@@ -327,6 +328,7 @@ async function runStages(id, { deps = {}, signal } = {}) {
     listwise: realListwise,
     thumbs: makeThumbs,
     decideLanguage: realDecideLanguage,
+    restorePunctuation: realRestorePunctuation,
     ...deps,
   };
   let job = loadJob(id);
@@ -431,6 +433,14 @@ async function runStages(id, { deps = {}, signal } = {}) {
       const split = splitNonSpeech(words); // a no-op for segmentsToWords output, which is already clean
       writeJsonAtomic(path.join(dir, "events.json"), [...(words.events || []), ...split.events].sort((a, b) => a.s - b.s));
       words = split.words;
+      // whisper sometimes writes long runs with no full stops; a punctuation model puts them back
+      job.punctuation = null;
+      if (lang === "en" && job.settings.punctuate !== false && isSparsePunctuation(words)) {
+        progress("transcribe", { progress: 0.999, note: "adding punctuation" });
+        const r = d.restorePunctuation(words);
+        words = r.words;
+        job.punctuation = r.info;
+      }
       writeJsonAtomic(wordsFile, words);
       fs.rmSync(path.join(dir, "captions.json"), { force: true }); // new words, new cues
       const sec = (Date.now() - t0) / 1000;

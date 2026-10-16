@@ -352,3 +352,26 @@ test("accent routing: English that whisper's detector heard as Yoruba is transcr
     delete process.env.SELECTS_ACCENT_MODEL_NG;
   }
 });
+
+test("a transcript without full stops gets punctuation restored before sentences are built", async () => {
+  const job = createJob(video, { model: "mock" });
+  const deps = mocks({ probe: 0, transcribe: 0, judge: 0 });
+  const plain = WORDS.map((w) => ({ ...w, w: w.w.replace(/[.,!?]/g, "").toLowerCase() }));
+  deps.transcribe = async () => plain;
+  let called = 0;
+  deps.restorePunctuation = (words) => {
+    called++;
+    return { words: words.map((w, i) => ({ ...w, w: i % 12 === 11 ? `${w.w}.` : w.w })), info: { restored: true, model: "fake", changed: 10, sec: 0.1, reason: null } };
+  };
+  const done = await runJob(job.id, { deps });
+  assert.equal(called, 1);
+  assert.equal(done.punctuation.restored, true);
+  const saved = JSON.parse(fs.readFileSync(path.join(jobDir(job.id), "words.json"), "utf8"));
+  assert.ok(saved.filter((w) => w.w.endsWith(".")).length > 10, "words.json holds the restored words");
+  const punctuated = createJob(video, { model: "mock" });
+  let again = 0;
+  const d2 = mocks({ probe: 0, transcribe: 0, judge: 0 });
+  d2.restorePunctuation = (w) => (again++, { words: w, info: {} });
+  await runJob(punctuated.id, { deps: d2 });
+  assert.equal(again, 0, "a punctuated transcript is left alone");
+});

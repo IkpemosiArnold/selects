@@ -19,5 +19,8 @@
   "dependencies": {
     "@napi-rs/canvas": "^1.0.11",
     "fasttext.wasm.js": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "sherpa-onnx-node": "^1.13.8"
   }
 }

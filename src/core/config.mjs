@@ -116,6 +116,7 @@ export const DEFAULT_SETTINGS = {
   asrModel: "auto", // base.en for English, the best installed multilingual model otherwise
   asrPrompt: null, // a short neutral context for whisper (--prompt)
   asrPreprocess: "none", // "none" or "clean" (highpass, lowpass, loudness) before whisper
+  punctuate: true, // restore full stops and casing with a punctuation model when whisper left them out (English)
   accent: "auto", // "auto" (route accented English to a fine-tune when the language check finds cues), "ng" (Nigerian English), "none"
   captions: true, // burn captions into rendered clips
   captionLang: "source", // "source"; "en" and "both" are planned
