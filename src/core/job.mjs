@@ -8,6 +8,7 @@ import { DEFAULT_SETTINGS, jobsDir, resolveAsrModel, resolveModel } from "./conf
 import { captionsFile, clipCues, loadCaptions, textInRange } from "./captions.mjs";
 import { detectFaces as realDetectFaces } from "./faces.mjs";
 import { decideLanguage as realDecideLanguage } from "./language.mjs";
+import { accentRoute, nigerianCues } from "./langid/accent.mjs";
 import { applyProfile } from "./profiles.mjs";
 import { transcriptQuality } from "./quality.mjs";
 import { attributionLine, captionWithCredit, mediaReminder, normaliseLicense, OWN_FOOTAGE } from "./attribution.mjs";
@@ -212,8 +213,26 @@ export function retranscribe(id, patch = {}, opts = {}) {
   return runJob(id, opts);
 }
 
+/**
+ * The answer "yes" to the language question: the language Selects used is right. Nothing is
+ * transcribed again; the question is cleared and the answer recorded. Returns the job.
+ */
+export function confirmLanguage(id, language) {
+  const job = loadJob(id);
+  if (!job.language || job.language.used !== language) {
+    const err = new Error(`This job was transcribed as ${job.language?.used ?? "nothing yet"}, not ${language}.`);
+    err.status = 409;
+    err.hint = "To change the language, send { language } without confirm: the video is transcribed again.";
+    throw err;
+  }
+  job.language = { ...job.language, question: null, confirmed: { by: "user", language, at: new Date().toISOString() } };
+  saveJob(job);
+  emit(id, "job", job);
+  return job;
+}
+
 /** The reset half of retranscribe, for callers that run the job through the queue. */
-export function resetTranscript(id, { language, asrModel, asrPrompt, asrPreprocess } = {}) {
+export function resetTranscript(id, { language, asrModel, asrPrompt, asrPreprocess, accent } = {}) {
   if (running.has(id)) {
     const err = new Error("This job is still running. Wait for it to finish, then change the language.");
     err.status = 409;
@@ -224,10 +243,12 @@ export function resetTranscript(id, { language, asrModel, asrPrompt, asrPreproce
   if (asrModel) job.settings.asrModel = asrModel;
   if (asrPrompt !== undefined) job.settings.asrPrompt = asrPrompt || null;
   if (asrPreprocess) job.settings.asrPreprocess = asrPreprocess;
+  if (accent) job.settings.accent = accent;
   const dir = jobDir(id);
   for (const f of ["whisper.json", "whisper.meta.json", "words.json", "events.json", "captions.json", "candidates.json", "judged.json", "loudness.json"]) fs.rmSync(path.join(dir, f), { force: true });
   for (const s of ["language", "transcribe", "candidates", "judge"]) job.stages[s] = freshStage();
   job.language = null;
+  job.accent = null;
   job.transcriptQuality = null;
   job.candidates = [];
   job.curve = [];
@@ -389,7 +410,11 @@ async function runStages(id, { deps = {}, signal } = {}) {
     if (job.stages.transcribe.status !== "done" || !fs.existsSync(wordsFile)) {
       current = "transcribe";
       begin("transcribe");
-      const model = resolveAsrModel(job.settings.asrModel || "auto", lang);
+      // accent routing: Nigerian-accented English goes to the fine-tune when there is a reason to
+      const cues = nigerianCues({ language: lang, detected: job.language?.detected ?? null, texts: (job.language?.compared || []).map((c) => ({ asked: c.code, ng5: c.text?.ng5 ?? null, lid608: c.text?.lid608 ?? null })) });
+      const route = accentRoute({ accent: job.settings.accent || "auto", asrModel: job.settings.asrModel || "auto", language: lang, cues });
+      job.accent = { accent: route.accent, routed: !!route.model, model: route.model ? path.basename(route.model) : null, cues, reason: route.reason };
+      const model = route.model || resolveAsrModel(job.settings.asrModel || "auto", lang);
       const t0 = Date.now();
       words = await d.transcribe(job.source.path, {
         cacheDir: dir,
@@ -409,7 +434,7 @@ async function runStages(id, { deps = {}, signal } = {}) {
       writeJsonAtomic(wordsFile, words);
       fs.rmSync(path.join(dir, "captions.json"), { force: true }); // new words, new cues
       const sec = (Date.now() - t0) / 1000;
-      job.asr = { provider: "whisper.cpp", model: path.basename(model), language: lang, prompt: job.settings.asrPrompt || null, preprocess: job.settings.asrPreprocess || "none", sec: +sec.toFixed(1), speed: +(job.source.duration / Math.max(0.1, sec)).toFixed(2) };
+      job.asr = { provider: "whisper.cpp", model: path.basename(model), accent: job.accent?.routed ? job.accent.accent : null, language: lang, prompt: job.settings.asrPrompt || null, preprocess: job.settings.asrPreprocess || "none", sec: +sec.toFixed(1), speed: +(job.source.duration / Math.max(0.1, sec)).toFixed(2) };
       job.transcriptQuality = transcriptQuality(words, { duration: job.source.duration });
       const speed = job.source.duration / ((Date.now() - Date.parse(job.stages.transcribe.startedAt)) / 1000);
       finish("transcribe", `${words.length} words, ${speed.toFixed(2)}x real time, transcript ${job.transcriptQuality.verdict}`);

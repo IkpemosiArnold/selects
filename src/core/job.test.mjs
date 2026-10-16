@@ -316,3 +316,39 @@ test("kits carry the slide reminder only when the job has a credit, licence or s
     }
   }
 });
+
+test("accent routing: English that whisper's detector heard as Yoruba is transcribed with the Nigerian-accent model", async () => {
+  const fine = path.join(home, "ggml-small-nigerian-accent.bin");
+  fs.writeFileSync(fine, "x");
+  process.env.SELECTS_ACCENT_MODEL_NG = fine;
+  try {
+    const run = async (settings, detected) => {
+      const job = createJob(video, { model: "mock", mode: "caption", ...settings });
+      const seen = [];
+      const deps = {
+        ...mocks({ probe: 0, transcribe: 0, judge: 0 }),
+        decideLanguage: async () => ({ setting: "auto", used: "en", detected, compared: [], margin: null, decided: "ensemble", warning: null, sec: 0 }),
+      };
+      const transcribe = deps.transcribe;
+      deps.transcribe = async (p, o) => (seen.push(o.model), transcribe(p, o));
+      const done = await runJob(job.id, { deps });
+      return { done, model: seen[0] };
+    };
+    const ng = await run({}, { code: "yo", p: 0.9 });
+    assert.equal(ng.model, fine);
+    assert.equal(ng.done.accent.routed, true);
+    assert.equal(ng.done.asr.accent, "ng");
+    assert.equal(ng.done.accent.cues[0].kind, "audio");
+    const plain = await run({}, { code: "en", p: 0.95 });
+    assert.notEqual(plain.model, fine);
+    assert.equal(plain.done.accent.routed, false);
+    const off = await run({ accent: "none" }, { code: "yo", p: 0.9 });
+    assert.notEqual(off.model, fine);
+    const chosen = await run({ asrModel: "small.en" }, { code: "yo", p: 0.9 });
+    assert.match(chosen.model, /ggml-small\.en\.bin$/, "the user's model choice wins");
+    const profile = await run({ accent: "ng" }, { code: "en", p: 0.95 });
+    assert.equal(profile.model, fine, "a profile that says Nigerian English routes without cues");
+  } finally {
+    delete process.env.SELECTS_ACCENT_MODEL_NG;
+  }
+});

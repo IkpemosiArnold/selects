@@ -84,6 +84,7 @@ test("decideLanguage decodes each candidate once, then caches", async () => {
       const p = code === "en" ? 0.7 : 0.3;
       return Array.from({ length: 30 }, (_, i) => ({ w: "w", s: i, e: i + 0.5, p }));
     },
+    identifyTexts: async (texts) => ({ results: texts.map(() => ({ lid608: null, ng5: null })), models: [], sec: 0 }),
   };
   const res = await decideLanguage("/fake.mov", { duration: 165, setting: "en", cacheDir: dir, deps });
   assert.deepEqual(calls.sort(), ["en", "yo"]);
@@ -109,4 +110,29 @@ test("decideLanguage creates a missing cacheDir before writing samples", async (
   assert.equal(res.used, "en");
   assert.ok(fs.existsSync(path.join(dir, "language.json")));
   fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("decideLanguage runs text language ID on each decode and stores the ensemble", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "selects-lang-ens-"));
+  let seen = null;
+  const deps = {
+    model: "/fake/ggml-base.bin",
+    extractAudio: async (_v, wav) => fs.writeFileSync(wav, "x"),
+    detectLanguage: async () => ({ code: "yo", p: 0.9 }),
+    // the accent trap: told to write Yoruba, whisper writes English, more confidently
+    decode: async (_wav, code) => Array.from({ length: 40 }, (_, i) => ({ w: ["and", "the", "market", "was", "full"][i % 5], s: i, e: i + 0.5, p: code === "yo" ? 0.8 : 0.65 })),
+    identifyTexts: async (texts) => {
+      seen = texts;
+      return { results: texts.map(() => ({ lid608: { label: "eng_Latn", code: "en", p: 0.97, pcm: 0.01 }, ng5: { eng: 0.9, hau: 0.02, ibo: 0.02, pcm: 0.04, yor: 0.02 } })), models: ["lid-lite-608", "lid-lite-5"], sec: 0.1 };
+    },
+  };
+  const res = await decideLanguage("/fake.mov", { duration: 165, setting: "auto", cacheDir: dir, deps });
+  assert.equal(seen.length, 2);
+  assert.equal(res.used, "en");
+  assert.equal(res.ensemble.language, "en");
+  assert.equal(res.ensemble.disagreement, false);
+  assert.equal(res.compared.find((c) => c.code === "yo").text.lid608.code, "en");
+  assert.equal(res.rule, "ensemble-1");
+  assert.deepEqual(res.textLid.models, ["lid-lite-608", "lid-lite-5"]);
+  fs.rmSync(dir, { recursive: true, force: true });
 });

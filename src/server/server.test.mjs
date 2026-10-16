@@ -210,6 +210,16 @@ test("blur is validated on clips and job settings", async () => {
   assert.equal(js.json.settings.captions, false);
   const lang = await req("POST", `/api/jobs/${job.id}/language`, { body: { language: "not a code" } });
   assert.equal(lang.status, 400);
+  // the answer to "Is the speaker using English?": yes keeps the transcript
+  const yes = await req("POST", `/api/jobs/${job.id}/language`, { body: { language: "en", confirm: true } });
+  assert.equal(yes.status, 200);
+  assert.equal(yes.json.language.confirmed.language, "en");
+  assert.equal(yes.json.language.question, null);
+  assert.equal(yes.json.stages.transcribe.status, "done", "nothing is transcribed again");
+  const wrong = await req("POST", `/api/jobs/${job.id}/language`, { body: { language: "yo", confirm: true } });
+  assert.equal(wrong.status, 409);
+  const badAccent = await req("POST", `/api/jobs/${job.id}/language`, { body: { language: "en", accent: "xx" } });
+  assert.equal(badAccent.status, 400);
   const faces = await req("GET", `/api/jobs/${job.id}/faces`);
   assert.equal(faces.status, 404);
 });

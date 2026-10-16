@@ -22,6 +22,27 @@ export function modelsDir() {
   return process.env.SELECTS_MODELS_DIR || path.dirname(whisperModel());
 }
 
+/** Text language-ID models (lid-lite-608, lid-lite-5): SELECTS_LANGID_DIR, else <models>/langid. */
+export function langidDir() {
+  return process.env.SELECTS_LANGID_DIR || path.join(modelsDir(), "langid");
+}
+
+/**
+ * Accent fine-tunes of whisper for English, by accent. "ng": Nigerian-accented English
+ * (rishabbahal/whisper-small-nigerian-accent, converted to ggml). SELECTS_ACCENT_MODEL_NG
+ * overrides the path.
+ */
+export function accentModel(accent) {
+  if (accent === "ng") return process.env.SELECTS_ACCENT_MODEL_NG || path.join(modelsDir(), "ggml-small-nigerian-accent.bin");
+  return null;
+}
+
+/** Silero VAD for whisper.cpp (ggml). SELECTS_VAD_MODEL overrides; null if not installed. */
+export function vadModel() {
+  const p = process.env.SELECTS_VAD_MODEL || path.join(modelsDir(), "ggml-silero-v6.2.0.bin");
+  return fs.existsSync(p) ? p : null;
+}
+
 // Multilingual models in order of preference when the language is not English. medium is
 // left out of "auto" on purpose: on a dual-core CPU it is far slower than real time.
 const MULTILINGUAL_AUTO = ["small", "small-q5_1", "base"];
@@ -95,6 +116,7 @@ export const DEFAULT_SETTINGS = {
   asrModel: "auto", // base.en for English, the best installed multilingual model otherwise
   asrPrompt: null, // a short neutral context for whisper (--prompt)
   asrPreprocess: "none", // "none" or "clean" (highpass, lowpass, loudness) before whisper
+  accent: "auto", // "auto" (route accented English to a fine-tune when the language check finds cues), "ng" (Nigerian English), "none"
   captions: true, // burn captions into rendered clips
   captionLang: "source", // "source"; "en" and "both" are planned
   captionStyle: "auto", // "bold", "subtitle", or auto (bold for portrait and clips, subtitle for landscape caption mode)

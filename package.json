@@ -17,6 +17,7 @@
     "eval": "node eval/run-eval.mjs"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^1.0.11"
+    "@napi-rs/canvas": "^1.0.11",
+    "fasttext.wasm.js": "^1.0.0"
   }
 }

@@ -5,7 +5,7 @@ import path from "node:path";
 import { selectsHome } from "./config.mjs";
 import { readJson, writeJsonAtomic } from "./util.mjs";
 
-const KEYS = ["language", "asrModel", "asrPrompt", "asrPreprocess", "captionStyle"];
+const KEYS = ["language", "asrModel", "asrPrompt", "asrPreprocess", "captionStyle", "accent"];
 const file = () => path.join(selectsHome(), "profiles.json");
 
 export function loadProfiles() {

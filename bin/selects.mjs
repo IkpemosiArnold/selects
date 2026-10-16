@@ -48,6 +48,8 @@ Speech and captions (clips and caption mode)
   --language <code> spoken language: en (default), auto (decode and compare), or a code like yo
   --asr-model <m>   whisper model: auto (base.en for English), small.en, medium.en-q5_0, a path...
   --prompt <text>   a short neutral context for whisper
+  --accent <a>      auto (default: Nigerian-accented English goes to a fine-tuned model when the
+                    language check finds cues), ng (always, for English), or none
   --clean-audio     cut rumble and hiss and even out loudness before whisper
   --no-captions     render clips without burned-in captions
   --style <s>       caption look: bold (2 to 4 words, current word yellow) or subtitle (two lines)
@@ -301,6 +303,7 @@ function speechSettings(values) {
     language: values.language,
     asrModel: values["asr-model"],
     asrPrompt: values.prompt,
+    accent: values.accent,
     asrPreprocess: values["clean-audio"] ? "clean" : undefined,
     captions: values["no-captions"] ? false : undefined,
     captionStyle: values.style,
@@ -335,7 +338,11 @@ function printSpeech(job) {
   const L = job.language;
   if (L?.warning) say(yellow(`Language: ${L.warning}`));
   else if (L) say(dim(`Language: ${languageName(L.used)}${L.detected ? ` (whisper's guess: ${languageName(L.detected.code)}, p = ${L.detected.p})` : ""}`));
-  if (L?.compared?.length) say(dim(`Decode and compare: ${L.compared.map((c) => `${c.code} ${c.meanP}`).join(", ")}${L.margin != null ? `, margin ${L.margin}` : ""}`));
+  if (L?.compared?.length) say(dim(`Decode and compare: ${L.compared.map((c) => `${c.code} ${c.meanP}${c.text?.lid608 ? ` (text reads as ${c.text.lid608.code})` : ""}`).join(", ")}${L.margin != null ? `, margin ${L.margin}` : ""}`));
+  const E = L?.ensemble;
+  if (E?.signals?.length) say(dim(`Language vote: ${E.signals.map((s) => `${s.id} ${s.verdict ?? "no opinion"}${s.refuted ? " (refuted)" : ""}`).join(", ")}; ${languageName(E.language)}${E.confidence != null ? ` with ${Math.round(E.confidence * 100)}% of the vote` : ""}.`));
+  if (L?.question) say(yellow(`${L.question.text} The signals disagree (${E.reasons.join("; ")}). If not, run again with --language ${L.question.choices[0] || "<code>"}.`));
+  if (job.accent?.routed) say(dim(`Accent: Nigerian English, so ${job.accent.model} transcribed it (${job.accent.reason}).`));
   const q = job.transcriptQuality;
   if (q) {
     const line = `Transcript ${q.verdict}: mean word confidence ${q.meanP}, ${Math.round(q.lowShare * 100)}% of words unsure${job.asr ? `, ${job.asr.model} at ${job.asr.speed}x real time` : ""}.`;
@@ -583,6 +590,7 @@ async function main() {
       force: { type: "boolean" },
       language: { type: "string" },
       "asr-model": { type: "string" },
+      accent: { type: "string" },
       prompt: { type: "string" },
       "clean-audio": { type: "boolean" },
       "no-captions": { type: "boolean" },

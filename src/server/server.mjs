@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { REPO, asrModels, ollamaModels, ollamaUrl, selectsHome, whisperBin, whisperModel } from "../core/config.mjs";
 import { measuredSpeeds } from "../core/judge.mjs";
 import { editCaptions, loadCaptions, resetCaptions, toSrt, toVtt } from "../core/captions.mjs";
-import { createJob, detectJobFaces, refreshStale, isRunning, jobDir, jobEvents, listJobs, loadJob, loadWords, resetTranscript, saveJob, updateCandidate, updateJobSettings } from "../core/job.mjs";
+import { confirmLanguage, createJob, detectJobFaces, refreshStale, isRunning, jobDir, jobEvents, listJobs, loadJob, loadWords, resetTranscript, saveJob, updateCandidate, updateJobSettings } from "../core/job.mjs";
 import { LOW_P } from "../core/quality.mjs";
 import { loadProfiles } from "../core/profiles.mjs";
 import { hwaccelArgs } from "../core/render.mjs";
@@ -348,8 +348,17 @@ async function route(req, res) {
     const body = await readBody(req);
     if (!body.language || !/^(auto|[a-z]{2,3})$/.test(body.language)) throw new HttpError(400, "Send { language } as an ISO code such as en or yo, or auto.");
     if (body.asrModel != null && !/^[\w.-]+$/.test(body.asrModel)) throw new HttpError(400, "asrModel is a model name such as small.en.");
+    if (body.accent != null && !["auto", "ng", "none"].includes(body.accent)) throw new HttpError(400, "accent is auto, ng or none.");
+    if (body.confirm === true) {
+      // "Yes, the speaker is using English": keep the transcript, clear the question
+      try {
+        return sendJson(res, 200, confirmLanguage(job.id, body.language));
+      } catch (e) {
+        throw new HttpError(e.status || 400, e.message, e.hint);
+      }
+    }
     try {
-      resetTranscript(job.id, { language: body.language, asrModel: body.asrModel || undefined });
+      resetTranscript(job.id, { language: body.language, asrModel: body.asrModel || undefined, accent: body.accent || undefined });
     } catch (e) {
       throw new HttpError(e.status || 400, e.message, e.hint);
     }

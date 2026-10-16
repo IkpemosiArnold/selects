@@ -5,8 +5,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { languageCheckModel } from "./config.mjs";
+import { ensemble } from "./langid/rule.mjs";
+import { identifyTexts as realIdentifyTexts } from "./langid/textlid.mjs";
 import { detectLanguage, extractAudio, runWhisper, wordsFromWhisperJson } from "./transcribe.mjs";
 import { readJson, writeJsonAtomic } from "./util.mjs";
+
+/** Bumped when the decision changes, so a cached language.json from an older rule is redone. */
+export const LANGUAGE_RULE = "ensemble-1";
 
 export const LANGUAGE_NAMES = {
   en: "English", yo: "Yoruba", ig: "Igbo", ha: "Hausa", sw: "Swahili", fr: "French", es: "Spanish", pt: "Portuguese",
@@ -89,18 +94,19 @@ export function chooseLanguage(results, { setting = "en", detected = null, minWo
 export async function decideLanguage(videoPath, { duration, setting = "en", remembered = null, cacheDir, audioStream = null, signal, onProgress, deps = {} } = {}) {
   const cacheFile = path.join(cacheDir, "language.json");
   const cached = readJson(cacheFile, null);
-  if (cached && cached.setting === setting && cached.remembered === remembered) return cached;
+  if (cached && cached.setting === setting && cached.remembered === remembered && cached.rule === LANGUAGE_RULE) return cached;
   const t0 = Date.now();
   const model = deps.model ?? languageCheckModel();
   if (!model) {
     // no multilingual model: trust the setting, say we could not check
-    const res = { setting, remembered, used: setting === "auto" ? "en" : setting, detected: null, compared: [], margin: null, decided: "setting", warning: setting === "auto" ? "No multilingual whisper model is installed, so the language could not be checked. Using English." : null, sec: 0 };
+    const res = { rule: LANGUAGE_RULE, setting, remembered, used: setting === "auto" ? "en" : setting, detected: null, compared: [], margin: null, decided: "setting", warning: setting === "auto" ? "No multilingual whisper model is installed, so the language could not be checked. Using English." : null, ensemble: ensemble({ setting }), sec: 0 };
     writeJsonAtomic(cacheFile, res);
     return res;
   }
   const extract = deps.extractAudio || extractAudio;
   const detect = deps.detectLanguage || detectLanguage;
   const decode = deps.decode || (async (wav, code, outBase) => wordsFromWhisperJson(await runWhisper(wav, { outBase, model, language: code, signal })));
+  const identifyTexts = deps.identifyTexts || realIdentifyTexts;
   fs.mkdirSync(cacheDir, { recursive: true }); // ffmpeg and whisper write their samples here
   const wav = path.join(cacheDir, "langcheck.wav");
   const ranges = sampleRanges(duration);
@@ -111,6 +117,7 @@ export async function decideLanguage(videoPath, { duration, setting = "en", reme
     const candidates = [...new Set([setting !== "auto" ? setting : null, remembered, detected?.code, "en"].filter(Boolean))];
     const needCompare = setting === "auto" || (detected && detected.code !== setting) || (remembered && remembered !== setting);
     const compared = [];
+    const texts = [];
     if (needCompare) {
       let i = 0;
       for (const code of candidates) {
@@ -119,11 +126,31 @@ export async function decideLanguage(videoPath, { duration, setting = "en", reme
         fs.rmSync(`${outBase}.json`, { force: true });
         const meanP = words.length ? words.reduce((a, w) => a + (w.p ?? 1), 0) / words.length : 0;
         compared.push({ code, meanP: +meanP.toFixed(3), words: words.length, englishShare: englishShare(words.map((w) => w.w)) });
-        onProgress?.({ progress: 0.1 + (0.9 * ++i) / candidates.length, note: `decoded the samples as ${languageName(code)}` });
+        texts.push(words.map((w) => w.w).join(" "));
+        onProgress?.({ progress: 0.1 + (0.85 * ++i) / candidates.length, note: `decoded the samples as ${languageName(code)}` });
       }
     }
+    // text language ID on each decode (the words never leave the machine and are not stored)
+    let textLid = null;
+    if (compared.length) {
+      const t1 = Date.now();
+      const r = await identifyTexts(texts, { tmpDir: cacheDir, signal });
+      r.results.forEach((x, i) => {
+        compared[i].text = { lid608: x.lid608 ? { label: x.lid608.label, code: x.lid608.code, p: x.lid608.p, pcm: x.lid608.pcm } : null, ng5: x.ng5 || null };
+      });
+      textLid = { models: r.models, sec: r.sec ?? +((Date.now() - t1) / 1000).toFixed(1), error: r.error || null };
+    }
     const pick = chooseLanguage(compared, { setting, detected });
-    const res = { setting, remembered, used: pick.used, detected, compared, margin: pick.margin, best: pick.best, decided: pick.decided, warning: pick.warning, model: path.basename(model), sec: +((Date.now() - t0) / 1000).toFixed(1) };
+    const ens = ensemble({ setting, detected, decode: { best: pick.best, margin: pick.margin }, compared });
+    let used = pick.used;
+    let decided = pick.decided;
+    let warning = pick.warning;
+    if (setting === "auto" && ens.used !== pick.used) {
+      warning = `Decoding alone pointed to ${languageName(pick.used)}, but the text of the decodes points to ${languageName(ens.used)}, so Selects uses ${languageName(ens.used)}. Change it if this is wrong.`;
+      used = ens.used;
+      decided = "ensemble";
+    }
+    const res = { rule: LANGUAGE_RULE, setting, remembered, used, detected, compared, margin: pick.margin, best: pick.best, decided, warning, ensemble: ens, question: ens.question, textLid, model: path.basename(model), sec: +((Date.now() - t0) / 1000).toFixed(1) };
     writeJsonAtomic(cacheFile, res);
     return res;
   } finally {
