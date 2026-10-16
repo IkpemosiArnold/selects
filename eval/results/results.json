@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-16T01:02:47.120Z",
+  "generatedAt": "2026-10-16T01:43:29.267Z",
   "k": 5,
   "iouThreshold": 0.5,
   "settings": {
@@ -11,44 +11,46 @@
   "aggregate": {
     "heatmap": {
       "oracle": {
-        "n": 4,
+        "n": 6,
         "hit3": {
           "mean": 1,
           "lo": 1,
           "hi": 1,
-          "n": 4
+          "n": 6
         },
         "p3": {
           "mean": 1,
           "lo": 1,
           "hi": 1,
-          "n": 4
+          "n": 6
         },
         "hit5": {
           "mean": 1,
           "lo": 1,
           "hi": 1,
-          "n": 4
+          "n": 6
         },
         "p5": {
-          "mean": 0.85,
-          "lo": 0.7,
-          "hi": 1,
-          "n": 4
+          "mean": 0.8666666666666667,
+          "lo": 0.7333333333333334,
+          "hi": 0.9666666666666667,
+          "n": 6
         },
         "r5": {
-          "mean": 0.9375,
-          "lo": 0.8125,
+          "mean": 0.9249999999999999,
+          "lo": 0.8416666666666667,
           "hi": 1,
-          "n": 4
+          "n": 6
         },
         "miou5": {
-          "mean": 0.7891348804701541,
-          "lo": 0.7189578470837946,
-          "hi": 0.8436665257738805,
-          "n": 4
+          "mean": 0.7590740825456225,
+          "lo": 0.7090657910062252,
+          "hi": 0.8145277606141171,
+          "n": 6
         },
         "hit3s": [
+          1,
+          1,
           1,
           1,
           1,
@@ -58,286 +60,342 @@
         "secPerCandidate": null
       },
       "oracle:shortlist": {
-        "n": 4,
+        "n": 6,
         "hit3": {
-          "mean": 0.5,
-          "lo": 0,
+          "mean": 0.6666666666666666,
+          "lo": 0.3333333333333333,
           "hi": 1,
-          "n": 4
+          "n": 6
         },
         "p3": {
-          "mean": 0.25,
-          "lo": 0,
-          "hi": 0.5,
-          "n": 4
+          "mean": 0.27777777777777773,
+          "lo": 0.1111111111111111,
+          "hi": 0.4444444444444444,
+          "n": 6
         },
         "hit5": {
-          "mean": 0.5,
-          "lo": 0,
+          "mean": 0.6666666666666666,
+          "lo": 0.3333333333333333,
           "hi": 1,
-          "n": 4
+          "n": 6
         },
         "p5": {
-          "mean": 0.15000000000000002,
-          "lo": 0,
-          "hi": 0.30000000000000004,
-          "n": 4
+          "mean": 0.16666666666666666,
+          "lo": 0.06666666666666667,
+          "hi": 0.26666666666666666,
+          "n": 6
         },
         "r5": {
-          "mean": 0.175,
-          "lo": 0,
-          "hi": 0.375,
-          "n": 4
+          "mean": 0.18333333333333332,
+          "lo": 0.06666666666666667,
+          "hi": 0.31666666666666665,
+          "n": 6
         },
         "miou5": {
-          "mean": 0.17238100159954517,
-          "lo": 0.048457283997911126,
-          "hi": 0.3225414304427311,
-          "n": 4
+          "mean": 0.1660393007088524,
+          "lo": 0.08101961945127184,
+          "hi": 0.26614625327097635,
+          "n": 6
         },
         "hit3s": [
           1,
           0,
           1,
-          0
+          0,
+          1,
+          1
         ],
         "judgeMinPerVideo": null,
         "secPerCandidate": null
       },
       "prescore": {
-        "n": 4,
+        "n": 6,
         "hit3": {
-          "mean": 0.25,
+          "mean": 0.3333333333333333,
           "lo": 0,
-          "hi": 0.75,
-          "n": 4
+          "hi": 0.6666666666666666,
+          "n": 6
         },
         "p3": {
           "mean": 0.16666666666666666,
           "lo": 0,
-          "hi": 0.5,
-          "n": 4
+          "hi": 0.3888888888888889,
+          "n": 6
         },
         "hit5": {
-          "mean": 0.25,
+          "mean": 0.3333333333333333,
           "lo": 0,
-          "hi": 0.75,
-          "n": 4
+          "hi": 0.6666666666666666,
+          "n": 6
         },
         "p5": {
-          "mean": 0.1,
+          "mean": 0.10000000000000002,
           "lo": 0,
-          "hi": 0.30000000000000004,
-          "n": 4
+          "hi": 0.23333333333333336,
+          "n": 6
         },
         "r5": {
-          "mean": 0.125,
+          "mean": 0.11666666666666665,
           "lo": 0,
-          "hi": 0.375,
-          "n": 4
+          "hi": 0.2833333333333333,
+          "n": 6
         },
         "miou5": {
-          "mean": 0.09195211159406858,
-          "lo": 0.00448350780169859,
-          "hi": 0.23859914918911657,
-          "n": 4
+          "mean": 0.09271556199741865,
+          "lo": 0.022911135179609427,
+          "hi": 0.18898575112688443,
+          "n": 6
         },
         "hit3s": [
           1,
           0,
           0,
+          0,
+          1,
           0
         ],
         "judgeMinPerVideo": null,
         "secPerCandidate": null
       },
       "prefilter": {
-        "n": 4,
+        "n": 6,
         "hit3": {
-          "mean": 0.25,
+          "mean": 0.3333333333333333,
           "lo": 0,
-          "hi": 0.75,
-          "n": 4
+          "hi": 0.6666666666666666,
+          "n": 6
         },
         "p3": {
           "mean": 0.16666666666666666,
           "lo": 0,
-          "hi": 0.5,
-          "n": 4
+          "hi": 0.3888888888888889,
+          "n": 6
         },
         "hit5": {
-          "mean": 0.25,
+          "mean": 0.3333333333333333,
           "lo": 0,
-          "hi": 0.75,
-          "n": 4
+          "hi": 0.6666666666666666,
+          "n": 6
         },
         "p5": {
-          "mean": 0.1,
+          "mean": 0.10000000000000002,
           "lo": 0,
-          "hi": 0.30000000000000004,
-          "n": 4
+          "hi": 0.23333333333333336,
+          "n": 6
         },
         "r5": {
-          "mean": 0.125,
+          "mean": 0.11666666666666665,
           "lo": 0,
-          "hi": 0.375,
-          "n": 4
+          "hi": 0.2833333333333333,
+          "n": 6
         },
         "miou5": {
-          "mean": 0.09195211159406858,
-          "lo": 0.00448350780169859,
-          "hi": 0.23859914918911657,
-          "n": 4
+          "mean": 0.09271556199741865,
+          "lo": 0.022911135179609427,
+          "hi": 0.18898575112688443,
+          "n": 6
         },
         "hit3s": [
           1,
           0,
           0,
+          0,
+          1,
           0
         ],
         "judgeMinPerVideo": null,
         "secPerCandidate": null
       },
       "random": {
-        "n": 4,
+        "n": 6,
         "hit3": {
-          "mean": 0.26749999999999996,
-          "lo": 0.20124999999999998,
-          "hi": 0.33375,
-          "n": 4
+          "mean": 0.2633333333333333,
+          "lo": 0.2175,
+          "hi": 0.31,
+          "n": 6
         },
         "p3": {
-          "mean": 0.09666666666666665,
-          "lo": 0.07250000000000001,
-          "hi": 0.11833333333333326,
-          "n": 4
+          "mean": 0.09416666666666666,
+          "lo": 0.07750000000000001,
+          "hi": 0.11055555555555548,
+          "n": 6
         },
         "hit5": {
-          "mean": 0.41375,
-          "lo": 0.31,
-          "hi": 0.49375,
-          "n": 4
+          "mean": 0.3983333333333334,
+          "lo": 0.33083333333333337,
+          "hi": 0.4633333333333334,
+          "n": 6
         },
         "p5": {
-          "mean": 0.09749999999999984,
-          "lo": 0.07149999999999991,
-          "hi": 0.1154999999999998,
-          "n": 4
+          "mean": 0.09266666666666652,
+          "lo": 0.07499999999999991,
+          "hi": 0.10916666666666648,
+          "n": 6
         },
         "r5": {
-          "mean": 0.10743749999999988,
-          "lo": 0.08412499999999994,
-          "hi": 0.12268749999999995,
-          "n": 4
+          "mean": 0.09929166666666656,
+          "lo": 0.08258333333333327,
+          "hi": 0.1160833333333333,
+          "n": 6
         },
         "miou5": {
-          "mean": 0.1410727894059503,
-          "lo": 0.12781727625481165,
-          "hi": 0.1521844861630985,
-          "n": 4
+          "mean": 0.13070428769038847,
+          "lo": 0.1150693489966213,
+          "hi": 0.1452501103408681,
+          "n": 6
         },
         "hit3s": [
           0.175,
           0.255,
           0.28,
-          0.36
+          0.36,
+          0.29,
+          0.22
         ],
         "judgeMinPerVideo": null,
         "secPerCandidate": null
       },
       "random:shortlist": {
-        "n": 4,
+        "n": 6,
         "hit3": {
-          "mean": 0.2525,
-          "lo": 0,
-          "hi": 0.5062500000000001,
-          "n": 4
+          "mean": 0.29583333333333334,
+          "lo": 0.11916666666666668,
+          "hi": 0.4725,
+          "n": 6
         },
         "p3": {
-          "mean": 0.09625000000000006,
-          "lo": 0,
-          "hi": 0.20500000000000018,
-          "n": 4
+          "mean": 0.10666666666666667,
+          "lo": 0.039722222222222194,
+          "hi": 0.17916666666666678,
+          "n": 6
         },
         "hit5": {
-          "mean": 0.3475,
-          "lo": 0,
-          "hi": 0.705,
-          "n": 4
+          "mean": 0.4258333333333333,
+          "lo": 0.165,
+          "hi": 0.6866666666666666,
+          "n": 6
         },
         "p5": {
-          "mean": 0.09299999999999999,
-          "lo": 0,
-          "hi": 0.21150000000000008,
-          "n": 4
+          "mean": 0.10083333333333323,
+          "lo": 0.03299999999999994,
+          "hi": 0.1798333333333333,
+          "n": 6
         },
         "r5": {
-          "mean": 0.11062499999999996,
-          "lo": 0,
-          "hi": 0.26437499999999997,
-          "n": 4
+          "mean": 0.11258333333333322,
+          "lo": 0.03299999999999994,
+          "hi": 0.21508333333333327,
+          "n": 6
         },
         "miou5": {
-          "mean": 0.10862778831651823,
-          "lo": 0.03077877914985537,
-          "hi": 0.18647679748318113,
-          "n": 4
+          "mean": 0.10300876772580485,
+          "lo": 0.04820371268022223,
+          "hi": 0.16078716279478436,
+          "n": 6
         },
         "hit3s": [
           0.675,
           0,
           0.335,
-          0
+          0,
+          0.385,
+          0.38
         ],
         "judgeMinPerVideo": null,
         "secPerCandidate": null
       },
       "energy": {
-        "n": 4,
+        "n": 6,
         "hit3": {
-          "mean": 0.25,
+          "mean": 0.16666666666666666,
           "lo": 0,
-          "hi": 0.75,
-          "n": 4
+          "hi": 0.5,
+          "n": 6
         },
         "p3": {
-          "mean": 0.08333333333333333,
+          "mean": 0.05555555555555555,
           "lo": 0,
-          "hi": 0.25,
-          "n": 4
+          "hi": 0.16666666666666666,
+          "n": 6
         },
         "hit5": {
-          "mean": 0.5,
+          "mean": 0.3333333333333333,
           "lo": 0,
-          "hi": 1,
-          "n": 4
+          "hi": 0.6666666666666666,
+          "n": 6
         },
         "p5": {
-          "mean": 0.1,
+          "mean": 0.06666666666666667,
           "lo": 0,
-          "hi": 0.2,
-          "n": 4
+          "hi": 0.13333333333333333,
+          "n": 6
         },
         "r5": {
-          "mean": 0.1,
+          "mean": 0.06666666666666667,
           "lo": 0,
-          "hi": 0.2,
-          "n": 4
+          "hi": 0.13333333333333333,
+          "n": 6
         },
         "miou5": {
-          "mean": 0.1502312259250831,
-          "lo": 0.04923781925511827,
-          "hi": 0.2512246325950479,
-          "n": 4
+          "mean": 0.11154974755203385,
+          "lo": 0.03282521283674551,
+          "hi": 0.2091833457421175,
+          "n": 6
         },
         "hit3s": [
           0,
           0,
           1,
+          0,
+          0,
           0
         ],
         "judgeMinPerVideo": null,
         "secPerCandidate": null
+      },
+      "judge:qwen2.5:0.5b": {
+        "n": 1,
+        "hit3": {
+          "mean": 1,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "p3": {
+          "mean": 0.6666666666666666,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "hit5": {
+          "mean": 1,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "p5": {
+          "mean": 0.4,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "r5": {
+          "mean": 0.5,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "miou5": {
+          "mean": 0.3151431937176897,
+          "lo": null,
+          "hi": null,
+          "n": 1
+        },
+        "hit3s": [
+          1
+        ],
+        "judgeMinPerVideo": 1.9849999999999999,
+        "secPerCandidate": 14.8875
       },
       "paired": {}
     },
@@ -658,11 +716,107 @@
               "miou5": 0.09847563851023654
             }
           }
+        },
+        "judge:qwen2.5:0.5b": {
+          "preds": [
+            {
+              "id": "c_0064",
+              "start": 218.76,
+              "end": 273.92,
+              "total": 0.65,
+              "hook": "How would you advise them that they should use the machine?",
+              "reason": "The clip is a clear topic but no tension.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0134",
+              "start": 552.88,
+              "end": 580.6,
+              "total": 0.575,
+              "hook": "We saw some surprising results from Iran.",
+              "reason": "The clip provides context about Iran's teenage team and their impressive performance, which is surprising but also promising for their young.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0122",
+              "start": 494.8,
+              "end": 520.92,
+              "total": 0.575,
+              "hook": ">> Right, so your focus is more just on your- >> Yeah, I mean- >> The comments.",
+              "reason": "The clip starts with the speaker's focus on comments and mentions of their team, which immediately sets up the contrast between them and a.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0007",
+              "start": 25.8,
+              "end": 51.52,
+              "total": 0.575,
+              "hook": ">> And you were coming back here Fabi after 2011.",
+              "reason": "The hook introduces the idea of a new challenge and player experience, which is intriguing and sets up the tension for the rest of the clip.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0131",
+              "start": 533.9,
+              "end": 560.64,
+              "total": 0.55,
+              "hook": "China, despite their bad results in the last Olympia, are of course very strong and they're still improving.",
+              "reason": "The clip is about China's recent success in the Olympics and their young players, with an unexpected high score from Iran.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 2,
+                "clarity": 1
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.6666666666666666,
+              "p5": 0.4,
+              "r5": 0.5,
+              "miou5": 0.3151431937176897
+            }
+          },
+          "judgeSec": 119.1,
+          "secPerCandidate": 14.8875,
+          "calls": {
+            "n": 8,
+            "wallSec": 14.885000000000002,
+            "loadSec": 1.21,
+            "words": 106.75,
+            "promptTokens": 394.375,
+            "promptTokPerSec": 60.06999999999999,
+            "outTokens": 58.25,
+            "outTokPerSec": 10.33
+          }
         }
       },
       "timings": {
         "transcribeSec": 201.149,
-        "candidatesSec": 0.031,
+        "candidatesSec": 0.009,
         "nCandidates": 142
       },
       "nShortlist": 8
@@ -1639,6 +1793,660 @@
         "transcribeSec": 306.28,
         "candidatesSec": 0.017,
         "nCandidates": 168
+      },
+      "nShortlist": 8
+    },
+    {
+      "id": "Aj0nf3rKG_E",
+      "title": "LIVE NURSING INTERVIEW",
+      "duration": 1030,
+      "nWords": 2973,
+      "nCandidates": 114,
+      "labels": {
+        "heatmap": [
+          {
+            "start": 288.4,
+            "end": 348.4,
+            "source": "heatmap",
+            "weight": 0.743
+          },
+          {
+            "start": 391.4,
+            "end": 412,
+            "source": "heatmap",
+            "weight": 1
+          },
+          {
+            "start": 545.9,
+            "end": 576.8,
+            "source": "heatmap",
+            "weight": 0.427
+          },
+          {
+            "start": 885.8,
+            "end": 916.7,
+            "source": "heatmap",
+            "weight": 0.675
+          },
+          {
+            "start": 957.9,
+            "end": 988.8,
+            "source": "heatmap",
+            "weight": 0.413
+          }
+        ],
+        "human": []
+      },
+      "methods": {
+        "oracle": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 1,
+              "p5": 1,
+              "r5": 1,
+              "miou5": 0.6818648943045994
+            }
+          }
+        },
+        "oracle:shortlist": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.3333333333333333,
+              "p5": 0.2,
+              "r5": 0.2,
+              "miou5": 0.11265038279256279
+            }
+          }
+        },
+        "prescore": {
+          "preds": [
+            {
+              "id": "c_0001",
+              "start": 10,
+              "end": 37,
+              "total": 0.74,
+              "hook": ">> I can, can you hear me?",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0084",
+              "start": 545.14,
+              "end": 600,
+              "total": 0.73,
+              "hook": "\"What do you think is the most important aspect of great customer service?\"",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0008",
+              "start": 71,
+              "end": 97,
+              "total": 0.707,
+              "hook": ">> Have you been working as a nurse at the Washington?",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0094",
+              "start": 681.11,
+              "end": 720,
+              "total": 0.684,
+              "hook": "I always like to say, \"What can I do for you right now that would help this situation?",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0028",
+              "start": 168.14,
+              "end": 195,
+              "total": 0.666,
+              "hook": "We're transitioning into not doing paper orders, and I was like, \"What is this?\"",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.3333333333333333,
+              "p5": 0.2,
+              "r5": 0.2,
+              "miou5": 0.11265038279256279
+            }
+          }
+        },
+        "prefilter": {
+          "preds": [
+            {
+              "id": "c_0001",
+              "start": 10,
+              "end": 37,
+              "total": 0.74,
+              "hook": ">> I can, can you hear me?",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0084",
+              "start": 545.14,
+              "end": 600,
+              "total": 0.73,
+              "hook": "\"What do you think is the most important aspect of great customer service?\"",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0008",
+              "start": 71,
+              "end": 97,
+              "total": 0.707,
+              "hook": ">> Have you been working as a nurse at the Washington?",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0094",
+              "start": 681.11,
+              "end": 720,
+              "total": 0.684,
+              "hook": "I always like to say, \"What can I do for you right now that would help this situation?",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0028",
+              "start": 168.14,
+              "end": 195,
+              "total": 0.666,
+              "hook": "We're transitioning into not doing paper orders, and I was like, \"What is this?\"",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.3333333333333333,
+              "p5": 0.2,
+              "r5": 0.2,
+              "miou5": 0.11265038279256279
+            }
+          }
+        },
+        "random": {
+          "preds": [
+            {
+              "id": "c_0010",
+              "start": 78,
+              "end": 117,
+              "total": 0.9948229456786066,
+              "hook": "What are you doing up there?",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0036",
+              "start": 203,
+              "end": 227,
+              "total": 0.9945340014528483,
+              "hook": "Being a small hospital, they don't have a set orientation program or preceptorship program, so I had like a three-day little clinical orientation as far as learning certain kind of equipment, and the pumps and things like that, and going kind of through policies.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0108",
+              "start": 959,
+              "end": 1014,
+              "total": 0.9916538530960679,
+              "hook": "Good, good.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0052",
+              "start": 328,
+              "end": 382,
+              "total": 0.9893774879164994,
+              "hook": "I'm not scared to approach and ask those questions, especially when it involves patient care, because I never want to compromise that.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0114",
+              "start": 1004,
+              "end": 1030,
+              "total": 0.9842514398042113,
+              "hook": "Sure, very good.",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0.29,
+              "hit5": 0.405,
+              "p3": 0.10166666666666663,
+              "p5": 0.0919999999999999,
+              "r5": 0.0919999999999999,
+              "miou5": 0.1193445045152259
+            }
+          },
+          "seeds": 200
+        },
+        "random:shortlist": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0.385,
+              "hit5": 0.625,
+              "p3": 0.12833333333333322,
+              "p5": 0.12499999999999972,
+              "r5": 0.12499999999999972,
+              "miou5": 0.07040648924535162
+            }
+          },
+          "seeds": 200
+        },
+        "energy": {
+          "preds": [
+            {
+              "id": "c_0013",
+              "start": 97,
+              "end": 119,
+              "total": 1,
+              "hook": "So actually, most of the time I show up to my med surge position and they say, \"Oh, we're short on nursing ER,\" or, you know, we have a high patient load in the ICU today or difficult patients, and so we need you there,",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0082",
+              "start": 509,
+              "end": 535,
+              "total": 0.8489334541261737,
+              "hook": "We had a bunch of us to try and turn it.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0028",
+              "start": 168.14,
+              "end": 195,
+              "total": 0.8346274839320701,
+              "hook": "We're transitioning into not doing paper orders, and I was like, \"What is this?\"",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0089",
+              "start": 608,
+              "end": 638,
+              "total": 0.809564596716631,
+              "hook": "It's like they're hobby, but no one's in the hospital for, you know, they're in their most photo-roll states and I think that's one of the things I love about being a nurse is you're working with them in their most vulnerable state so making sure that they feel like you are there to for them,",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0021",
+              "start": 130,
+              "end": 186,
+              "total": 0.744952584888345,
+              "hook": "Very tiny, but it's been great because I get to be resourceful and I feel like I have a good contribution to the hospital because they can -- I never get called off because they always put me somewhere, so it's just good.",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0
+            }
+          }
+        }
+      },
+      "timings": {
+        "transcribeSec": 179.985,
+        "candidatesSec": 0.015,
+        "nCandidates": 114
+      },
+      "nShortlist": 8
+    },
+    {
+      "id": "k4715CJ0Ii8",
+      "title": "IELTS Speaking Test- Perfect Band 9 [+ Free Speaking PDF]",
+      "duration": 1045,
+      "nWords": 2899,
+      "nCandidates": 218,
+      "labels": {
+        "heatmap": [
+          {
+            "start": 125.4,
+            "end": 156.75,
+            "source": "heatmap",
+            "weight": 0.508
+          },
+          {
+            "start": 198.55,
+            "end": 229.9,
+            "source": "heatmap",
+            "weight": 0.763
+          },
+          {
+            "start": 329.63,
+            "end": 349.63,
+            "source": "heatmap",
+            "weight": 0.856
+          },
+          {
+            "start": 360.98,
+            "end": 380.98,
+            "source": "heatmap",
+            "weight": 0.754
+          },
+          {
+            "start": 992.75,
+            "end": 1013.65,
+            "source": "heatmap",
+            "weight": 0.936
+          }
+        ],
+        "human": []
+      },
+      "methods": {
+        "oracle": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 1,
+              "p5": 0.8,
+              "r5": 0.8,
+              "miou5": 0.7160400790885194
+            }
+          }
+        },
+        "oracle:shortlist": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.3333333333333333,
+              "p5": 0.2,
+              "r5": 0.2,
+              "miou5": 0.19406141506237087
+            }
+          }
+        },
+        "prescore": {
+          "preds": [
+            {
+              "id": "c_0123",
+              "start": 600.27,
+              "end": 649.12,
+              "total": 0.81,
+              "hook": "How clear are they?\"",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0172",
+              "start": 822.72,
+              "end": 860.08,
+              "total": 0.75,
+              "hook": "\"How often do you every day?\"",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0177",
+              "start": 848.36,
+              "end": 888.64,
+              "total": 0.75,
+              "hook": "Just make sure that you answer every question exactly how they want it.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0209",
+              "start": 978.08,
+              "end": 1033.2,
+              "total": 0.724,
+              "hook": "I think I only heard one or two small slips.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0182",
+              "start": 885.28,
+              "end": 913.68,
+              "total": 0.71,
+              "hook": "I think you would be fine, but we just don't want to take any risks.",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.0758345428156748
+            }
+          }
+        },
+        "prefilter": {
+          "preds": [
+            {
+              "id": "c_0123",
+              "start": 600.27,
+              "end": 649.12,
+              "total": 0.81,
+              "hook": "How clear are they?\"",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0172",
+              "start": 822.72,
+              "end": 860.08,
+              "total": 0.75,
+              "hook": "\"How often do you every day?\"",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0177",
+              "start": 848.36,
+              "end": 888.64,
+              "total": 0.75,
+              "hook": "Just make sure that you answer every question exactly how they want it.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0209",
+              "start": 978.08,
+              "end": 1033.2,
+              "total": 0.724,
+              "hook": "I think I only heard one or two small slips.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0182",
+              "start": 885.28,
+              "end": 913.68,
+              "total": 0.71,
+              "hook": "I think you would be fine, but we just don't want to take any risks.",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.0758345428156748
+            }
+          }
+        },
+        "random": {
+          "preds": [
+            {
+              "id": "c_0198",
+              "start": 942.96,
+              "end": 981.52,
+              "total": 0.9984868622850627,
+              "hook": "Coherence is the only area that I'm really, really concerned about.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0010",
+              "start": 26.87,
+              "end": 65.64,
+              "total": 0.9948229456786066,
+              "hook": "Is music an important subject in schools in your country?",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0036",
+              "start": 162.44,
+              "end": 188.08,
+              "total": 0.9945340014528483,
+              "hook": "I usually spend my time planning an activity or just being out my friends.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0108",
+              "start": 557.76,
+              "end": 585.52,
+              "total": 0.9916538530960679,
+              "hook": "That is a fact because we have more than seven, eight and nine success stories than any other IELTS course in the entire world.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0052",
+              "start": 238.72,
+              "end": 264.24,
+              "total": 0.9893774879164994,
+              "hook": "So I always watch movies as such and they're acting as on point.",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0.22,
+              "hit5": 0.33,
+              "p3": 0.07666666666666672,
+              "p5": 0.07399999999999993,
+              "r5": 0.07399999999999993,
+              "miou5": 0.10059006400330378
+            }
+          },
+          "seeds": 200
+        },
+        "random:shortlist": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0.38,
+              "hit5": 0.54,
+              "p3": 0.12666666666666657,
+              "p5": 0.10799999999999978,
+              "r5": 0.10799999999999978,
+              "miou5": 0.11313496384340446
+            }
+          },
+          "seeds": 200
+        },
+        "energy": {
+          "preds": [
+            {
+              "id": "c_0111",
+              "start": 565.43,
+              "end": 592.64,
+              "total": 1,
+              "hook": "We do that by simplifying the whole IELTS process, supporting you with some of the best IELTS teachers in the world and being with you every step of the way until you get the score that you need.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0063",
+              "start": 337.88,
+              "end": 364,
+              "total": 0.8785573264445985,
+              "hook": "It would be to thank you for watching this video.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0105",
+              "start": 548.32,
+              "end": 576.32,
+              "total": 0.7957358297966375,
+              "hook": "To thank you for making it this far in the video, I want to give you 10% off our VIP course.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0191",
+              "start": 913.68,
+              "end": 936.56,
+              "total": 0.7501600683759524,
+              "hook": "If the examiner thinks you're bad, they'll just throw easy, softball questions at you.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0199",
+              "start": 949.12,
+              "end": 972.88,
+              "total": 0.6713871474019277,
+              "hook": "I'm focusing on the negative, but it's only because you're...",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.0683735816118708
+            }
+          }
+        }
+      },
+      "timings": {
+        "transcribeSec": 267.057,
+        "candidatesSec": 0.015,
+        "nCandidates": 218
       },
       "nShortlist": 8
     }

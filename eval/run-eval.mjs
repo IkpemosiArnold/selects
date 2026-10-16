@@ -168,6 +168,11 @@ export async function runVideo(v, C, models) {
   // oracle: the best any picker could do choosing K windows from the pool it sees
   out.methods.oracle = { preds: [], metrics: oracle(cands, labels) };
   out.methods["oracle:shortlist"] = { preds: [], metrics: oracle(short, labels) };
+  // How big must the shortlist be for the judge to have a chance? Ceiling by shortlist size (no LLM).
+  if (C.shortlist) {
+    out.shortlistCeiling = {};
+    for (const n of [4, 8, 12, 16, 24, 36]) out.shortlistCeiling[n] = oracle(C.shortlist(cands, { n, duration: v.duration }), labels);
+  }
 
   // prescore: the core's text rules alone (no LLM), ranking every candidate
   if (cands.length && typeof cands[0].pre === "number") {
@@ -199,6 +204,7 @@ export async function runVideo(v, C, models) {
     const jf = join(dir, `judge-${model.replace(/[^a-z0-9.]+/gi, "_")}.json`);
     let judged = readJson(jf);
     if (!judged || judged.n !== short.length || judged.candidatesHash !== hashCands(short)) {
+      if (REPORT_ONLY) continue; // not judged yet: leave this row out for this video
       judged = await withHeavyLock(`judge ${model} ${v.id}`, async () => {
         log(`${v.id}: judging ${short.length} shortlisted of ${cands.length} candidates with ${model}`);
         const t0 = Date.now();
@@ -329,6 +335,17 @@ export function report(videos, agg, manifest) {
     }
   }
 
+  const withCeil = videos.filter((v) => v.shortlistCeiling);
+  if (withCeil.length) {
+    const ns = Object.keys(withCeil[0].shortlistCeiling);
+    L.push("## How big must the shortlist be?", "");
+    L.push("Best possible against replay peaks if the judge were perfect, by how many prefiltered windows it reads (no LLM involved; mean over videos):", "");
+    L.push(`| windows judged | ${ns.join(" | ")} | all |`, `|---|${ns.map(() => "---").join("|")}|---|`);
+    const row = (k, f) => `| ${k} | ${ns.map((n) => f(mean(withCeil.map((v) => v.shortlistCeiling[n].heatmap?.[k] ?? 0)))).join(" | ")} | ${f(mean(withCeil.map((v) => v.methods.oracle.metrics.heatmap?.[k] ?? 0)))} |`;
+    L.push(row("hit5", pct).replace("| hit5 |", "| ceiling hit@5 |"), row("r5", pct).replace("| r5 |", "| ceiling recall@5 |"));
+    L.push("", "Judge time grows linearly with this number (see the cost table).", "");
+  }
+
   L.push("## Wall time per video and stage", "");
   const models = [...new Set(videos.flatMap((v) => Object.keys(v.methods).filter((m) => m.startsWith("judge:"))))];
   const cols = ["Video", "evaluated length", "windows (judged)", "transcribe", ...models.map((m) => m.replace("judge:", "judge "))];
@@ -359,7 +376,8 @@ export function report(videos, agg, manifest) {
     const byIou = videos.filter((v) => v.methods[best]?.metrics?.heatmap).sort((a, b) => b.methods[best].metrics.heatmap.miou5 - a.methods[best].metrics.heatmap.miou5);
     const ex = (v, label) => {
       const p = v.methods[best].preds[0];
-      const lab = v.labels.heatmap.reduce((b, l) => (tiou(p, l) > tiou(p, b) ? l : b), v.labels.heatmap[0]);
+      const centre = (w) => (w.start + w.end) / 2;
+      const lab = v.labels.heatmap.reduce((b, l) => (Math.abs(centre(l) - centre(p)) < Math.abs(centre(b) - centre(p)) ? l : b), v.labels.heatmap[0]);
       L.push(`**${label}: ${v.title}** (mean best IoU ${f2(v.methods[best].metrics.heatmap.miou5)})`, "");
       L.push(`- ${best} top pick: ${mmss(p.start)} to ${mmss(p.end)}, best IoU with any peak ${f2(bestIoU(p, v.labels.heatmap))}. Hook: "${(p.hook || "").slice(0, 160)}"${p.reason ? ` Reason: "${p.reason}"` : ""}`);
       if (lab) L.push(`- Nearest replay peak: ${mmss(lab.start)} to ${mmss(lab.end)} (peak height ${lab.weight})`);
