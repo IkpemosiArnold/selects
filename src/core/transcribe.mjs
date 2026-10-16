@@ -64,53 +64,115 @@ export function parseSegmentLines(chunk) {
   return out;
 }
 
-/**
- * Transcribe a video to words.
- * @param {string} videoPath
- * @param {object} opts
- * @param {string} opts.cacheDir where audio.wav (temporary) and whisper.json go
- * @param {number} [opts.duration] seconds, for progress and ETA
- * @param {(p:{progress:number,speed:number|null,etaSec:number|null,note:string,processed:number})=>void} [opts.onProgress]
- * @param {(words:object[])=>void} [opts.onWords] newly transcribed words, as they stream
- * @param {AbortSignal} [opts.signal]
- * @returns {Promise<{w,s,e,p}[]>}
- */
-export async function transcribe(videoPath, { cacheDir, duration, onProgress, onWords, signal, threads, model, bin } = {}) {
-  if (!cacheDir) throw new Error("transcribe needs a cacheDir");
-  fs.mkdirSync(cacheDir, { recursive: true });
-  const outBase = path.join(cacheDir, "whisper");
-  const jsonFile = `${outBase}.json`;
-  if (fs.existsSync(jsonFile)) {
-    // a previous run finished whisper; reuse it rather than spend minutes again
-    const words = wordsFromWhisperJson(readJson(jsonFile));
-    onWords?.(words);
-    onProgress?.({ progress: 1, speed: null, etaSec: 0, note: "reused the saved transcript", processed: duration ?? 0 });
-    return words;
-  }
-  const whisper = bin || whisperBin();
-  const modelPath = model || whisperModel();
-  if (!fs.existsSync(modelPath)) {
-    const err = new Error(`The whisper model is missing at ${modelPath}.`);
-    err.hint = "Download ggml-base.en.bin from huggingface.co/ggerganov/whisper.cpp and set SELECTS_WHISPER_MODEL to its path.";
-    throw err;
-  }
+/** Audio clean-up before whisper. "clean": rumble and hiss cut, loudness evened out. */
+export const AUDIO_FILTERS = {
+  none: null,
+  clean: "highpass=f=80,lowpass=f=7600,loudnorm=I=-18:TP=-2:LRA=11",
+};
 
-  const wav = path.join(cacheDir, "audio.wav");
+/**
+ * Extract 16 kHz mono WAV for whisper. ranges: optional [{ start, dur }] to cut and join
+ * samples (with half a second of silence after each), for cheap language checks.
+ */
+export async function extractAudio(input, wav, { stream = null, preprocess = "none", ranges = null, signal } = {}) {
+  const map = stream != null ? `0:${stream}` : "0:a:0";
+  const af = AUDIO_FILTERS[preprocess] ?? null;
+  let args;
+  if (ranges?.length) {
+    const ins = ranges.flatMap((r) => ["-ss", String(r.start), "-t", String(r.dur), "-i", input]);
+    const m = stream != null ? (i) => `[${i}:${stream}]` : (i) => `[${i}:a:0]`;
+    const parts = ranges.map((_, i) => `${m(i)}aresample=16000,aformat=channel_layouts=mono,apad=pad_dur=0.5[a${i}]`);
+    const fc = `${parts.join(";")};${ranges.map((_, i) => `[a${i}]`).join("")}concat=n=${ranges.length}:v=0:a=1${af ? `,${af}` : ""}[out]`;
+    args = ["-v", "error", "-y", ...ins, "-filter_complex", fc, "-map", "[out]", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wav];
+  } else {
+    args = ["-v", "error", "-y", "-i", input, "-map", map, "-vn", ...(af ? ["-af", af] : []), "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav];
+  }
   try {
-    await run("ffmpeg", ["-v", "error", "-y", "-i", videoPath, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav], { signal });
+    await run("ffmpeg", args, { signal });
   } catch (e) {
     fs.rmSync(wav, { force: true });
     const err = new Error(`Could not extract audio: ${e.message}`);
     err.hint = "Check that the file plays and that there is free disk space (about 2 MB per minute of video).";
     throw err;
   }
+  return wav;
+}
+
+const defaultThreads = () => Number(process.env.SELECTS_WHISPER_THREADS) || Math.max(1, Math.min(8, Math.floor(os.cpus().length / 2)));
+
+/** Whisper's own language guess on the first 30 s of a WAV: { code, p } or null. Needs a multilingual model. */
+export async function detectLanguage(wav, { model, bin, threads, signal } = {}) {
+  const r = await run(bin || whisperBin(), ["-m", model, "-f", wav, "-l", "auto", "-dl", "-t", String(threads || defaultThreads())], { signal, allowFail: true });
+  const m = `${r.stderr}\n${r.stdout}`.match(/auto-detected language:\s*([a-z]{2,3})\s*\(p\s*=\s*([\d.]+)\)/i);
+  return m ? { code: m[1], p: +(+m[2]).toFixed(3) } : null;
+}
+
+/**
+ * Run whisper-cli on a WAV and return the parsed JSON (and the path it wrote).
+ * Greedy decoding (-bs 1 -bo 1): measured 1.57x real time against 14.8x for the default
+ * beam search on this machine, with nearly identical text.
+ */
+export async function runWhisper(wav, { outBase, model, bin, language = "en", prompt = null, translate = false, threads, signal, onStdout, onStderr, extraArgs = [] } = {}) {
+  const args = ["-m", model, "-f", wav, "-l", language, "-t", String(threads || defaultThreads()), "-bs", "1", "-bo", "1", "-ml", "1", "-sow", "-ojf", "-of", outBase, "-pp"];
+  if (prompt) args.push("--prompt", prompt);
+  if (translate) args.push("-tr");
+  args.push(...extraArgs);
+  if (process.env.SELECTS_WHISPER_ARGS) args.push(...process.env.SELECTS_WHISPER_ARGS.split(/\s+/).filter(Boolean));
+  await run(bin || whisperBin(), args, { signal, keepOutput: false, onStdout, onStderr });
+  return readJson(`${outBase}.json`);
+}
+
+/**
+ * Transcribe a video to words.
+ * @param {string} videoPath
+ * @param {object} opts
+ * @param {string} opts.cacheDir where audio.wav (temporary) and whisper.json go
+ * @param {number} [opts.duration] seconds, for progress and ETA
+ * @param {string} [opts.language] ISO code passed to whisper (default "en")
+ * @param {string} [opts.model] path to a ggml model (default SELECTS_WHISPER_MODEL)
+ * @param {string} [opts.prompt] a short context passed as --prompt
+ * @param {"none"|"clean"} [opts.preprocess] audio clean-up before whisper
+ * @param {number} [opts.audioStream] which audio stream (index) to use
+ * @param {(p:{progress:number,speed:number|null,etaSec:number|null,note:string,processed:number})=>void} [opts.onProgress]
+ * @param {(words:object[])=>void} [opts.onWords] newly transcribed words, as they stream
+ * @param {AbortSignal} [opts.signal]
+ * @returns {Promise<{w,s,e,p}[]>}
+ */
+export async function transcribe(videoPath, { cacheDir, duration, onProgress, onWords, signal, threads, model, bin, language = "en", prompt = null, translate = false, preprocess = "none", audioStream = null } = {}) {
+  if (!cacheDir) throw new Error("transcribe needs a cacheDir");
+  fs.mkdirSync(cacheDir, { recursive: true });
+  const outBase = path.join(cacheDir, "whisper");
+  const jsonFile = `${outBase}.json`;
+  const metaFile = `${outBase}.meta.json`;
+  const whisper = bin || whisperBin();
+  const modelPath = model || whisperModel();
+  const meta = { model: path.basename(modelPath), language, prompt: prompt || null, translate: !!translate, preprocess };
+  const prevMeta = readJson(metaFile, null);
+  const sameRun = !prevMeta || JSON.stringify(prevMeta) === JSON.stringify(meta);
+  if (fs.existsSync(jsonFile) && sameRun) {
+    // a previous run finished whisper with the same settings; reuse it rather than spend minutes again
+    const words = wordsFromWhisperJson(readJson(jsonFile));
+    onWords?.(words);
+    onProgress?.({ progress: 1, speed: null, etaSec: 0, note: "reused the saved transcript", processed: duration ?? 0 });
+    return words;
+  }
+  fs.rmSync(jsonFile, { force: true });
+  if (!fs.existsSync(modelPath)) {
+    const err = new Error(`The whisper model is missing at ${modelPath}.`);
+    err.hint = "Download it from huggingface.co/ggerganov/whisper.cpp into the models folder, or set SELECTS_WHISPER_MODEL to its path.";
+    throw err;
+  }
+  if (/\.en(-q\d_\d)?\.bin$/.test(modelPath) && language !== "en") {
+    const err = new Error(`${path.basename(modelPath)} only knows English, but the language is set to "${language}".`);
+    err.hint = "Use a multilingual model (--asr-model small) or set --language en.";
+    throw err;
+  }
+
+  const wav = path.join(cacheDir, "audio.wav");
+  await extractAudio(videoPath, wav, { stream: audioStream, preprocess, signal });
 
   // Physical cores, not hyperthreads: on a dual-core laptop -t 2 beat -t 4 when measured.
-  const nThreads = threads || Number(process.env.SELECTS_WHISPER_THREADS) || Math.max(1, Math.min(8, Math.floor(os.cpus().length / 2)));
-  // Greedy decoding (-bs 1 -bo 1): measured 1.57x real time against 14.8x for the default
-  // beam search on this machine, with nearly identical text.
-  const args = ["-m", modelPath, "-f", wav, "-l", "en", "-t", String(nThreads), "-bs", "1", "-bo", "1", "-ml", "1", "-sow", "-ojf", "-of", outBase, "-pp"];
-  if (process.env.SELECTS_WHISPER_ARGS) args.push(...process.env.SELECTS_WHISPER_ARGS.split(/\s+/).filter(Boolean));
+  const nThreads = threads || defaultThreads();
 
   const t0 = Date.now();
   let processed = 0;
@@ -137,9 +199,15 @@ export async function transcribe(videoPath, { cacheDir, duration, onProgress, on
     }
   };
   try {
-    await run(whisper, args, {
+    await runWhisper(wav, {
+      outBase,
+      model: modelPath,
+      bin: whisper,
+      language,
+      prompt,
+      translate,
+      threads: nThreads,
       signal,
-      keepOutput: false,
       onStdout: (chunk) => {
         pending += chunk;
         const nl = pending.lastIndexOf("\n");
@@ -163,6 +231,7 @@ export async function transcribe(videoPath, { cacheDir, duration, onProgress, on
     });
   } catch (e) {
     fs.rmSync(jsonFile, { force: true });
+    if (e.name === "AbortError") throw e;
     const err = new Error(e.code === "ENOENT" ? `whisper-cli was not found at ${whisper}.` : `whisper stopped: ${e.message}`);
     err.hint =
       e.code === "ENOENT"
@@ -177,6 +246,7 @@ export async function transcribe(videoPath, { cacheDir, duration, onProgress, on
     fs.rmSync(wav, { force: true });
   }
   if (!fs.existsSync(jsonFile)) throw Object.assign(new Error("whisper finished but wrote no JSON."), { hint: "Run `selects doctor` to check the whisper build." });
+  writeJsonAtomic(metaFile, meta);
   const words = wordsFromWhisperJson(readJson(jsonFile));
   // send whatever the live stream did not (the held-back tail, or everything if stdout was quiet)
   if (words.length > emitted) onWords?.(words.slice(emitted));
