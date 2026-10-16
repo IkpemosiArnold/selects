@@ -116,7 +116,7 @@ const Transcript = memo(function Transcript({ words, sentences, candidate, playe
   );
 });
 
-export default function Detail({ job, candidate, total, words, sentences, player, onDecide, onExtend, onPrev, onNext, busy }) {
+export default function Detail({ job, candidate, total, words, sentences, player, onDecide, onExtend, onPrev, onNext, busy, extra }) {
   if (!candidate) {
     return (
       <aside className="detail is-empty">
@@ -188,6 +188,8 @@ export default function Detail({ job, candidate, total, words, sentences, player
       </div>
 
       <Transcript words={words} sentences={sentences} candidate={c} player={player} onExtend={onExtend} onSeek={(t) => player.seek(t)} />
+
+      {extra}
 
       <div className="decide">
         {status === "approved" ? (

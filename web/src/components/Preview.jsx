@@ -4,6 +4,9 @@ import { tc } from "../lib/time.js";
 import { wordsIn } from "../lib/sentences.js";
 import { usePlayerTime, usePlaying } from "../lib/player.js";
 import { frameSvg } from "../mock/frames.js";
+import { BlurOverlay, useContentBox, trackLabelsFor } from "./Blur.jsx";
+
+const src0 = (job) => !!api.sourceUrl(job.id);
 
 // Captions as the render will burn them: 2 to 4 words at a time, never across
 // a sentence end, current word in marker yellow.
@@ -70,8 +73,15 @@ function defaultReframe(job, c) {
   return w && h && w / h < 1.2 ? "fit" : "crop";
 }
 
-export default function Preview({ job, words, candidate, player }) {
+const NO_FACES = { tracks: [] };
+
+export default function Preview({ job, words, candidate, player, blur, faces = NO_FACES, blurEditing, armed, onArmed, blurSelected, onBlurSelect }) {
   const videoRef = useRef(null);
+  const frameRef = useRef(null);
+  const [natural, setNatural] = useState(() => {
+    const s = job.source || {};
+    return src0(job) ? { w: s.uprightWidth || s.displayWidth || s.width || 16, h: s.uprightHeight || s.height || 9 } : { w: 320, h: 180 };
+  });
   const [safe, setSafe] = useState(false);
   const auto = defaultReframe(job, candidate);
   const [reframeChoice, setReframe] = useState(null);
@@ -80,6 +90,8 @@ export default function Preview({ job, words, candidate, player }) {
   const src = api.sourceUrl(job.id);
   const playing = usePlaying(player);
   const t = usePlayerTime(player);
+  const box = useContentBox(frameRef, natural, reframe === "fit" ? "contain" : "cover");
+  const labels = useMemo(() => trackLabelsFor(faces.tracks || []), [faces.tracks]);
 
   useEffect(() => {
     if (src) player.attach(videoRef.current);
@@ -97,7 +109,7 @@ export default function Preview({ job, words, candidate, player }) {
 
   return (
     <div className="preview">
-      <div className="pv-frame" data-playing={playing || undefined} data-reframe={reframe}>
+      <div className="pv-frame" ref={frameRef} data-playing={playing || undefined} data-reframe={reframe}>
         {reframe === "fit" && <Backdrop job={job} player={player} />}
         {src && !mediaError ? (
           <video
@@ -107,6 +119,10 @@ export default function Preview({ job, words, candidate, player }) {
             preload="metadata"
             playsInline
             onError={() => setMediaError(true)}
+            onLoadedMetadata={(e) => {
+              const v = e.currentTarget;
+              if (v.videoWidth && v.videoHeight) setNatural({ w: v.videoWidth, h: v.videoHeight });
+            }}
             onClick={() => player.toggle()}
           />
         ) : src && mediaError ? (
@@ -123,7 +139,22 @@ export default function Preview({ job, words, candidate, player }) {
             <span>Platform buttons</span>
           </div>
         )}
-        <button type="button" className="pv-hit" aria-label={playing ? "Pause" : "Play"} onClick={() => player.toggle()} />
+        {blur && (
+          <BlurOverlay
+            spec={blur.spec}
+            onChange={blur.change}
+            tracks={(faces.tracks || []).filter((tr) => tr.end >= candidate.start && tr.start <= candidate.end)}
+            t={t}
+            editing={blurEditing}
+            armed={armed}
+            onArmed={onArmed}
+            selected={blurSelected}
+            onSelect={onBlurSelect}
+            box={box}
+            trackLabels={labels}
+          />
+        )}
+        {!blurEditing && <button type="button" className="pv-hit" aria-label={playing ? "Pause" : "Play"} onClick={() => player.toggle()} />}
       </div>
       <div className="pv-controls">
         <button type="button" className="btn btn-icon btn-on-film" onClick={() => player.toggle()} aria-label={playing ? "Pause, Space" : "Play, Space"}>

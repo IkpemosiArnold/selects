@@ -7,12 +7,20 @@ import { Masthead } from "../App.jsx";
 import Filmstrip from "./Filmstrip.jsx";
 import Preview from "./Preview.jsx";
 import Detail from "./Detail.jsx";
+import LanguageQuality from "./LanguageQuality.jsx";
+import { BlurPanel, useBlurDraft, blurSummary, blurIsEmpty } from "./Blur.jsx";
+import { usePlayerTime } from "../lib/player.js";
+
+function LiveBlurPanel({ player, ...rest }) {
+  const t = usePlayerTime(player);
+  return <BlurPanel t={t} {...rest} />;
+}
 
 function isTyping(el) {
   return el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
 }
 
-export default function Review({ job, words, onCandidate, onRender }) {
+export default function Review({ job, words, faces, onCandidate, onRender, onRetranscribe }) {
   const player = usePlayer();
   const ranked = useMemo(() => [...(job.candidates || [])].sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99)), [job.candidates]);
   const [selectedId, setSelectedId] = useState(() => (ranked.find((c) => c.status === "proposed") || ranked[0])?.id);
@@ -22,6 +30,21 @@ export default function Review({ job, words, onCandidate, onRender }) {
   const [rendering, setRendering] = useState(false);
   const sentences = useMemo(() => toSentences(words), [words]);
   const sel = ranked.find((c) => c.id === selectedId) || ranked[0];
+  const [blurOpen, setBlurOpen] = useState(false);
+  const [armed, setArmed] = useState(false);
+  const [blurSel, setBlurSel] = useState(null);
+  const [blurSpec, blurChange, blurSave] = useBlurDraft(sel?.blur ?? job.settings?.blur, sel?.id, async (spec, cid) => {
+    const res = await api.patchCandidate(job.id, cid, { blur: spec });
+    if (res?.id) onCandidate(res);
+  });
+  useEffect(() => {
+    setBlurSel(null);
+    setArmed(false);
+  }, [sel?.id]);
+  useEffect(() => {
+    if (!blurOpen) setArmed(false);
+  }, [blurOpen]);
+  const [captionsOn, setCaptionsOn] = useState(job.settings?.captions !== false);
   const shellRef = useRef(null);
   const footRef = useRef(null);
   const selRef = useRef(sel);
@@ -119,6 +142,10 @@ export default function Review({ job, words, onCandidate, onRender }) {
 
   useEffect(() => {
     const onKey = (e) => {
+      if (e.key === "Escape" && armed) {
+        setArmed(false);
+        return;
+      }
       if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
       if (e.target?.getAttribute?.("role") === "slider" && e.key.startsWith("Arrow")) return;
       const k = e.key.toLowerCase();
@@ -140,7 +167,7 @@ export default function Review({ job, words, onCandidate, onRender }) {
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [step, decide, nudge, player]);
+  }, [step, decide, nudge, player, armed]);
 
   const approved = ranked.filter((c) => c.status === "approved");
   const skipped = ranked.filter((c) => c.status === "skipped").length;
@@ -152,6 +179,7 @@ export default function Review({ job, words, onCandidate, onRender }) {
       <Masthead job={job}>
         <span className="judged-by mono dim">Judged by {job.settings?.model}</span>
       </Masthead>
+      <LanguageQuality job={job} variant="strip" onRetranscribe={onRetranscribe} />
       <main className="review">
         <h1 className="sr-only">Review clips from {job.source?.name}</h1>
         <Filmstrip
@@ -166,7 +194,19 @@ export default function Review({ job, words, onCandidate, onRender }) {
         />
         <div className={"bay" + (ranked.length ? "" : " is-empty")}>
           <div className="bay-preview">
-            <Preview job={job} words={words} candidate={sel} player={player} />
+            <Preview
+              job={job}
+              words={words}
+              candidate={sel}
+              player={player}
+              blur={{ spec: blurSpec, change: blurChange }}
+              faces={faces}
+              blurEditing={blurOpen}
+              armed={armed}
+              onArmed={setArmed}
+              blurSelected={blurSel}
+              onBlurSelect={setBlurSel}
+            />
           </div>
           <Detail
             job={job}
@@ -180,6 +220,35 @@ export default function Review({ job, words, onCandidate, onRender }) {
             onExtend={(body) => sel && patch(sel, body, body)}
             onPrev={() => step(-1, "pointer")}
             onNext={() => step(1, "pointer")}
+            extra={
+              sel && (
+                <div className="detail-blur">
+                  <div className="detail-blur-head">
+                    <button type="button" className={"btn btn-chip" + (blurOpen ? " is-on" : "")} aria-expanded={blurOpen} onClick={() => setBlurOpen((o) => !o)}>
+                      {blurOpen ? "Done blurring" : "Blur faces or areas"}
+                    </button>
+                    {!blurOpen && <p className="bp-summary">{blurIsEmpty(blurSpec) ? "Nothing blurred in this clip." : blurSummary(blurSpec) + "."}</p>}
+                  </div>
+                  {blurOpen && (
+                    <LiveBlurPanel
+                      player={player}
+                      spec={blurSpec}
+                      onChange={blurChange}
+                      faces={faces}
+                      scope="clip"
+                      range={{ start: sel.start, end: sel.end }}
+                      selected={blurSel}
+                      onSelect={setBlurSel}
+                      armed={armed}
+                      onArm={setArmed}
+                      saveState={blurSave}
+                      onSeek={(t) => player.seek(Math.max(sel.start, Math.min(sel.end, t)))}
+                      duration={job.source?.duration}
+                    />
+                  )}
+                </div>
+              )
+            }
           />
         </div>
       </main>
@@ -198,6 +267,26 @@ export default function Review({ job, words, onCandidate, onRender }) {
           <span><kbd>Shift</kbd> in point</span>
         </p>
         <div className="ab-go">
+          <label className="ab-check" title="Burn captions into the rendered clips">
+            <input
+              type="checkbox"
+              checked={captionsOn}
+              onChange={async (e) => {
+                const v = e.target.checked;
+                setCaptionsOn(v);
+                try {
+                  await api.patchJob(job.id, { captions: v });
+                } catch (err) {
+                  setCaptionsOn(!v);
+                  flash(`That change was not saved. ${err.message}`, "error");
+                }
+              }}
+            />
+            Captions
+          </label>
+          <a className="btn" href={`#/job/${job.id}/captions`}>
+            Review captions
+          </a>
           {rendered > 0 && (
             <a className="btn btn-quiet" href={`#/job/${job.id}/render`}>
               See {plural(rendered, "rendered clip")}
