@@ -56,6 +56,7 @@ function Row({ job, c, kit }) {
             </span>
           )}
           {r.status === "pending" && <span className="dim">Waiting</span>}
+          {done && r.stale && <span className="rr-stale">Captions or blur changed. Re-render to apply.</span>}
           {r.status === "error" && <span className="is-error">{r.message || r.error || "This clip did not render."}</span>}
           {done && (
             <button type="button" className="btn btn-chip" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
@@ -181,7 +182,43 @@ function CreditBlock({ job, attribution, onSaved }) {
   );
 }
 
-export default function RenderScreen({ job }) {
+function CaptionsToggle({ job, refetch, done, onRerender, busy }) {
+  const [on, setOn] = useState(job.settings?.captions !== false);
+  const [err, setErr] = useState(null);
+  const [changed, setChanged] = useState(false);
+  return (
+    <div className="render-captions">
+      <label className="ab-check">
+        <input
+          type="checkbox"
+          checked={on}
+          onChange={async (e) => {
+            const v = e.target.checked;
+            setOn(v);
+            setErr(null);
+            try {
+              await api.patchJob(job.id, { captions: v });
+              setChanged(true);
+              refetch?.();
+            } catch (e2) {
+              setOn(!v);
+              setErr(e2.message);
+            }
+          }}
+        />
+        Burn captions into the clips
+      </label>
+      {changed && done > 0 && (
+        <button type="button" className="btn btn-chip" disabled={busy} onClick={onRerender}>
+          Render {plural(done, "clip")} again {on ? "with" : "without"} captions
+        </button>
+      )}
+      {err && <p className="field-error" role="alert">{err}</p>}
+    </div>
+  );
+}
+
+export default function RenderScreen({ job, refetch }) {
   const list = (job.candidates || []).filter((c) => c.render).sort((a, b) => a.rank - b.rank);
   const done = list.filter((c) => c.render.status === "done").length;
   const all = list.length;
@@ -190,6 +227,7 @@ export default function RenderScreen({ job }) {
   const errors = failed.length;
   const active = list.filter((c) => c.render.status === "pending" || c.render.status === "running").length;
   const [retrying, setRetrying] = useState(false);
+  const stale = list.filter((c) => c.render.status === "done" && c.render.stale);
   const [kits, setKits] = useState({});
   const [kitVersion, setKitVersion] = useState(0);
   const doneIds = list.filter((c) => c.render.status === "done").map((c) => c.id).join(",");
@@ -250,8 +288,40 @@ export default function RenderScreen({ job }) {
                 Render {plural(errors, "clip")} again
               </button>
             )}
+            {stale.length > 0 && !active && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={retrying}
+                onClick={async () => {
+                  setRetrying(true);
+                  try {
+                    await api.render(job.id, stale.map((c) => c.id));
+                  } finally {
+                    setRetrying(false);
+                  }
+                }}
+              >
+                Re-render {plural(stale.length, "clip")} to apply changes
+              </button>
+            )}
+            <a className="btn" href={`#/job/${job.id}/captions`}>Review captions</a>
             <a className="btn" href={`#/job/${job.id}/review`}>Back to review</a>
           </div>
+          <CaptionsToggle
+            job={job}
+            refetch={refetch}
+            done={done}
+            busy={retrying || active > 0}
+            onRerender={async () => {
+              setRetrying(true);
+              try {
+                await api.render(job.id, list.filter((c) => c.render.status === "done").map((c) => c.id));
+              } finally {
+                setRetrying(false);
+              }
+            }}
+          />
         </div>
 
         {all > 0 && (

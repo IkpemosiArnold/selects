@@ -6,6 +6,7 @@ import ModelControl from "./ModelControl.jsx";
 import QueueList from "./QueueList.jsx";
 import { measuredRates } from "../lib/estimate.js";
 import { LICENCES } from "../lib/licences.js";
+import { LANGUAGES } from "../lib/languages.js";
 
 
 
@@ -42,6 +43,11 @@ function statusLine(j) {
   const n = j.candidateCount ?? j.candidates?.length ?? 0;
   const approved = j.approvedCount ?? j.candidates?.filter((c) => c.status === "approved").length ?? 0;
   const rendered = j.candidates?.filter((c) => c.render?.status === "done").length || 0;
+  if (j.settings?.mode === "caption") {
+    if (j.stage === "ready") return j.transcriptQuality?.verdict === "shaky" ? "Captions ready, check the unsure words" : "Captions ready to review";
+    if (j.stage === "done") return j.output?.stale ? "Captioned, captions changed since" : "Captioned video rendered";
+    if (j.stage === "rendering") return "Rendering the captioned video";
+  }
   switch (j.stage) {
     case "ready":
       return approved ? `${approved} approved of ${n}` : n ? `Ready to review, ${plural(n, "clip")}` : "Ready to review";
@@ -71,6 +77,8 @@ export default function NewJob() {
   const [maxLen, setMaxLen] = useState(60);
   const [k, setK] = useState(5);
   const [judgeN, setJudgeN] = useState(8);
+  const [mode, setMode] = useState("clips");
+  const [language, setLanguage] = useState("en");
   const [credit, setCredit] = useState("");
   const [license, setLicense] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
@@ -153,12 +161,11 @@ export default function NewJob() {
     setError(null);
     try {
       const settings = {
-        model,
-        k: Number(k),
-        minLen: Number(minLen),
-        maxLen: Number(maxLen),
-        judgeN: Number(judgeN),
-        preset: "shorts",
+        mode,
+        language,
+        ...(mode === "caption"
+          ? {}
+          : { model, k: Number(k), minLen: Number(minLen), maxLen: Number(maxLen), judgeN: Number(judgeN), preset: "shorts" }),
         ...(credit.trim() ? { credit: credit.trim() } : {}),
         ...(license && license !== "other" ? { license } : {}),
         ...(sourceUrl.trim() ? { sourceUrl: sourceUrl.trim() } : {}),
@@ -256,7 +263,7 @@ export default function NewJob() {
                   aria-invalid={!!error}
                 />
                 <button className="btn btn-primary" type="submit" disabled={busy}>
-                  {busy ? "Starting" : "Find clips"}
+                  {busy ? "Starting" : mode === "caption" ? "Caption the video" : "Find clips"}
                 </button>
                 <button className="btn" type="button" disabled={busy} onClick={(e) => submit(e, "queue")}>
                   Queue for overnight
@@ -268,6 +275,32 @@ export default function NewJob() {
 
               <fieldset className="lengths">
                 <legend className="label">The brief</legend>
+                <div className="mode-row">
+                  <div className="seg seg-light" role="radiogroup" aria-label="What to make">
+                    {[["clips", "Find clips"], ["caption", "Caption the whole video"]].map(([v, l]) => (
+                      <button key={v} type="button" role="radio" aria-checked={mode === v} className={"seg-btn" + (mode === v ? " is-on" : "")} onClick={() => setMode(v)}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="lang-field">
+                    <span>Spoken in</span>
+                    <select className="input select" value={language} onChange={(e) => setLanguage(e.target.value)}>
+                      {LANGUAGES.slice(0, 1).map(([c, n]) => (
+                        <option key={c} value={c}>{n}</option>
+                      ))}
+                      <option value="auto">Detect automatically</option>
+                      {LANGUAGES.slice(1).map(([c, n]) => (
+                        <option key={c} value={c}>{n}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                {mode === "caption" ? (
+                  <p className="brief-line caption-brief">
+                    Transcribe the whole video, let you correct the captions and blur what should not be seen, then burn the captions in. The video keeps its shape. No clips, no judge model.
+                  </p>
+                ) : (
                 <p className="brief-line">
                   Clips from
                   <input className="input num mono" type="number" min={5} max={180} value={minLen} onChange={(e) => setMinLen(e.target.value)} aria-label="Shortest clip in seconds" />
@@ -279,6 +312,10 @@ export default function NewJob() {
                   <input className="input num mono" type="number" min={2} max={30} value={judgeN} onChange={(e) => setJudgeN(e.target.value)} aria-label="Moments the model reads" />
                   moments.
                 </p>
+                )}
+                {language === "auto" && (
+                  <p className="field-hint">Selects compares a few samples in each likely language. Accented English is often guessed as another language, so choose it here if you know it.</p>
+                )}
               </fieldset>
 
               <fieldset className="rights">
@@ -309,7 +346,12 @@ export default function NewJob() {
               </fieldset>
             </div>
             <div className="new-right">
-              {models ? (
+              {mode === "caption" ? (
+                <div className="model-control">
+                  <p className="label">No judge model needed</p>
+                  <p className="dim">Captioning uses whisper only. You review every caption before anything is rendered.</p>
+                </div>
+              ) : models ? (
                 <ModelControl models={models} value={model} onChange={setModel} judgeN={Number(judgeN) || 8} rates={rates} />
               ) : (
                 <div className="model-control is-loading" aria-busy="true" />
