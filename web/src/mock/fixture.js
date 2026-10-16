@@ -14,6 +14,7 @@ function rng(seed) {
 }
 
 const r2 = (n) => Math.round(n * 100) / 100;
+const r3 = (n) => Math.round(n * 1000) / 1000;
 
 function speak(text, t, rand, words) {
   for (const w of text.split(/\s+/).filter(Boolean)) {
@@ -53,24 +54,47 @@ export function buildTalk() {
   for (const s of OUTRO) t = speak(s, t, rand, words);
   const duration = r2(t + 2.2);
 
+  // Scoring as the core does it (notes/CONTRACTS.md, 16 Oct): the rubric gives
+  // judgeTotal, blended 0.7 judge + 0.3 pre-score, then a listwise final round
+  // on the top 4 moves each total by up to 0.15.
+  const W = { hook: 0.35, standalone: 0.3, payoff: 0.2, clarity: 0.15 };
+  const judgeTotal = (sc) => r3(Object.entries(W).reduce((a, [k, w]) => a + w * ((sc[k] - 1) / 4), 0));
+  const PRE = { validator: 0.71, promise: 0.66, triple: 0.69, index: 0.58, receipt: 0.62, arguing: 0.55, boxes: 0.6, time: 0.52, exactly: 0.57, support: 0.64, "second-click": 0.5, oncall: 0.43 };
+  const LIST = {
+    promise: [1, "Quotable first line, and the payoff lands in the last sentence."],
+    validator: [2, "Strong claim up front; the lesson needs the middle to land."],
+    index: [3, "Clear advice, but the proof at the end is a little quiet."],
+    triple: [4, "Good story, though the opening needs the talk's context."],
+  };
   const candidates = passages
-    .map((p, idx) => ({
-      id: "c_" + String(idx * 13 + 7).padStart(4, "0"),
-      rank: p.rank,
-      start: p.start,
-      end: p.end,
-      text: p.text,
-      hook: p.text.split(/(?<=[.?!])\s/)[0],
-      scores: p.scores,
-      total: p.total,
-      reason: p.reason,
-      title: null,
-      status: "proposed",
-      trimmed: false,
-      render: null,
-      _kit: { title: p.title, caption: p.caption, hashtags: p.hashtags },
-    }))
-    .sort((a, b) => a.rank - b.rank);
+    .map((p, idx) => {
+      const jt = judgeTotal(p.scores);
+      const pre = PRE[p.key] ?? 0.5;
+      const blended = 0.7 * jt + 0.3 * pre;
+      const lr = LIST[p.key];
+      const total = r3(lr ? 0.85 * blended + 0.15 * [1, 2 / 3, 1 / 3, 0][lr[0] - 1] : 0.85 * blended);
+      return {
+        id: "c_" + String(idx * 13 + 7).padStart(4, "0"),
+        rank: null,
+        start: p.start,
+        end: p.end,
+        text: p.text,
+        hook: p.text.split(/(?<=[.?!])\s/)[0],
+        scores: p.scores,
+        judgeTotal: jt,
+        pre,
+        total,
+        ...(lr ? { listRank: lr[0], listReason: lr[1] } : {}),
+        reason: p.reason,
+        title: null,
+        status: "proposed",
+        trimmed: false,
+        render: null,
+        _kit: { title: p.title, captionText: p.caption, hashtags: p.hashtags.map((h) => h.replace(/^#/, "")) },
+      };
+    })
+    .sort((a, b) => b.total - a.total)
+    .map((c, i) => ({ ...c, rank: i + 1 }));
 
   // Interest curve: one point every 5 s. Bumps at every judged window, the
   // twelve ranked ones plus some moments that scored well but lost to overlap.
@@ -98,20 +122,47 @@ export function buildTalk() {
   return cache;
 }
 
-export function makeJob({ id, name = TALK_NAME, stage = "ready", createdAt } = {}) {
-  const { candidates, curve, labels, duration } = buildTalk();
-  const done = (startedAt, endedAt, note) => ({ status: "done", startedAt, endedAt, progress: 1, etaSec: null, note });
+// Measured on the build machine (notes/timings.md, final run): whisper base.en
+// at 2.78x real time, 72.9 s per judged moment plus a 141 s listwise round,
+// renders at about 1.1x the clip length plus about 100 s for each posting kit.
+export const MEASURED = { rtf: 2.78, judgePerMoment: 72.9, listwiseSec: 141.1, renderFactor: 1.1, kitSec: 104 };
+
+export const DEMO_CREDIT = {
+  credit: "Northwind Engineering Summit 2026",
+  license: "CC-BY-4.0",
+  sourceUrl: "https://example.org/talks/retries-are-a-promise",
+};
+
+export function attributionFor({ credit, license, sourceUrl } = {}) {
+  const L = { "CC-BY-4.0": ["CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/"], "CC-BY-SA-4.0": ["CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"], "CC0-1.0": ["CC0 1.0", "https://creativecommons.org/publicdomain/zero/1.0/"] }[license];
+  if (!credit && !L) return null;
+  const parts = [`Clip from ${credit || "the original video"}${sourceUrl ? ` (${sourceUrl})` : ""}`];
+  if (license === "CC0-1.0") parts.push(`Dedicated to the public domain under ${L[0]}: ${L[1]}`);
+  else if (L) parts.push(`Licensed under ${L[0]}: ${L[1]}`);
+  parts.push("Cut, reframed and captioned from the original");
+  if (license === "CC-BY-SA-4.0") parts.push(`This clip is shared under ${L[0]} too`);
+  return parts.join(". ") + ".";
+}
+
+export function makeJob({ id, name = TALK_NAME, stage = "ready", createdAt, duration: durOverride, judgeN = 12 } = {}) {
+  const { candidates, curve, labels, duration: talkDur, words } = buildTalk();
+  const duration = durOverride || talkDur;
   const created = createdAt || "2026-10-15T21:14:03.000Z";
+  const t0 = Date.parse(created);
+  const at = (s) => new Date(t0 + s * 1000).toISOString();
+  const trSec = duration / MEASURED.rtf;
+  const jdSec = judgeN * MEASURED.judgePerMoment + MEASURED.listwiseSec;
+  const st = (a, b, note) => ({ status: "done", startedAt: at(a), endedAt: at(b), progress: 1, etaSec: 0, note });
   return {
     id,
     source: { path: "/Users/demo/Movies/" + name, name, duration, width: 1920, height: 1080, fps: 25 },
-    settings: { model: "gemma3:4b", k: 12, minLen: 20, maxLen: 60, preset: "shorts" },
+    settings: { model: "gemma3-4b-hf:latest", k: 12, minLen: 20, maxLen: 60, preset: "shorts", judgeN, listwise: true, ...DEMO_CREDIT },
     stage,
     stages: {
-      probe: done(created, created, null),
-      transcribe: done(created, created, "transcribed at 2.4x real time"),
-      candidates: done(created, created, "148 moments"),
-      judge: done(created, created, "2.1 s per moment"),
+      probe: st(0, 1.2, `${Math.round(duration)} s of video`),
+      transcribe: st(1.2, 1.2 + trSec, `${words.length} words, ${MEASURED.rtf}x real time`),
+      candidates: st(1.2 + trSec, 1.3 + trSec, `190 windows passed the filter, ${judgeN} go to the judge`),
+      judge: st(1.3 + trSec, 1.3 + trSec + jdSec, `${judgeN} clips judged, ${MEASURED.judgePerMoment} s each`),
       render: { status: "pending", startedAt: null, endedAt: null, progress: 0, etaSec: null, note: null },
     },
     error: null,
@@ -119,6 +170,7 @@ export function makeJob({ id, name = TALK_NAME, stage = "ready", createdAt } = {
     candidates: candidates.map((c) => ({ ...c, scores: { ...c.scores } })),
     curve,
     labels,
+    listwise: { order: candidates.filter((c) => c.listRank).sort((a, b) => a.listRank - b.listRank).map((c) => c.id), complete: true, sec: MEASURED.listwiseSec },
     thumbs: { count: 60, interval: duration / 60, pattern: "thumbs/strip-%04d.jpg" },
     createdAt: created,
     updatedAt: created,

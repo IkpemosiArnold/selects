@@ -2,15 +2,9 @@ import { useId } from "react";
 import { aboutMinutes } from "../lib/time.js";
 
 // Faster to Smarter: one control that picks the local model and says what it
-// costs on this laptop, measured, rather than a generic label.
-const MOMENTS_PER_SEC = 148 / 1864; // candidate windows per second of video, from real runs
-
-export function estimateFor(model, duration) {
-  if (!model?.measuredSecPerCandidate) return null;
-  return model.measuredSecPerCandidate * Math.max(1, Math.round((duration || 1800) * MOMENTS_PER_SEC));
-}
-
-export default function ModelControl({ models, value, onChange, duration }) {
+// costs on this laptop. Only measured figures are shown; anything the server
+// has not measured is labelled "not measured yet".
+export default function ModelControl({ models, value, onChange, judgeN = 8, rates }) {
   const id = useId();
   if (!models?.length) {
     return (
@@ -23,11 +17,13 @@ export default function ModelControl({ models, value, onChange, duration }) {
   const sorted = [...models].sort((a, b) => (a.sizeGb ?? 0) - (b.sizeGb ?? 0));
   const idx = Math.max(0, sorted.findIndex((m) => m.name === value));
   const m = sorted[idx];
-  const est = estimateFor(m, duration);
-  const span = duration ? "for this video" : "for 30 minutes of video";
+  const per = m.measuredSecPerCandidate;
+  const est = per ? per * judgeN : null;
+  const cap = (x) => x[0].toUpperCase() + x.slice(1);
   const timeText = est
-    ? `${aboutMinutes(est)[0].toUpperCase() + aboutMinutes(est).slice(1)} ${span}, measured on this laptop.`
-    : "Not measured on this laptop yet. The first run will time it.";
+    ? `${cap(aboutMinutes(est))} to judge ${judgeN} moments, at ${Math.round(per)} s each on this laptop.`
+    : "Judge speed not measured yet on this laptop. The first run will time it.";
+  const rtfText = rates?.rtf ? `Transcription runs at ${rates.rtf.toFixed(2)}x real time here.` : "Transcription speed not measured yet.";
   return (
     <div className="model-control">
       <div className="mc-head">
@@ -47,7 +43,7 @@ export default function ModelControl({ models, value, onChange, duration }) {
           step={1}
           value={idx}
           disabled={sorted.length < 2}
-          aria-valuetext={`${m.name}, ${est ? aboutMinutes(est) : "not measured yet"}`}
+          aria-valuetext={`${m.name}, ${est ? aboutMinutes(est) + " to judge" : "not measured yet"}`}
           onChange={(e) => onChange(sorted[Number(e.target.value)].name)}
         />
         <div className="mc-stops" aria-hidden="true">
@@ -73,10 +69,8 @@ export default function ModelControl({ models, value, onChange, duration }) {
         </div>
       )}
       <p className={"mc-time" + (est ? "" : " dim")}>{timeText}</p>
-      <p className="mc-meta mono dim">
-        {m.sizeGb != null ? `${m.sizeGb} GB` : ""}
-        {m.measuredSecPerCandidate ? `   ${m.measuredSecPerCandidate} s per moment` : ""}
-      </p>
+      <p className="mc-time dim">{rtfText}</p>
+      <p className="mc-meta mono dim">{m.sizeGb != null ? `${m.sizeGb} GB` : ""}</p>
     </div>
   );
 }

@@ -7,7 +7,7 @@
 //   health=bad             show health warnings on the new job screen
 //   speed=0.3              slow the simulated pipeline (for screen recording)
 //   at=0.4                 start the live job part way through transcription
-import { buildTalk, makeJob } from "./fixture.js";
+import { buildTalk, makeJob, MEASURED, attributionFor } from "./fixture.js";
 import { frameSvg } from "./frames.js";
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -56,13 +56,40 @@ export function createMockApi(params) {
     for (const c of demo.candidates.filter((c) => c.status === "approved")) finishRender(demo, c);
   }
   jobs.set(demo.id, demo);
-  const older = makeJob({ id: "j_20261012_k7q2", name: "sunday-service-oct-12.mp4", stage: "done", createdAt: "2026-10-12T19:02:11.000Z" });
-  older.source.duration = 5412.6;
+  const older = makeJob({ id: "j_20261012_k7q2", name: "sunday-service-oct-12.mp4", stage: "done", createdAt: "2026-10-12T19:02:11.000Z", duration: 5412.6, judgeN: 8 });
+  older.settings = { ...older.settings, credit: null, license: "own", sourceUrl: null };
+  {
+    // Three clips rendered after judging finished, at the measured render and kit speeds.
+    const end = Date.parse(older.stages.judge.endedAt);
+    const sec = older.candidates.slice(0, 3).reduce((a, c) => a + (c.end - c.start) * MEASURED.renderFactor + MEASURED.kitSec, 0);
+    older.stages.render = { status: "done", startedAt: new Date(end).toISOString(), endedAt: new Date(end + sec * 1000).toISOString(), progress: 1, etaSec: 0, note: "rendered 3 clips (shorts)" };
+  }
   for (const c of older.candidates.slice(0, 3)) {
     c.status = "approved";
     finishRender(older, c);
   }
   jobs.set(older.id, older);
+
+  // The overnight queue. Empty unless the scenario asks for one.
+  const queue = { running: null, items: [] };
+  if (scenario === "queue") {
+    const busy = makeJob({ id: "j_20261016_q1a9", name: "panel-ai-in-hr-oct-14.mp4", stage: "transcribing", createdAt: new Date(Date.now() - 600e3).toISOString(), duration: 3121.4, judgeN: 8 });
+    busy.candidates = [];
+    Object.assign(busy.stages.transcribe, { status: "running", endedAt: null, startedAt: new Date(Date.now() - 520e3).toISOString(), progress: 0.4, etaSec: (3121.4 * 0.6) / MEASURED.rtf, note: `transcribing at ${MEASURED.rtf}x real time` });
+    for (const k of ["candidates", "judge", "render"]) busy.stages[k] = { status: "pending", startedAt: null, endedAt: null, progress: 0, etaSec: null, note: null };
+    jobs.set(busy.id, busy);
+    const next = makeJob({ id: "j_20261016_q2c4", name: "church-service-oct-12-full.mp4", stage: "queued", createdAt: new Date(Date.now() - 300e3).toISOString(), judgeN: 8 });
+    next.source.duration = null;
+    next.candidates = [];
+    for (const k of Object.keys(next.stages)) next.stages[k] = { status: "pending", startedAt: null, endedAt: null, progress: 0, etaSec: null, note: null };
+    jobs.set(next.id, next);
+    queue.running = { jobId: busy.id, kind: "analyze", ids: null, preset: null, addedAt: busy.createdAt };
+    queue.items = [
+      queue.running,
+      { jobId: next.id, kind: "analyze", ids: null, preset: null, addedAt: next.createdAt },
+      { jobId: demo.id, kind: "render", ids: demo.candidates.filter((c) => c.rank <= 3).map((c) => c.id), preset: "shorts", addedAt: new Date().toISOString() },
+    ];
+  }
 
   function applyWorst(job) {
     job.source.name = "GMT20261014-150312_Recording_gallery_1920x1080_all-hands-q4-FINAL-v3-export.mp4";
@@ -103,14 +130,22 @@ export function createMockApi(params) {
   }
 
   function finishRender(job, c) {
-    c.render = {
-      status: "done",
-      progress: 1,
-      path: `/Users/demo/selects/.selects/jobs/${job.id}/clips/${c.id}.mp4`,
-      srt: `clips/${c.id}.srt`,
-      kit: `clips/${c.id}.kit.json`,
+    // Shapes as the core writes them: relative paths on the candidate, the kit in kit.json.
+    c.render = { status: "done", progress: 1, path: `clips/${c.id}.mp4`, srt: `clips/${c.id}.srt`, kit: `clips/${c.id}.kit.json` };
+    c.title = c._kit.title;
+  }
+
+  function kitFor(job, c) {
+    const attribution = attributionFor(job.settings);
+    const dir = `/Users/demo/selects/.selects/jobs/${job.id}`;
+    return {
+      ...c._kit,
+      caption: [c._kit.captionText, attribution].filter(Boolean).join("\n\n"),
+      attribution,
+      reminder: "Check slides and on-screen media: a talk's licence may not cover every figure.",
+      file: `${dir}/clips/${c.id}.mp4`,
+      srtFile: `${dir}/clips/${c.id}.srt`,
     };
-    Object.assign(c, c._kit);
   }
 
   function newJob(id, path, settings = {}) {
@@ -147,7 +182,7 @@ export function createMockApi(params) {
     }
     if (job.stages.transcribe.status !== "done") {
       setStage(job, "transcribing", "transcribe", { status: "running", startedAt: job.stages.transcribe.startedAt || now() });
-      const rtf = 2.4;
+      const rtf = MEASURED.rtf;
       while (job._emitted < words.length) {
         if (scenario === "error" && !job._erroredOnce && words[job._emitted].s > duration * 0.45) {
           job._erroredOnce = true;
@@ -173,25 +208,29 @@ export function createMockApi(params) {
         emit(job.id, "progress", { stage: "transcribe", ...st });
         await tick(260);
       }
-      setStage(job, "candidates", "transcribe", { status: "done", endedAt: now(), progress: 1, etaSec: 0, note: `transcribed at ${rtf}x real time` });
+      setStage(job, "candidates", "transcribe", { status: "done", endedAt: now(), progress: 1, etaSec: 0, note: `${words.length} words, ${rtf}x real time` });
     }
     setStage(job, "candidates", "candidates", { status: "running", startedAt: now() });
     await tick(900);
-    const n = 148;
-    setStage(job, "judging", "candidates", { status: "done", endedAt: now(), progress: 1, note: `${n} moments` });
+    const n = job.settings.judgeN || 8;
+    const per = MEASURED.judgePerMoment;
+    setStage(job, "judging", "candidates", { status: "done", endedAt: now(), progress: 1, note: `190 windows passed the filter, ${n} go to the judge` });
     setStage(job, "judging", "judge", { status: "running", startedAt: now() });
-    for (let i = 1; i <= n; i += 2) {
+    for (let i = 0; i < n; i++) {
       const st = job.stages.judge;
-      st.progress = i / n;
-      st.etaSec = (n - i) * 2.1;
-      st.note = `${i} of ${n} moments, 2.1 s each`;
+      st.progress = i / (n + 1);
+      st.etaSec = (n - i) * per + MEASURED.listwiseSec;
+      st.note = `${i} of ${n} moments, ${per} s each`;
       emit(job.id, "progress", { stage: "judge", ...st });
-      await tick(70);
+      await tick(700);
     }
+    Object.assign(job.stages.judge, { progress: n / (n + 1), etaSec: MEASURED.listwiseSec, note: "final round: the top 4 side by side" });
+    emit(job.id, "progress", { stage: "judge", ...job.stages.judge });
+    await tick(1400);
     job.candidates = job._candidates;
     job.curve = makeJob({ id: "x" }).curve;
     emit(job.id, "candidates", job.candidates);
-    setStage(job, "ready", "judge", { status: "done", endedAt: now(), progress: 1, etaSec: 0, note: `${n} moments, 2.1 s each` });
+    setStage(job, "ready", "judge", { status: "done", endedAt: now(), progress: 1, etaSec: 0, note: `${n} clips judged, ${per} s each` });
   }
 
   async function runRender(job, ids) {
@@ -204,11 +243,11 @@ export function createMockApi(params) {
       c.render = { status: "running", progress: 0 };
       for (let p = 0; p <= 1.001; p += 0.05) {
         c.render.progress = Math.min(1, p);
-        emit(job.id, "render", { id, ...c.render, etaSec: Math.round((1 - p) * (c.end - c.start) * 1.6) });
+        emit(job.id, "render", { id, ...c.render, etaSec: Math.round((1 - p) * (c.end - c.start) * MEASURED.renderFactor + MEASURED.kitSec) });
         await wait(110 / speed);
       }
       finishRender(job, c);
-      emit(job.id, "render", { id, ...c.render, title: c.title, caption: c.caption, hashtags: c.hashtags });
+      emit(job.id, "render", { id, ...c.render, title: c.title });
     }
     job.stage = "done";
     job.stages.render = { ...job.stages.render, status: "done", progress: 1, endedAt: new Date().toISOString() };
@@ -227,14 +266,15 @@ export function createMockApi(params) {
       await wait(120);
       return healthBad
         ? { ok: false, whisper: false, ollama: false, models: [], diskFreeGb: 3.1 }
-        : { ok: true, whisper: true, ollama: true, models: ["gemma3:1b", "gemma3:4b", "qwen3:4b"], diskFreeGb: 34.6 };
+        : { ok: true, whisper: true, ollama: true, models: ["gemma3-4b-hf:latest", "qwen2.5:0.5b", "phi3:mini"], diskFreeGb: 34.6 };
     },
     async models() {
       await wait(100);
       return [
-        { name: "gemma3:1b", sizeGb: 0.8, measuredSecPerCandidate: 0.9 },
-        { name: "gemma3:4b", sizeGb: 3.3, measuredSecPerCandidate: 2.1 },
-        { name: "qwen3:4b", sizeGb: 2.6, measuredSecPerCandidate: null },
+        // The figures measured on the build machine (.selects/models.json).
+        { name: "qwen2.5:0.5b", sizeGb: 0.4, measuredSecPerCandidate: 14.89 },
+        { name: "phi3:mini", sizeGb: 2.18, measuredSecPerCandidate: null },
+        { name: "gemma3-4b-hf:latest", sizeGb: 2.49, measuredSecPerCandidate: 80.05 },
       ];
     },
     async listJobs() {
@@ -254,12 +294,23 @@ export function createMockApi(params) {
       if (!job) return [];
       return job._emitted != null ? words.slice(0, job._emitted) : words;
     },
-    async createJob(path, settings) {
+    async createJob(path, settings, { queueOnly = false } = {}) {
       await wait(300);
       if (!/\.(mp4|mov|mkv|webm|m4v)$/i.test(path)) {
         throw Object.assign(new Error(`Selects cannot open ${path.split("/").pop()}. Choose an MP4, MOV, MKV or WebM video.`), { status: 400 });
       }
       const id = "j_live_" + Math.random().toString(36).slice(2, 6);
+      if (queueOnly || queue.running) {
+        // Another job holds the machine: this one waits its turn, as in the core's queue.
+        const job = makeJob({ id, name: path.split("/").pop(), stage: "queued", createdAt: new Date().toISOString() });
+        job.source = { ...job.source, path, duration: null };
+        job.settings = { ...job.settings, ...settings };
+        for (const k of Object.keys(job.stages)) job.stages[k] = { status: "pending", startedAt: null, endedAt: null, progress: 0, etaSec: null, note: null };
+        job.candidates = [];
+        jobs.set(id, job);
+        queue.items.push({ jobId: id, kind: "analyze", ids: null, preset: null, addedAt: job.createdAt });
+        return summary(job);
+      }
       return summary(newJob(id, path, settings));
     },
     async patchCandidate(id, cid, body) {
@@ -302,6 +353,23 @@ export function createMockApi(params) {
       job.stage = "transcribing";
       sims.set(id, runSim(job));
       return summary(job);
+    },
+    async getKit(id, cid) {
+      await wait(90);
+      const job = jobs.get(id);
+      const c = job?.candidates.find((x) => x.id === cid);
+      if (!c?.render?.kit) throw Object.assign(new Error("This clip has no posting kit yet. Render it first."), { status: 404 });
+      return kitFor(job, c);
+    },
+    async patchJob(id, settings) {
+      await wait(150);
+      const job = jobs.get(id);
+      job.settings = { ...job.settings, ...Object.fromEntries(Object.entries(settings).map(([k, v]) => [k, v === "" ? null : v])) };
+      return summary(job);
+    },
+    async queue() {
+      await wait(60);
+      return clone(queue);
     },
     async locate(name) {
       await wait(200);

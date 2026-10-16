@@ -3,6 +3,11 @@ import { api } from "../lib/api.js";
 import { tc, plural } from "../lib/time.js";
 import { Masthead, MiddleTruncate, go } from "../App.jsx";
 import ModelControl from "./ModelControl.jsx";
+import QueueList from "./QueueList.jsx";
+import { measuredRates } from "../lib/estimate.js";
+import { LICENCES } from "../lib/licences.js";
+
+
 
 function healthIssues(h) {
   if (!h) return [];
@@ -65,6 +70,12 @@ export default function NewJob() {
   const [minLen, setMinLen] = useState(20);
   const [maxLen, setMaxLen] = useState(60);
   const [k, setK] = useState(5);
+  const [judgeN, setJudgeN] = useState(8);
+  const [credit, setCredit] = useState("");
+  const [license, setLicense] = useState("");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [queue, setQueue] = useState(null);
+  const [notice, setNotice] = useState(null);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -80,6 +91,30 @@ export default function NewJob() {
       if (pref) setModel(pref.name);
     }).catch(() => setModels([]));
     api.listJobs().then(setJobs).catch(() => {});
+  }, []);
+
+  // The queue changes while the page is open; poll it gently.
+  useEffect(() => {
+    let alive = true;
+    let lastKey = "";
+    const tick = async () => {
+      try {
+        const q = await api.queue();
+        if (!alive) return;
+        setQueue(q);
+        const key = JSON.stringify([q.running, q.items?.map((x) => x.jobId + x.kind)]);
+        if (key !== lastKey) {
+          lastKey = key;
+          api.listJobs().then((j) => alive && setJobs(j)).catch(() => {});
+        }
+      } catch {}
+    };
+    tick();
+    const t = setInterval(tick, 5000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
   }, []);
 
   const takeFile = async (file) => {
@@ -107,8 +142,8 @@ export default function NewJob() {
     if (f) takeFile(f);
   };
 
-  const submit = async (e) => {
-    e.preventDefault();
+  const submit = async (e, mode = "now") => {
+    e?.preventDefault?.();
     if (!path.trim()) {
       setError("Add the path to a video first.");
       pathRef.current?.focus();
@@ -117,7 +152,26 @@ export default function NewJob() {
     setBusy(true);
     setError(null);
     try {
-      const job = await api.createJob(path.trim(), { model, k: Number(k), minLen: Number(minLen), maxLen: Number(maxLen), preset: "shorts" });
+      const settings = {
+        model,
+        k: Number(k),
+        minLen: Number(minLen),
+        maxLen: Number(maxLen),
+        judgeN: Number(judgeN),
+        preset: "shorts",
+        ...(credit.trim() ? { credit: credit.trim() } : {}),
+        ...(license && license !== "other" ? { license } : {}),
+        ...(sourceUrl.trim() ? { sourceUrl: sourceUrl.trim() } : {}),
+      };
+      const job = await api.createJob(path.trim(), settings, { queueOnly: mode === "queue" });
+      if (mode === "queue") {
+        setNotice(`Queued ${job.source?.name}. It starts when the jobs ahead of it finish.`);
+        setPath("");
+        setBusy(false);
+        api.queue().then(setQueue).catch(() => {});
+        api.listJobs().then(setJobs).catch(() => {});
+        return;
+      }
       go(`#/job/${job.id}`);
     } catch (err) {
       setError(err.message || "Selects could not start that job.");
@@ -125,6 +179,7 @@ export default function NewJob() {
     }
   };
 
+  const rates = measuredRates(jobs);
   const issues = health?.unreachable
     ? [{ what: "Selects cannot reach its local server.", fix: "Start it in a terminal, then reload this page.", code: "npm run serve" }]
     : healthIssues(health);
@@ -203,7 +258,11 @@ export default function NewJob() {
                 <button className="btn btn-primary" type="submit" disabled={busy}>
                   {busy ? "Starting" : "Find clips"}
                 </button>
+                <button className="btn" type="button" disabled={busy} onClick={(e) => submit(e, "queue")}>
+                  Queue for overnight
+                </button>
               </div>
+              {notice && <p className="field-ok" role="status">{notice}</p>}
               {hint && <p id="path-hint" className="field-hint">{hint}</p>}
               {error && <p id="path-error" className="field-error" role="alert">{error}</p>}
 
@@ -216,15 +275,50 @@ export default function NewJob() {
                   <input className="input num mono" type="number" min={10} max={180} value={maxLen} onChange={(e) => setMaxLen(e.target.value)} aria-label="Longest clip in seconds" />
                   seconds, up to
                   <input className="input num mono" type="number" min={1} max={30} value={k} onChange={(e) => setK(e.target.value)} aria-label="Number of clips to propose" />
-                  clips, in 9:16 with captions.
+                  clips, in 9:16 with captions. The model reads the best
+                  <input className="input num mono" type="number" min={2} max={30} value={judgeN} onChange={(e) => setJudgeN(e.target.value)} aria-label="Moments the model reads" />
+                  moments.
+                </p>
+              </fieldset>
+
+              <fieldset className="rights">
+                <legend className="label">Credit</legend>
+                <div className="rights-grid">
+                  <label className="field">
+                    <span className="field-label">Who made it</span>
+                    <input className="input" value={credit} onChange={(e) => setCredit(e.target.value)} placeholder="Speaker, event and year" autoComplete="off" />
+                  </label>
+                  <label className="field">
+                    <span className="field-label">Licence</span>
+                    <select className="input select" value={license} onChange={(e) => setLicense(e.target.value)}>
+                      {LICENCES.map(([v, l]) => (
+                        <option key={v} value={v} disabled={v === ""}>{l}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field field-wide">
+                    <span className="field-label">Source link</span>
+                    <input className="input" type="url" inputMode="url" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://" autoComplete="off" spellCheck={false} />
+                  </label>
+                </div>
+                <p className="field-hint">
+                  {license === "own"
+                    ? "Your own footage needs no credit line. Add one anyway if you want your name on the post."
+                    : "Added to every caption, so the original gets credit and the licence is followed."}
                 </p>
               </fieldset>
             </div>
             <div className="new-right">
-              {models ? <ModelControl models={models} value={model} onChange={setModel} /> : <div className="model-control is-loading" aria-busy="true" />}
+              {models ? (
+                <ModelControl models={models} value={model} onChange={setModel} judgeN={Number(judgeN) || 8} rates={rates} />
+              ) : (
+                <div className="model-control is-loading" aria-busy="true" />
+              )}
             </div>
           </div>
         </form>
+
+        <QueueList queue={queue} jobs={jobs} rates={rates} models={models || []} />
 
         {jobs.length > 0 && (
           <section className="recent" aria-labelledby="recent-h">

@@ -50,9 +50,32 @@ function MockFrame({ player, duration }) {
   return <img className={"pv-media mock-media" + (playing ? " is-playing" : "")} src={frameSvg(idx, 60)} alt="" draggable={false} />;
 }
 
+// The blurred backdrop behind a "fit" frame, from the nearest filmstrip
+// thumbnail, so the preview costs one video decode, not two.
+function Backdrop({ job, player }) {
+  const t = usePlayerTime(player);
+  const count = job.thumbs?.count || 60;
+  const interval = job.thumbs?.interval || (job.source?.duration || 1) / count;
+  const n = Math.min(count, Math.max(1, Math.floor(t / interval) + 1));
+  return <img className="pv-backdrop" src={api.thumbUrl(job.id, n)} alt="" draggable={false} />;
+}
+
+// What the render will do: a clip already rendered says; a source that is not
+// landscape is always fit; otherwise the core decides from motion, so crop is
+// the best guess and the toggle lets you look at both.
+function defaultReframe(job, c) {
+  if (c?.render?.reframe) return c.render.reframe === "fit" ? "fit" : "crop";
+  const w = job.source?.displayWidth || job.source?.width;
+  const h = job.source?.height;
+  return w && h && w / h < 1.2 ? "fit" : "crop";
+}
+
 export default function Preview({ job, words, candidate, player }) {
   const videoRef = useRef(null);
   const [safe, setSafe] = useState(false);
+  const auto = defaultReframe(job, candidate);
+  const [reframeChoice, setReframe] = useState(null);
+  const reframe = reframeChoice || auto;
   const [mediaError, setMediaError] = useState(false);
   const src = api.sourceUrl(job.id);
   const playing = usePlaying(player);
@@ -74,7 +97,8 @@ export default function Preview({ job, words, candidate, player }) {
 
   return (
     <div className="preview">
-      <div className="pv-frame" data-playing={playing || undefined}>
+      <div className="pv-frame" data-playing={playing || undefined} data-reframe={reframe}>
+        {reframe === "fit" && <Backdrop job={job} player={player} />}
         {src && !mediaError ? (
           <video
             ref={videoRef}
@@ -125,10 +149,26 @@ export default function Preview({ job, words, candidate, player }) {
         <span className="pv-time mono">
           {tc(into)}<span className="dim"> / {tc(len)}</span>
         </span>
+      </div>
+      <div className="pv-options">
+        <div className="seg" role="group" aria-label="Reframe">
+          {["crop", "fit"].map((m) => (
+            <button key={m} type="button" className={"seg-btn" + (reframe === m ? " is-on" : "")} aria-pressed={reframe === m} onClick={() => setReframe(m)}>
+              {m === "crop" ? "Crop" : "Fit"}
+            </button>
+          ))}
+        </div>
         <button type="button" className={"btn btn-chip btn-on-film" + (safe ? " is-on" : "")} aria-pressed={safe} onClick={() => setSafe((s) => !s)}>
           Safe zone
         </button>
       </div>
+      <p className="pv-note">
+        {candidate.render?.reframe
+          ? `Rendered with ${candidate.render.reframe === "fit" ? "fit" : "crop"}.`
+          : auto === "fit"
+          ? "This source is not wide, so the render will fit it."
+          : "The render crops when the speaker stays central, and fits otherwise."}
+      </p>
     </div>
   );
 }

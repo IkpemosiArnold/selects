@@ -31,6 +31,9 @@ function createHttpApi() {
     getWords: (id) => get(`/api/jobs/${id}/words`),
     createJob: (path, settings) => send("POST", "/api/jobs", { path, settings }),
     patchCandidate: (id, cid, body) => send("PATCH", `/api/jobs/${id}/candidates/${cid}`, body),
+    patchJob: (id, settings) => send("PATCH", `/api/jobs/${id}`, { settings }),
+    getKit: (id, cid) => get(`/api/jobs/${id}/candidates/${cid}/kit`),
+    queue: () => get("/api/queue"),
     render: (id, ids) => send("POST", `/api/jobs/${id}/render`, ids ? { ids } : {}),
     resume: (id) => send("POST", `/api/jobs/${id}/resume`),
     // Optional: lets drag-and-drop work in browsers that hide a file's folder.

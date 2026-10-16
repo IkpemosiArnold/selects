@@ -28,6 +28,45 @@ function Score({ label, value }) {
   );
 }
 
+// How a clip earned its rank, as the core computes it: the rubric total
+// (judgeTotal), a cheap pre-score from the transcript and audio, blended
+// 0.7 and 0.3, then a listwise final round over the top few.
+function RankLedger({ c, settings = {} }) {
+  const legacy = c.judgeTotal == null && c.total != null;
+  const listOn = settings.listwise !== false && !legacy;
+  const listN = settings.listN ?? 4;
+  if (c.judgeTotal == null && c.pre == null && c.total == null) return null;
+  const n = (v) => (v == null ? "not recorded" : v.toFixed(2));
+  const cells = [
+    ["Model", n(c.judgeTotal), "The rubric above, weighted: hook 35%, stands alone 30%, payoff 20%, clarity 15%."],
+    ["Pre-score", n(c.pre), "Measured without a model: hook phrases, questions, numbers, pace, pauses and loudness."],
+  ];
+  if (listOn) cells.push(["Final round", c.listRank != null ? `${c.listRank} of ${listN}` : `outside the top ${listN}`, `The top ${listN} are shown to the model side by side and put in order.`]);
+  cells.push(["Ranked by", n(c.total), null]);
+  return (
+    <div className="ledger">
+      <dl className="ledger-row" aria-label="How this clip was ranked">
+        {cells.map(([k, v, why]) => (
+          <div key={k} className="ledger-cell" title={why || undefined}>
+            <dt>{k}</dt>
+            <dd className="mono">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="ledger-note">
+        {legacy
+          ? "This job was ranked before the pre-score blend and the final round were added, so only the total is on record."
+          : `70% model and 30% pre-score${listOn ? `, then the top ${listN} compared side by side` : ""}.`}
+        {c.listReason && (
+          <>
+            {" "}In that round: <q className="ledger-quote">{c.listReason}</q>
+          </>
+        )}
+      </p>
+    </div>
+  );
+}
+
 // The transcript of the window, with in and out marks, plus a sentence or two
 // of context either side that you can click to extend the clip to.
 const Transcript = memo(function Transcript({ words, sentences, candidate, player, onExtend, onSeek }) {
@@ -141,6 +180,7 @@ export default function Detail({ job, candidate, total, words, sentences, player
       ) : (
         <p className="dim">Not scored yet. The model has not judged this moment.</p>
       )}
+      <RankLedger c={c} settings={job.settings} />
 
       <div className="reason">
         <p className="reason-by mono">Why {job.settings?.model || "the model"} picked it</p>
