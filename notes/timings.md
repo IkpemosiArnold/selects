@@ -207,3 +207,133 @@ Selects now uses the last path for 8-bit H.264 and HEVC on macOS (with a fallbac
 | B2 | B again with the English-text rule | language English (decided by compare), transcript shaky (0.787), whole video captioned at 1080x1920, 30 fps, bold style, GPU decode | 386.0 s: probe 8.0 (thumbnails now hardware-decoded), language 27.2, transcribe 101.9 (1.62x), render 247.0 (1.5x the video's length) |
 
 Bug found and fixed by run C: on the GPU path, `-noautorotate` made ffmpeg copy the source's -90 rotation into the output, so players turned the already-upright frames sideways. The input now uses `-display_rotation:v 0`. A second bug came from the web builder's test with blur on the public EMF clip: crop, boxblur and overlay on nv12 frames left the blurred boxes green; the GPU path now converts to planar yuv420p after the download.
+
+## Language ID ensemble, accent routing, punctuation and VAD (16 Oct, speech-ML)
+
+Same machine. Other builders were running Gemma judge calls and Chrome at the same time (load average 25 to 120 during the decodes), so the decode times are high and vary. Only codes, probabilities and times are recorded for the private recording, never its words; its decodes stay in `.selects/private/` (gitignored).
+
+### Test set
+
+- The elderly Nigerian speaker speaking English (private phone recording, 165 s).
+- The EMF talk excerpt (British English, 360 s).
+- The 6 eval videos (English; full cached audio in `eval/media`, read only).
+- FLEURS dev utterances (CC BY 4.0, google/fleurs): 7 in Yoruba (92 s) and 7 in Hausa (138 s), joined into one file each. These check the other direction: real Yoruba or Hausa must not be relabelled English.
+
+Each recording went through Selects' language check: three 20 s samples (one sample for short files), whisper's detector (multilingual base), and a decode of the samples in the detector's language and in English. To stress the text signals, every recording was also decoded as Yoruba (and the Hausa set as Hausa).
+
+### Each signal's verdict, `--language auto` (the detector's language and English decoded)
+
+"Decode by mean p only" is the first decode-and-compare rule (highest mean word probability wins). "Decode-compare" is the rule shipped before today (a decode that comes out as English text cannot win). The time column is samples plus detector, then the decodes, then the text models (a child process that loads both; 2.6 to 3.1 s when the model file is not in the page cache).
+
+| Recording | Spoken | whisper detector | Decode by mean p only | Decode-compare | lid-lite-608 | lid-lite-5 | Ensemble (share of vote) | Question? | Default setting (en) | Time (s) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Elderly Nigerian speaker (private, 165 s) | en | yo (0.9), refuted | yo | en | en (0.994) | en (0.999) | **en** (0.847) | no | en, no | 6.7 + 48.3 + 1.6 |
+| EMF talk, British speaker (6 min) | en | cy (0.633), refuted | en | en | no opinion | no opinion | **en** (0.759) | no | en, no | 5.0 + 139.9 + 1.5 |
+| Eval G9NabGlnDCs | en | en (0.987) | en | en | no opinion | no opinion | **en** (1) | no | en, no | 4.5 + 36.0 + 1.8 |
+| Eval CBYhVcO4WgI | en | en (0.998) | en | en | no opinion | no opinion | **en** (1) | no | en, no | 5.9 + 16.4 + 1.6 |
+| Eval iqm-XEqpayc | en | en (0.996) | en | en | no opinion | no opinion | **en** (1) | no | en, no | 7.9 + 22.1 + 1.6 |
+| Eval uFyk5UOyNqI | en | en (0.973) | en | en | no opinion | no opinion | **en** (1) | no | en, no | 4.5 + 24.1 + 1.6 |
+| Eval Aj0nf3rKG_E | en | en (0.997) | en | en | no opinion | no opinion | **en** (1) | no | en, no | 3.8 + 17.4 + 1.6 |
+| Eval k4715CJ0Ii8 | en | en (0.985) | en | en | no opinion | no opinion | **en** (1) | no | en, no | 3.8 + 13.2 + 1.4 |
+| FLEURS Yoruba, 7 utterances (92 s) | yo | yo (0.54) | yo | yo | no opinion | no opinion | **yo** (1) | no | en, yes (English?) | 3.0 + 24.6 + 1.6 |
+| FLEURS Hausa, 7 utterances (138 s) | ha | ro (0.173) | ro | ro | no opinion | no opinion | **ro** (1) | yes (Romanian?) | en, yes (English?) | 3.8 + 20.3 + 1.6 |
+
+What each signal contributed:
+
+- **whisper detector**: wrong on 3 of 10 (Yoruba for the Nigerian speaker, Welsh for the British speaker, Romanian at p 0.17 for Hausa). Both accented English speakers were mislabelled.
+- **decode by mean p only**: wrong on the Nigerian speaker (Yoruba, 0.798 against 0.650 for English) and on Hausa.
+- **lid-lite-608 on the decodes**: on the Nigerian speaker it read the "Yoruba" decode as English (p 0.994), which on its own refutes Yoruba. This is the signal that fails differently: it never hears the accent, only the words whisper wrote. Elsewhere it had no opinion, because every decode came out in the language asked for, or failed.
+- **lid-lite-5**: agreed with lid-lite-608 on the Nigerian speaker (English, p 0.999).
+- **The ensemble**: 9 of 10 right, the 10th (Hausa) asked about instead of decided. No English recording was relabelled and no English recording raised the question.
+- **With the default setting (English)**, Selects keeps the user's choice and transcribes English, so the last column only shows whether it asks: it asks "Is the speaker using English?" for both FLEURS sets (offering Yoruba and Romanian first) and for none of the English recordings.
+
+Stress run, every recording also decoded as Yoruba (the case where a profile or the detector brings Yoruba in):
+
+| Recording | Spoken | whisper detector | Decode by mean p only | Decode-compare | lid-lite-608 | lid-lite-5 | Ensemble (share of vote) | Question? | Default setting (en) | Time (s) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Elderly Nigerian speaker (private, 165 s) | en | yo (0.9), refuted | yo | en | en (0.994) | en (0.999) | **en** (0.847) | no | en, no | 6.7 + 48.3 + 1.6 |
+| EMF talk, British speaker (6 min) | en | cy (0.633), refuted | en | en | no opinion | no opinion | **en** (0.759) | no | en, no | 5.0 + 205.5 + 1.5 |
+| Eval G9NabGlnDCs | en | en (0.987) | en | en | no opinion | no opinion | **en** (1) | no | en, no | 4.5 + 142.1 + 1.8 |
+| Eval CBYhVcO4WgI | en | en (0.998) | en | en | en (0.99) | en (0.998) | **en** (1) | no | en, no | 5.9 + 99.1 + 1.6 |
+| Eval iqm-XEqpayc | en | en (0.996) | en | en | en (0.681) | en (0.994) | **en** (1) | no | en, no | 7.9 + 116.3 + 1.6 |
+| Eval uFyk5UOyNqI | en | en (0.973) | en | en | en (0.985) | en (1) | **en** (1) | no | en, no | 4.5 + 43.9 + 1.6 |
+| Eval Aj0nf3rKG_E | en | en (0.997) | en | en | no opinion | no opinion | **en** (1) | no | en, no | 3.8 + 63.5 + 1.6 |
+| Eval k4715CJ0Ii8 | en | en (0.985) | en | en | en (0.989) | en (0.999) | **en** (1) | no | en, no | 3.8 + 46.2 + 1.4 |
+| FLEURS Yoruba, 7 utterances (92 s) | yo | yo (0.54) | yo | yo | no opinion | no opinion | **yo** (1) | no | en, yes (English?) | 3.0 + 24.6 + 1.6 |
+| FLEURS Hausa, 7 utterances (138 s) | ha | ro (0.173) | ha | ha | ha (0.951) | no opinion | **ha** (0.958) | yes (Hausa?) | en, yes (English?) | 3.8 + 44.3 + 1.6 |
+
+
+The stress run found two faults in the first version of the rule, both fixed before the tables above were computed:
+
+- **Text models reading failed decodes.** Asked to write Welsh, whisper produced junk for the British speaker (mean word p 0.064), and lid-lite-608 still read the junk as Welsh (p 1.0); the forced Yoruba decode (p 0.098) also read as Welsh (0.71), and the first rule picked Welsh. Now a decode with mean word p under 0.3 (or under 5 words) counts as failed: its text is ignored and its language is refuted.
+- **lid-lite-5 outside its five languages.** The forced Yoruba decode of an American nursing interview came out garbled (mean p 0.58, no English words); lid-lite-608 said French at only p 0.20, and lid-lite-5, which only knows five languages, said Hausa at p 0.99. lid-lite-5 now only votes on text that lid-lite-608 places in English, Hausa, Igbo, Pidgin or Yoruba.
+
+A third case is a limit, not a fault: on the Hausa set, the detector said Romanian at p 0.17 and the Romanian decode read as Romanian text, so nothing in the default run points to Hausa. A non-English verdict that rests on a detector under p 0.5 now raises the question instead.
+
+### End to end: the elderly Nigerian speaker with `--language auto` (16 Oct, 07:01 WAT)
+
+`createJob(IMG_1922.MOV, { mode: "caption", language: "auto" })` and `runJob`, with `SELECTS_HOME` in `.selects/private/home` (job `j_20261016_0mab`). Caption mode, so it stops before rendering.
+
+| Step | Result | Wall time |
+|---|---|---|
+| Probe and thumbnails | | 9.7 s |
+| Language check | English, 85% of the vote, no question. Detector: Yoruba p 0.90, refuted. Decoded as Yoruba: mean p 0.798, read as English by lid-lite-608 (0.994) and lid-lite-5. Decoded as English: 0.650, read as English (0.990). | 25.0 s, of which text models 1.3 s |
+| Accent routing | routed to `ggml-small-nigerian-accent.bin`, on the audio cue (the detector heard Yoruba in speech that is English) | |
+| Transcribe | 1.98x real time; transcript quality score 0.915, mean word p 0.915, 3.1% unsure: **good** | 83.6 s |
+| Whole run | | 118.3 s |
+
+The same video with the defaults before today (`base.en`, run A above) scored 0.638 and stopped as unreliable after a 50.3 s transcription; with `small.en` (run C) it scored 0.787, shaky. So routing costs about 33 s more transcription on this 165 s video than base.en and turns a stopped run into one that passes the gate. The score is whisper's own confidence, and a fine-tune can be confidently wrong, so the transcripts still need rating by a person who knows the speaker.
+
+### Time cost per video
+
+The ensemble itself adds only the text models: 1.2 to 1.8 s per video (a child process that loads lid-lite-608 in 0.6 to 3 s and frees its 225 MB afterwards). Everything else in the table above is the decode-and-compare that already existed: 3 to 8 s for the samples and the detector, then 10 to 40 s per decode, or more when whisper retries a decode in the wrong language (up to 121 s for the Welsh decode of the British talk under heavy load). When the setting is English and the detector agrees, which was the case for all 6 eval videos, no decodes run and the language check costs only the detector pass (3.8 to 7.9 s). Punctuation adds 1 to 5 s, only for sparse English transcripts. Accent routing adds the fine-tune's slower transcription (about 2x real time against about 3 to 6x for base.en on this machine).
+
+### Decoding without temperature fallback (`-nf`): faster, and it breaks the check
+
+The junk decodes are slow because whisper retries them at higher temperatures. With `-nf` they were much faster (EMF as Welsh: 121.1 s down to 14.3 s; G9NabGlnDCs as Yoruba: 106.1 s down to 14.0 s), but the confidence numbers stopped meaning anything: the Welsh junk scored mean p 0.87, and the forced Yoruba decode of an English interview scored 0.906, above English (0.864). Worse, the Nigerian speaker's "Yoruba" decode stopped coming out as English text (English function-word share 0.519 with fallback, 0.026 without; lid-lite-608 read it as Punjabi), and the ensemble chose Yoruba. The fallback is what makes whisper either give up or write the language it actually hears, so the language check keeps it.
+
+### Audio language ID (VoxLingua107 ECAPA, int8 ONNX): rejected
+
+Run with onnxruntime-node 1.21 (the last release with a macOS x64 build) on 20 s windows, 2 threads, about 2.2 to 3.9 s per window (10 s for 60 s of audio) under load, 0.5 s to load the 26.6 MB model.
+
+| Recording | Windows | Verdicts |
+|---|---|---|
+| Elderly Nigerian speaker | 0-20 s, 15-35 s, 62-82 s, 130-150 s, first 60 s, all 165 s | Yoruba 0.37, Hausa 0.49, Croatian 0.47, Korean 0.33, Swahili 0.28, Croatian 0.29 |
+| EMF talk, British speaker | 3 windows of 20 s, first 60 s | Welsh 0.95, 0.93, 0.95, 0.93 (English second at 0.05 to 0.07) |
+| Eval ASvx-QG6o04, American | 2 windows, 60 s | English 0.999, 0.996, 0.997 |
+| Eval iqm-XEqpayc, American | 2 windows, 60 s | English 0.94, 0.995, 0.99 |
+
+It fails differently from whisper, but on exactly the speakers the ensemble exists for, and confidently (Welsh at 0.95). As a voter it would have turned the British talk into a question or a wrong answer. Not adopted. sherpa-onnx's spoken-language ID was not tried: it runs whisper's own encoder, so it would fail the same way as the detector.
+
+### Punctuation restoration (Edge-Punct-Casing, int8, via sherpa-onnx-node)
+
+Controlled test: whisper's punctuation removed from 7 well-punctuated transcripts, then sentence ends put back by (a) the pause-based fallback in `sentences.mjs` (a pause of 0.6 s ends a sentence, no sentence over 12 s) and (b) the model, in chunks of 150 words. Scored against whisper's original sentence ends, counting a boundary within one word as a hit.
+
+| Transcript | Words | Whisper's ends | Pauses: P / R / F1 | Model: P / R / F1 | Model time |
+|---|---|---|---|---|---|
+| Aj0nf3rKG_E | 2,962 | 138 | 0.29 / 0.27 / 0.28 | 0.51 / 0.76 / 0.61 | 4.7 s |
+| CBYhVcO4WgI | 3,136 | 193 | 0.38 / 0.23 / 0.28 | 0.74 / 0.76 / 0.75 | 3.6 s |
+| G9NabGlnDCs | 1,881 | 143 | 0.68 / 0.39 / 0.50 | 0.81 / 0.73 / 0.77 | 1.4 s |
+| iqm-XEqpayc | 1,802 | 141 | 0.56 / 0.42 / 0.48 | 0.81 / 0.75 / 0.77 | 1.7 s |
+| k4715CJ0Ii8 | 2,899 | 250 | 0.70 / 0.39 / 0.50 | 0.90 / 0.79 / 0.84 | 2.6 s |
+| uFyk5UOyNqI | 2,512 | 154 | 0.20 / 0.15 / 0.17 | 0.67 / 0.81 / 0.73 | 2.6 s |
+| EMF talk | 1,232 | 67 | 0.27 / 0.21 / 0.23 | 0.83 / 0.79 / 0.81 | 0.9 s |
+| Mean | | | F1 0.35 | F1 0.76 | |
+
+Loading the model takes about 1.5 s. Every chunk came back with the same number of words, so whisper's word timings carry over unchanged. On the one transcript that really is sparse (ASvx-QG6o04: 12 sentence ends in 2,316 words), the model changed 422 words in 4.6 s and turned 85 pause-based sentences (mean 7.5 s) into 166 sentences (mean 3.8 s, close to the 4 to 6.5 s of the well-punctuated talks). The candidate windows that pass the filter went from 143 to 125, because the stricter rules for punctuated text now apply. Adopted, for English transcripts that `isSparsePunctuation` flags.
+
+### VAD (whisper.cpp's built-in Silero VAD v6.2.0): rejected
+
+whisper `base.en`, greedy, 2 threads, with and without `--vad -vm ggml-silero-v6.2.0.bin`. Words matched between the two runs by longest common subsequence.
+
+| Recording | Without VAD | With VAD | Words matched | Start-time shift (median, 90th percentile, max) | Pauses of 1 s or more (mean length without, with) |
+|---|---|---|---|---|---|
+| Elderly Nigerian speaker, 165 s | 41.6 s, 246 words, mean p 0.767, 17.9% unsure | 18.1 s, 253 words, 0.792, 12.6% unsure | 80.5% | 0.70 s, 2.31 s, 4.00 s | 26 pauses: 1.88 s, 0.99 s |
+| EMF talk, 360 s | 62.6 s, 1,232 words, 0.942 | 83.6 s, 1,239 words, 0.944 | 99.4% | 0.21 s, 0.59 s, 2.56 s | 2 pauses: 1.72 s, 0.00 s |
+| G9NabGlnDCs, first 300 s | 63.0 s, 958 words, 0.914 | 51.1 s, 937 words, 0.915 | 95.3% | 0.18 s, 0.61 s, 3.12 s | 9 pauses: 1.53 s, 0.21 s |
+
+VAD helped the pause-heavy phone recording (2.3 times faster, fewer unsure words), but the time saved on talks was small or negative, and whisper.cpp maps its timestamps back from the speech-only audio loosely: word times moved by up to 4 s and real pauses shrank or vanished. Captions, cut snapping, the pause-based sentence fallback and the pre-score's pause feature all depend on those times, so VAD is not used. The speech-boundary hint for cuts was not built: the word gaps and the loudness track already mark pauses, and a separate VAD pass was not shown to add anything.
+
+### Speaker diarization
+
+Not built (stretch goal). Feasible on this machine: sherpa-onnx-node's macOS x64 build includes `OfflineSpeakerDiarization` (pyannote segmentation 3.0, about 6 MB, plus a speaker-embedding model of 25 to 40 MB).
