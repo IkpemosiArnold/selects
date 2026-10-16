@@ -110,6 +110,7 @@ function printCandidates(job) {
     say(`${bold(String(c.rank ?? "-").padStart(2))}  ${tc(c.start)} to ${tc(c.end)}  ${Math.round(c.end - c.start)} s   ${blue(`score ${(c.total ?? 0).toFixed(2)}`)}   ${dim(`hook ${s.hook ?? "-"}  stands alone ${s.standalone ?? "-"}  payoff ${s.payoff ?? "-"}  clarity ${s.clarity ?? "-"}`)}`);
     say(`    "${c.hook.length > 110 ? c.hook.slice(0, 107) + "..." : c.hook}"`);
     if (c.reason) say(`    ${blue(c.reason)}`);
+    if (c.listRank) say(`    ${dim(`Side by side: ${c.listRank} of ${job.listwise?.order?.length ?? "?"}${c.listReason ? `. ${c.listReason}` : ""}`)}`);
   }
   say("");
 }

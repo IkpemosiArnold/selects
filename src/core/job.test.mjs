@@ -27,6 +27,7 @@ function mocks(counter, { failJudgeAt = -1 } = {}) {
       onWords(WORDS.slice(10));
       return WORDS;
     },
+    listwise: async (cands) => ({ candidates: cands, order: [], reasons: {} }),
     judge: async (cands, { onProgress }) => {
       const out = [];
       for (let i = 0; i < cands.length; i++) {

@@ -86,6 +86,35 @@ Two more findings from the same calls:
 
 An earlier attempt at this A/B (01:28, one block per setting, no warm-up) was confounded: load average fell from about 250 to 28 while it ran, and it stopped when Gemma closed a JSON string with a curly quote (see "Failures").
 
+## Spreading the judge's scores (16 Oct, 02:22 to 02:41 WAT)
+
+The problem: in the end-to-end run all three picks scored hook 3 and stands alone 3, and two of them tied at 0.675, so the ranking came down to tie-breaks. All variants below use the same 8 shortlisted windows. The spread is the standard deviation of the 8 totals (each 0..1); "distinct" counts different totals.
+
+| Variant | SD of totals | Distinct totals | Extra model time |
+|---|---|---|---|
+| Rubric as shipped in the e2e run (anchors at 1, 3, 5), judge only | 0.093 | 7 of 8 | none |
+| (b) all five levels anchored, each with a short example, judge only | 0.077 | 3 of 8 | 8 calls, 685.7 s (85.7 s each); rubric 220 words instead of 140 |
+| (c) old rubric, blended 0.7 judge + 0.3 pre-score | 0.079 | 8 of 8 | none |
+| (c) then (a): blend, then the listwise round on the top 4 | 0.104 | 8 of 8 | 1 call, 71.3 s (318 prompt tokens, 142 output tokens) |
+| (b) then (c) then (a), for reference | 0.097 | 8 of 8 | the listwise call took 112.6 s (299 prompt, 149 output tokens) |
+
+Kept: the old rubric, (c) and (a). Dropped: (b). It made scores bunch higher (most windows went to standalone 4, payoff 5, clarity 5; hook stayed at 3 for all 8), and the anchor example "I slept four hours a night for a year" turned up in a reason as if the speaker had said it.
+
+What the listwise round did with the shipped rubric. Order: c_0001, c_0014, c_0020, c_0012.
+
+| Window | Pointwise scores (hook, standalone, payoff, clarity) | Judge | Pre | Blended | Final | Listwise rank and reason |
+|---|---|---|---|---|---|---|
+| c_0014 | 3, 3, 5, 5 | 0.675 | 0.712 | 0.686 | 0.683 | 2: "Sets up a compelling story, intriguing, strong initial statement." |
+| c_0001 | 3, 3, 3, 5 | 0.575 | 0.536 | 0.563 | 0.629 | 1: "Direct, relatable motivation; clear risk statement, immediate scroll stop." |
+| c_0020 | 3, 3, 4, 5 | 0.625 | 0.533 | 0.597 | 0.557 | 3: "Vague intro, payoff is overly simplistic and unconvincing." |
+| c_0012 | 3, 3, 5, 5 | 0.675 | 0.537 | 0.634 | 0.539 | 4: "Generic statement, lacks a strong hook or payoff." |
+| c_0027 | 3, 3, 2, 4 | 0.487 | 0.650 | 0.536 | 0.456 | not in the round |
+| c_0036 | 3, 3, 3, 3 | 0.500 | 0.617 | 0.535 | 0.455 | not in the round |
+| c_0004 | 3, 3, 2, 3 | 0.450 | 0.473 | 0.457 | 0.388 | not in the round |
+| c_0016 | 3, 2, 3, 3 | 0.425 | 0.462 | 0.436 | 0.371 | not in the round |
+
+A caution for the eval: the listwise judgment depends on which clips share the round. With the (b) judgments the round held c_0012, c_0014, c_0027 and c_0036, and c_0012 came first. In the round above it came last ("generic statement"). Comparing side by side spreads the scores, but whether it agrees with people more is for the eval to show (`judgeTotal` for the judge alone, `total` for the full pipeline).
+
 ## Earlier measurements (from review-tech-feasibility.md, not re-run here)
 
 whisper base.en default beam search ran at 14.8x real time; greedy (`-bs 1 -bo 1`) at 1.57x. Selects uses greedy.

@@ -27,6 +27,7 @@ const deps = {
     active--;
     return WORDS;
   },
+  listwise: async (cands) => ({ candidates: cands, order: [], reasons: {} }),
   judge: async (cands) => cands.map((c, i) => ({ ...c, scores: { hook: 3, standalone: 3, payoff: 3, clarity: 3 }, total: 0.5 - i * 0.01, reason: "Fine." })),
 };
 

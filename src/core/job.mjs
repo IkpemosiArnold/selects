@@ -7,7 +7,7 @@ import path from "node:path";
 import { DEFAULT_SETTINGS, jobsDir, resolveModel } from "./config.mjs";
 import { attributionLine, captionWithCredit, MEDIA_REMINDER, normaliseLicense } from "./attribution.mjs";
 import { makeCandidates, shortlist } from "./candidates.mjs";
-import { judge as realJudge } from "./judge.mjs";
+import { judge as realJudge, listwise as realListwise } from "./judge.mjs";
 import { plainKit, postingKit as realKit } from "./kit.mjs";
 import { probe as realProbe } from "./probe.mjs";
 import { curve, rank } from "./rank.mjs";
@@ -187,6 +187,7 @@ async function runStages(id, { deps = {}, signal } = {}) {
     probe: realProbe,
     transcribe: realTranscribe,
     judge: realJudge,
+    listwise: realListwise,
     thumbs: makeThumbs,
     ...deps,
   };
@@ -291,19 +292,26 @@ async function runStages(id, { deps = {}, signal } = {}) {
     if (job.stages.judge.status !== "done") {
       current = "judge";
       begin("judge");
-      const judged = await d.judge(short, {
+      let judged = await d.judge(short, {
         model: job.settings.model,
         cacheDir: dir,
         signal,
-        onProgress: (p) => progress("judge", p),
+        onProgress: (p) => progress("judge", { ...p, progress: (p.progress ?? 0) * 0.9 }),
       });
+      const st = judged.stats;
+      if (job.settings.listwise !== false && judged.length >= 3) {
+        progress("judge", { progress: 0.9, note: "comparing the best clips side by side" });
+        const t0 = Date.now();
+        const lw = await d.listwise(judged, { model: job.settings.model, n: job.settings.listN ?? 4, cacheDir: dir, signal });
+        judged = lw.candidates;
+        job.listwise = { order: lw.order, reasons: lw.reasons, complete: lw.complete ?? true, sec: +((Date.now() - t0) / 1000).toFixed(1) };
+      }
       writeJsonAtomic(path.join(dir, "judged.json"), judged);
       const ranked = rank(judged, { k: job.settings.k, iou: 0.3 });
       // keep any human decisions from an earlier run of the same windows
       const prev = new Map((job.candidates || []).map((c) => [c.id, c]));
       job.candidates = ranked.map((c) => (prev.get(c.id)?.status && prev.get(c.id).status !== "proposed" ? { ...c, status: prev.get(c.id).status } : c));
       job.curve = curve(judged, job.source.duration, { step: 5 });
-      const st = judged.stats;
       finish("judge", st?.secPerCandidate ? `${judged.length} clips judged, ${st.secPerCandidate} s each` : `${judged.length} clips judged`);
       emit(id, "candidates", { ranked: true, candidates: job.candidates, curve: job.curve });
     }

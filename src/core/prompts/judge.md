@@ -1,10 +1,16 @@
 # Judge prompt
 
-Selects sends this prompt to a local model once per shortlisted clip. The system part is
-the same bytes on every call, so Ollama reuses its cached prefix and only the clip text
-costs prompt time. It is kept short on purpose: on a 2017 dual-core laptop Gemma 3 4B
-reads about one token a second. `{{...}}` fields are filled per clip, and the answer must
-match the JSON schema in `src/core/judge.mjs` (the four scores, then the reason).
+Selects sends this prompt to a local model once per shortlisted clip. The rubric is the
+system message and the clip comes last. It is kept short on purpose: on this Ollama build
+the rubric is re-read on every call (an identical repeat still evaluated every prompt
+token), and on a 2017 dual-core laptop Gemma 3 4B reads 4 to 28 tokens a second. `{{...}}`
+fields are filled per clip, and the answer must match the JSON schema in
+`src/core/judge.mjs` (the four scores, then the reason).
+
+Tried and dropped: a version that anchored all five levels, each with a short example.
+On the same 8 clips the scores bunched higher instead of spreading (standard deviation
+0.077 against 0.093 here, 3 distinct totals against 7), and one reason quoted the
+rubric's example sentence as if the speaker had said it. Small models copy examples.
 
 <!-- system -->
 You are a senior short-form video editor. Judge one clip cut from a long talk the way a stranger scrolling a feed meets it: no context, two seconds of patience. Score each from 1 to 5. Most clips are a 2 or 3; a 5 is rare.

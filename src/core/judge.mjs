@@ -15,6 +15,22 @@ import { readJson, sha1, writeJsonAtomic } from "./util.mjs";
  */
 export const WEIGHTS = { hook: 0.35, standalone: 0.3, payoff: 0.2, clarity: 0.15 };
 
+/**
+ * The total a candidate is ranked by blends the judge with the cheap pre-score. On the
+ * first real run, a small model put most clips on the same middle scores (three of eight
+ * tied at 0.675), so the ranking came down to tie-breaks on list order. The pre-score is
+ * independent evidence (hook phrases, pace, loudness), so it breaks those ties on
+ * something measured. The judge still carries most of the weight.
+ */
+export const BLEND = { judge: 0.7, pre: 0.3 };
+/** How much the listwise final round can move a clip (best of the round +0.15 x 1, last +0). */
+export const LIST_WEIGHT = 0.15;
+
+export function blend(judgeTotal, pre) {
+  if (typeof pre !== "number") return judgeTotal;
+  return +(BLEND.judge * judgeTotal + BLEND.pre * pre).toFixed(3);
+}
+
 /** Combine 1..5 scores into 0..1. */
 export function combine(scores) {
   let sum = 0;
@@ -73,7 +89,8 @@ export function loadPrompt() {
   const sys = md.split("<!-- system -->")[1]?.split("<!-- user -->")[0]?.trim();
   const user = md.split("<!-- user -->")[1]?.trim();
   if (!sys || !user) throw new Error("prompts/judge.md must contain <!-- system --> and <!-- user --> sections");
-  promptCache = { system: sys, user, version: sha1(md).slice(0, 10) };
+  // the version covers only what the model sees, so editing the notes above it keeps the cache
+  promptCache = { system: sys, user, version: sha1(`${sys}\n---\n${user}`).slice(0, 10) };
   return promptCache;
 }
 
@@ -136,7 +153,9 @@ export function callStats(j, wallSec) {
 
 /**
  * Ollama's num_thread. SELECTS_THREADS overrides; "auto" (or 0) leaves it to Ollama.
- * The default is set from an A/B measured on this machine (see notes/timings.md).
+ * Default: leave it to Ollama. On the i5-7360U, Ollama's own choice beat num_thread 2 in an
+ * A/B (median prompt 20.7 vs 14.6 tok/s, output 2.9 vs 2.8 tok/s, wall 39 vs 47 s per
+ * call; notes/timings.md), so there is no override unless SELECTS_THREADS sets one.
  */
 export const DEFAULT_THREADS = null;
 export function threadOption() {
@@ -245,7 +264,8 @@ export async function judge(candidates, { model, cacheDir, onProgress, onResult,
       cache[key] = hit;
       if (cacheFile) writeJsonAtomic(cacheFile, cache);
     }
-    const judged = { ...c, scores: hit.scores, total: combine(hit.scores), reason: hit.reason };
+    const judgeTotal = combine(hit.scores);
+    const judged = { ...c, scores: hit.scores, judgeTotal, total: blend(judgeTotal, c.pre), reason: hit.reason };
     out.push(judged);
     onResult?.(judged);
     const secPer = times.length ? times.reduce((a, b) => a + b, 0) / times.length : null;
@@ -284,3 +304,123 @@ export function measuredSpeeds() {
 }
 
 export { SCHEMA as JUDGE_SCHEMA };
+
+// ---------------------------------------------------------------- listwise final round
+
+let listPromptCache = null;
+function loadListPrompt() {
+  if (listPromptCache) return listPromptCache;
+  const md = fs.readFileSync(path.join(PROMPTS_DIR, "listwise.md"), "utf8");
+  listPromptCache = {
+    system: md.split("<!-- system -->")[1].split("<!-- user -->")[0].trim(),
+    user: md.split("<!-- user -->")[1].trim(),
+    version: null,
+  };
+  listPromptCache.version = sha1(`${listPromptCache.system}\n---\n${listPromptCache.user}`).slice(0, 10);
+  return listPromptCache;
+}
+
+const lastSentence = (text) => {
+  const parts = text.trim().split(/(?<=[.!?]["')\]]?)\s+/);
+  return parts[parts.length - 1];
+};
+
+export function buildListMessages(top) {
+  const p = loadListPrompt();
+  const blocks = top.map((c, i) => `Clip ${String.fromCharCode(65 + i)} (${Math.round(c.end - c.start)} s)\nFirst: "${c.hook.trim()}"\nLast: "${lastSentence(c.text)}"`);
+  return [
+    { role: "system", content: p.system },
+    { role: "user", content: p.user.replace("{{clips}}", blocks.join("\n\n")) },
+  ];
+}
+
+function listSchema(letters) {
+  return {
+    type: "object",
+    properties: {
+      ranking: {
+        type: "array",
+        minItems: letters.length,
+        maxItems: letters.length,
+        items: { type: "object", properties: { clip: { type: "string", enum: letters }, reason: { type: "string" } }, required: ["clip", "reason"] },
+      },
+    },
+    required: ["ranking"],
+  };
+}
+
+/** Turn the model's answer (parsed or raw text) into a full order of letters plus reasons. */
+export function parseListAnswer(answer, letters) {
+  let items = [];
+  if (answer && typeof answer === "object" && Array.isArray(answer.ranking)) items = answer.ranking;
+  else if (typeof answer === "string") {
+    const re = /"clip"\s*:\s*"([A-Z])"(?:\s*,\s*"reason"\s*:\s*"((?:[^"\\]|\\.)*)")?/g;
+    let m;
+    while ((m = re.exec(answer))) items.push({ clip: m[1], reason: m[2] || "" });
+  }
+  const order = [];
+  const reasons = {};
+  for (const it of items) {
+    const l = String(it.clip || "").trim().toUpperCase();
+    if (letters.includes(l) && !order.includes(l)) {
+      order.push(l);
+      reasons[l] = tidyReason(it.reason || "");
+    }
+  }
+  const complete = order.length === letters.length;
+  for (const l of letters) if (!order.includes(l)) order.push(l); // anything missing keeps its place at the end
+  return { order, reasons, complete };
+}
+
+/**
+ * Listwise final round: take the top n distinct candidates (NMS on time overlap), show the
+ * model only their first and last sentences, and let it order them. The order moves each
+ * total by up to LIST_WEIGHT; every candidate not in the round is scaled the same way, so
+ * totals stay comparable. Returns { candidates, order: ids[], reasons: {id: reason}, stats }.
+ */
+export async function listwise(candidates, { model, n = 4, cacheDir, request, signal, rankFn } = {}) {
+  const { rank } = await import("./rank.mjs");
+  const top = (rankFn || rank)(candidates, { k: n, iou: 0.3 });
+  if (top.length < 2) return { candidates, order: top.map((c) => c.id), reasons: {}, stats: null };
+  const letters = top.map((_, i) => String.fromCharCode(65 + i));
+  const messages = buildListMessages(top);
+  const p = loadListPrompt();
+  const cacheFile = cacheDir ? path.join(cacheDir, "judge-cache.json") : null;
+  const cache = cacheFile ? readJson(cacheFile, {}) : {};
+  const key = sha1(`list|${model}|${p.version}|${messages[1].content}`);
+  let hit = cache[key];
+  let stats = null;
+  if (!hit) {
+    const ask = request || ((m) => ollamaJson({ model, messages: m, schema: listSchema(letters), numPredict: 40 + 30 * letters.length, signal }));
+    let parsed;
+    try {
+      const res = await ask(messages);
+      stats = res.stats ?? null;
+      parsed = parseListAnswer(res.data ?? res, letters);
+    } catch (e) {
+      if (e.content == null) throw e;
+      stats = e.stats ?? null;
+      parsed = parseListAnswer(e.content, letters);
+    }
+    hit = { order: parsed.order, reasons: parsed.reasons, complete: parsed.complete, stats };
+    if (cacheFile) {
+      cache[key] = hit;
+      writeJsonAtomic(cacheFile, cache);
+    }
+    if (cacheDir && stats) fs.appendFileSync(path.join(cacheDir, "judge-calls.jsonl"), JSON.stringify({ at: new Date().toISOString(), model, id: "listwise", kind: "listwise", clips: letters.length, complete: parsed.complete, ...stats }) + "\n");
+  }
+  const byLetter = Object.fromEntries(top.map((c, i) => [letters[i], c]));
+  const listScore = new Map();
+  const listInfo = new Map();
+  hit.order.forEach((l, pos) => {
+    const c = byLetter[l];
+    listScore.set(c.id, (letters.length - 1 - pos) / (letters.length - 1));
+    listInfo.set(c.id, { listRank: pos + 1, listReason: hit.reasons[l] || null });
+  });
+  const out = candidates.map((c) => {
+    if (typeof c.total !== "number") return c;
+    const total = +((1 - LIST_WEIGHT) * c.total + LIST_WEIGHT * (listScore.get(c.id) ?? 0)).toFixed(3);
+    return { ...c, total, ...(listInfo.get(c.id) || {}) };
+  });
+  return { candidates: out, order: hit.order.map((l) => byLetter[l].id), reasons: Object.fromEntries(hit.order.map((l) => [byLetter[l].id, hit.reasons[l] || null])), complete: hit.complete, stats: hit.stats };
+}

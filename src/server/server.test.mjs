@@ -47,6 +47,7 @@ before(async () => {
       probe: async (p) => ({ path: p, name: "talk.mp4", duration: WORDS[WORDS.length - 1].e + 1, width: 1920, height: 1080, fps: 25 }),
       thumbs: async () => null,
       transcribe: async () => WORDS,
+      listwise: async (cs) => ({ candidates: cs, order: [], reasons: {} }),
       judge: async (cs) => cs.map((c, i) => ({ ...c, scores: { hook: 4, standalone: 4, payoff: 3, clarity: 3 }, total: 0.7 - i * 0.01, reason: "Fine." })),
     },
   });

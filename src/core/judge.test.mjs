@@ -82,3 +82,40 @@ test("judge uses a salvaged answer instead of failing the job", async () => {
   assert.deepEqual(out[0].scores, { hook: 5, standalone: 4, payoff: 4, clarity: 3 });
   assert.equal(out[0].reason, "Lands the number.");
 });
+
+test("blend mixes judge and pre-score 0.7 / 0.3", async () => {
+  const { blend } = await import("./judge.mjs");
+  assert.equal(blend(1, 0), 0.7);
+  assert.equal(blend(0.5, 1), 0.65);
+  assert.equal(blend(0.5, undefined), 0.5);
+});
+
+test("listwise orders the top distinct clips from first and last sentences only", async () => {
+  const { listwise, buildListMessages, parseListAnswer } = await import("./judge.mjs");
+  const mk = (id, start, total, text) => ({ id, start, end: start + 30, total, pre: 0.5, hook: text.split(". ")[0] + ".", text });
+  const cs = [
+    mk("c1", 0, 0.7, "First one opens. Middle bit that is long. It ends here."),
+    mk("c2", 5, 0.69, "Overlaps c1 heavily. So it is not in the round."),
+    mk("c3", 100, 0.6, "Third opens. Then it lands the point."),
+    mk("c4", 200, 0.5, "Fourth opens. Then fades."),
+  ];
+  const msgs = buildListMessages([cs[0], cs[2]]);
+  assert.match(msgs[1].content, /Clip A \(30 s\)\nFirst: "First one opens\."\nLast: "It ends here\."/);
+  assert.doesNotMatch(msgs[1].content, /Middle bit/);
+  let seen;
+  const request = async (m) => {
+    seen = m[1].content;
+    return { data: { ranking: [{ clip: "C", reason: "Best hook" }, { clip: "A", reason: "Solid" }, { clip: "B", reason: "Fades" }] } };
+  };
+  const lw = await listwise(cs, { model: "m", n: 4, request });
+  assert.doesNotMatch(seen, /Overlaps c1/, "overlapping windows are not compared");
+  assert.deepEqual(lw.order, ["c4", "c1", "c3"]);
+  const byId = Object.fromEntries(lw.candidates.map((c) => [c.id, c]));
+  assert.equal(byId.c4.listRank, 1);
+  assert.equal(byId.c4.total, +(0.85 * 0.5 + 0.15).toFixed(3));
+  assert.equal(byId.c2.total, +(0.85 * 0.69).toFixed(3), "not in the round: scaled, no bonus");
+  // a cut-off answer still yields an order; missing letters keep their place at the end
+  const p = parseListAnswer('{"ranking":[{"clip":"B","reason":"x"},{"clip":"B"},{"clip":"A","reason":"cut', ["A", "B", "C"]);
+  assert.deepEqual(p.order, ["B", "A", "C"]);
+  assert.equal(p.complete, false);
+});
