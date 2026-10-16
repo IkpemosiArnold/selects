@@ -85,7 +85,7 @@ export function MiddleTruncate({ text = "", tail = 16 }) {
 export function Masthead({ job, children }) {
   return (
     <header className="masthead">
-      <a className="brand" href="#/" aria-label="Selects, new job">
+      <a className="brand" href="#/" aria-label="Selects home">
         <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
           <path d="M6 4H3v14h3M16 4h3v14h-3" fill="none" stroke="currentColor" strokeWidth="2.2" />
           <rect x="8.5" y="8" width="5" height="6" fill="var(--yellow)" />

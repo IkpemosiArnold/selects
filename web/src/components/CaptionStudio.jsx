@@ -95,7 +95,7 @@ function StudioPreview({ job, player, items, blur, faces, blurEditing, armed, on
           />
         ) : src ? (
           <div className="pv-missing">
-            <p>The source video is not where it was. Move it back to</p>
+            <p>Selects can't find the video. Put it back here:</p>
             <p className="mono">{job.source?.path}</p>
           </div>
         ) : (
@@ -147,7 +147,7 @@ function StudioPreview({ job, player, items, blur, faces, blurEditing, armed, on
   );
 }
 
-const VERDICT = { good: "transcript good", shaky: "transcript shaky, check the grey words", unreliable: "transcript unreliable" };
+const VERDICT = { good: "the words look right", shaky: "some words are unsure, so check the underlined ones", unreliable: "most words are unsure" };
 
 // Which language whisper listened in, and a way to say it was wrong.
 function LanguageLine({ job }) {
@@ -176,15 +176,15 @@ function OutputPanel({ job, onRender, busy }) {
   if (!o) {
     return (
       <div className="out-panel">
-        <p className="lede">Nothing rendered yet. Render the captioned video once the captions read right.</p>
+        <p className="lede">Nothing rendered yet. Render the video once the captions read right.</p>
       </div>
     );
   }
   const done = o.status === "done";
   const files = [
     ["Video", o.file || o.path],
-    ["SRT", o.srtFile || o.srt],
-    ["WebVTT", o.vttFile || o.vtt],
+    ["Captions, SRT", o.srtFile || o.srt],
+    ["Captions, WebVTT", o.vttFile || o.vtt],
   ].filter(([, p]) => p);
   const relative = done && !o.file;
   const url = api.outputUrl(job.id);
@@ -194,7 +194,7 @@ function OutputPanel({ job, onRender, busy }) {
         <>
           {o.stale && (
             <p className="out-stale" role="note">
-              The captions changed after this render. Render again to apply them.
+              You changed the captions after this render. Render again to use them.
               <button type="button" className="btn btn-chip" disabled={busy} onClick={onRender}>
                 Render again
               </button>
@@ -224,11 +224,11 @@ function OutputPanel({ job, onRender, busy }) {
           {relative && <p className="field-hint">Paths are inside this job's folder.</p>}
         </>
       ) : o.status === "error" ? (
-        <p className="field-error" role="alert">{o.message || job.error?.message || "The render stopped."} {job.error?.hint || "Render again to retry."}</p>
+        <p className="field-error" role="alert">{o.message || job.error?.message || "The render stopped."} {job.error?.hint || "Render again to try once more."}</p>
       ) : (
         <div className="out-running" aria-live="polite">
           <p className="mono">
-            {o.status === "pending" ? "Waiting to start" : `Rendering ${Math.round((o.progress || 0) * 100)}%`}
+            {o.status === "pending" ? "Waiting to start" : `Rendering, ${Math.round((o.progress || 0) * 100)}%`}
             {o.etaSec ? <span className="dim">, {aboutMinutes(o.etaSec)} left</span> : null}
           </p>
           <div className="rp-bar" role="progressbar" aria-label="Captioned video render" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((o.progress || 0) * 100)}>
@@ -237,12 +237,12 @@ function OutputPanel({ job, onRender, busy }) {
         </div>
       )}
       <p className="out-downloads">
-        <span className="dim">Captions only:</span>
+        <span className="dim">Caption files, for YouTube or an editor:</span>
         <a className="btn btn-chip" href={api.captionsFileUrl(job.id, "srt")} download={`${(job.source?.name || "captions").replace(/\.[^.]+$/, "")}.srt`}>
-          Download SRT
+          Save SRT
         </a>
         <a className="btn btn-chip" href={api.captionsFileUrl(job.id, "vtt")} download={`${(job.source?.name || "captions").replace(/\.[^.]+$/, "")}.vtt`}>
-          Download WebVTT
+          Save WebVTT
         </a>
       </p>
     </div>
@@ -344,20 +344,20 @@ export default function CaptionStudio({ job, words, mode, faces, captionsVersion
       onJob((j) => ({ ...j, stage: "rendering", output: { ...(j.output || {}), status: "pending", progress: 0, stale: false } }));
       setTab("video");
     } catch (e) {
-      flash(`Rendering did not start. ${e.message}`, "error");
+      flash(`The render did not start. ${e.message}`, "error");
     } finally {
       setBusy(false);
     }
   };
 
-  const saveLabel = caps.saveState === "saving" ? "Saving" : caps.saveState === "error" ? "Not saved" : caps.dirty ? "Unsaved changes" : caps.edited ? "Saved" : "Whisper's words, unedited";
+  const saveLabel = caps.saveState === "saving" ? "Saving" : caps.saveState === "error" ? "Not saved" : caps.dirty ? "Not saved yet" : caps.edited ? "Saved" : "Not edited yet";
 
   return (
     <div className="studio-shell">
       <Masthead job={job} />
       <LanguageLine job={job} />
       <main className="studio">
-        <h1 className="sr-only">{isCaption ? "Caption the video" : "Review captions"} for {job.source?.name}</h1>
+        <h1 className="sr-only">{isCaption ? "Caption the video" : "Fix caption words"} for {job.source?.name}</h1>
         <div className="studio-preview">
           <StudioPreview
             job={job}
@@ -373,7 +373,7 @@ export default function CaptionStudio({ job, words, mode, faces, captionsVersion
             captionsOn={captionsOn || !isCaption}
           />
           {isCaption && !blurEditing && (
-            <p className="pv-note">{blurSummary(blurSpec)}. {captionsOn ? "Captions as they will be burned in." : "Captions are off for this render."}</p>
+            <p className="pv-note">{blurSummary(blurSpec)}. {captionsOn ? "The captions show as they will in the video." : "Captions are off for this render."}</p>
           )}
         </div>
         <section className="studio-side">
@@ -389,13 +389,13 @@ export default function CaptionStudio({ job, words, mode, faces, captionsVersion
               </div>
             ) : (
               <div className="studio-title">
-                <h2 className="h-18">Review captions</h2>
+                <h2 className="h-18">Fix caption words</h2>
                 <div className="seg seg-light" role="group" aria-label="Which captions">
                   <button type="button" className={"seg-btn" + (scope === "clips" ? " is-on" : "")} aria-pressed={scope === "clips"} disabled={!approved.length} onClick={() => setScope("clips")}>
                     {approved.length ? `In ${plural(approved.length, "approved clip")}` : "No approved clips"}
                   </button>
                   <button type="button" className={"seg-btn" + (scope === "all" ? " is-on" : "")} aria-pressed={scope === "all"} onClick={() => setScope("all")}>
-                    Whole transcript
+                    Whole video
                   </button>
                 </div>
               </div>
@@ -418,7 +418,7 @@ export default function CaptionStudio({ job, words, mode, faces, captionsVersion
           </div>
           {confirmReset && (
             <div className="lq-confirm ce-confirm" role="alertdialog" aria-label="Undo all edits?">
-              <p>Undo every caption edit and go back to whisper's words? This cannot be taken back.</p>
+              <p>Undo every caption edit and go back to the original transcript? You can't get the edits back.</p>
               <div className="lq-quick">
                 <button
                   type="button"
@@ -428,7 +428,7 @@ export default function CaptionStudio({ job, words, mode, faces, captionsVersion
                     setConfirmReset(false);
                     await caps.reset();
                     refetch?.().catch(() => {});
-                    flash("Back to whisper's words.");
+                    flash("The captions are back to the original transcript.");
                   }}
                 >
                   Undo all edits
@@ -475,16 +475,16 @@ export default function CaptionStudio({ job, words, mode, faces, captionsVersion
       <footer className="actionbar">
         {tab === "captions" || !isCaption ? (
           <p className="ab-keys" aria-label="Keyboard shortcuts">
-            <span><kbd>Enter</kbd> save, next</span>
+            <span><kbd>Enter</kbd> save and go on</span>
             <span><kbd>Shift</kbd><kbd>Enter</kbd> split</span>
-            <span><kbd>⌫</kbd> at start merges</span>
+            <span><kbd>⌫</kbd> at the start joins lines</span>
             <span><kbd>Alt</kbd><kbd>Enter</kbd> play</span>
             <span><kbd>Alt</kbd><kbd>↓</kbd> next unsure</span>
-            <span><kbd>Esc</kbd> undo cue</span>
+            <span><kbd>Esc</kbd> undo this line</span>
           </p>
         ) : (
           <p className="ab-count">
-            <span className="dim">{editedCount ? `${plural(editedCount, "caption")} edited by you` : "Captions unedited"}</span>
+            <span className="dim">{editedCount ? `You edited ${plural(editedCount, "line")}` : "Captions not edited yet"}</span>
           </p>
         )}
         <div className="ab-go">
@@ -505,7 +505,7 @@ export default function CaptionStudio({ job, words, mode, faces, captionsVersion
                     }
                   }}
                 />
-                Burn in captions
+                Show captions in the video
               </label>
               <button type="button" className="btn btn-primary btn-render" disabled={busy || rendering} onClick={renderVideo}>
                 {rendering
@@ -514,12 +514,12 @@ export default function CaptionStudio({ job, words, mode, faces, captionsVersion
                   ? out.stale
                     ? "Render again with the new captions"
                     : "Render again"
-                  : "Render captioned video"}
+                  : "Render the video with captions"}
               </button>
             </>
           ) : (
             <>
-              <a className="btn btn-quiet" href={`#/job/${job.id}/review`}>Back to clips</a>
+              <a className="btn btn-quiet" href={`#/job/${job.id}/review`}>Back to the clips</a>
               <button
                 type="button"
                 className="btn btn-primary btn-render"

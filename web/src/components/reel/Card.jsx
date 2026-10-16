@@ -82,7 +82,7 @@ export default function Card({ job, clip, player, cues, captionsOn = true, lowP 
         />
       ) : src ? (
         <div className="card-missing">
-          <p>The source video is not where it was. Move it back to</p>
+          <p>Selects can't find the video. Put it back here:</p>
           <p className="mono">{job.source?.path}</p>
         </div>
       ) : (

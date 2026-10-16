@@ -331,7 +331,7 @@ export function BlurPanel({ spec, onChange, faces, t, scope = "clip", range, sel
         <p className="bp-hint">
           {armed
             ? "Drag over the area to hide. Press Escape to stop."
-            : "Cover a phone number, a name badge, a logo, or a figure the talk's licence may not cover."}
+            : "Cover a phone number, a name badge, a logo, or an image the video's licence may not cover."}
         </p>
         {regions.length > 0 && (
           <ol className="bp-list">
@@ -382,7 +382,7 @@ export function BlurPanel({ spec, onChange, faces, t, scope = "clip", range, sel
           <>
             <p className="bp-hint">Selects looks for faces on this laptop{estimate ? `, which takes ${estimate} for this video` : ""}. Nothing is uploaded.</p>
             <button type="button" className="btn" onClick={faces.detect} disabled={faces.status === "unknown"}>
-              Detect faces
+              Find faces
             </button>
           </>
         )}

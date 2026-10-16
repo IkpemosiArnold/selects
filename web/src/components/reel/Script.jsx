@@ -203,15 +203,38 @@ export default function Script({ job, clip, cues, lowP, player, onTrim, onEditWo
     };
     body.addEventListener("mouseup", up);
     body.addEventListener("keyup", up);
+    // On a phone, words are selected with a long press and the handles, which
+    // send no mouseup: wait for the selection to settle instead.
+    let t = 0;
+    const settle = () => {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        const s = getSelection();
+        if (s && !s.isCollapsed && body.contains(s.anchorNode)) up();
+      }, 450);
+    };
+    document.addEventListener("selectionchange", settle);
     return () => {
+      clearTimeout(t);
       body.removeEventListener("mouseup", up);
       body.removeEventListener("keyup", up);
+      document.removeEventListener("selectionchange", settle);
     };
   }, [words, sentences]);
 
+  const lastTap = useRef({ i: -1, t: 0 });
   const onWordClick = (e) => {
     if (!getSelection()?.isCollapsed) return;
-    const w = words[+e.currentTarget.dataset.i];
+    const i = +e.currentTarget.dataset.i;
+    // a double tap on a phone fixes the word, as a double-click does
+    const now = performance.now();
+    if (lastTap.current.i === i && now - lastTap.current.t < 350) {
+      lastTap.current = { i: -1, t: 0 };
+      onWordDouble(e);
+      return;
+    }
+    lastTap.current = { i, t: now };
+    const w = words[i];
     if (w && w.s >= clip.start - 0.05 && w.s <= clip.end) player.seek(w.s);
   };
   const onWordDouble = (e) => {
@@ -229,13 +252,13 @@ export default function Script({ job, clip, cues, lowP, player, onTrim, onEditWo
       <header className="script-head">
         <div>
           <h2 id="script-h" className="script-title">
-            Fine trim, {clipName(clip).toLowerCase()}
+            Trim {clipName(clip).toLowerCase()} by words
           </h2>
           <p className="script-range mono" aria-live="polite">
             <span className={trimmed ? "is-moving" : ""}>
               {tc(range.start)} to {tc(range.end)}, {len} s
             </span>
-            {saving && <span className="dim"> saving</span>}
+            {saving && <span className="dim">, saving</span>}
           </p>
         </div>
         <button type="button" className="btn btn-chip" onClick={onClose}>
@@ -243,7 +266,7 @@ export default function Script({ job, clip, cues, lowP, player, onTrim, onEditWo
         </button>
       </header>
       <p className="script-help">
-        Drag the ends of the line in the margin, or select words, to move the in and out points. Clips start and end on whole sentences. Double-click a word to fix it.
+        Drag the ends of the line in the margin, or select words, to move the start and the end. Clips start and end on whole sentences. To fix a word, double-click it, or double-tap it on a phone.
       </p>
       <div className="script-scroll" ref={scrollRef}>
         {i0 > 0 && pad.before < clip.start && (
@@ -272,7 +295,7 @@ export default function Script({ job, clip, cues, lowP, player, onTrim, onEditWo
                 }
                 const cls = "sw" + (inside(w, range) ? (clip.trimmed || trimmed ? " is-in is-mine" : " is-in") : "") + (w.p < lowP ? " is-unsure" : "");
                 return (
-                  <span key={i} data-i={i} className={cls} onClick={onWordClick} onDoubleClick={onWordDouble} title={w.p < lowP ? "Whisper was unsure of this word. Double-click to fix it." : undefined}>
+                  <span key={i} data-i={i} className={cls} onClick={onWordClick} onDoubleClick={onWordDouble} title={w.p < lowP ? "Selects was unsure of this word. Double-click to fix it." : undefined}>
                     {w.w + " "}
                   </span>
                 );
@@ -290,14 +313,14 @@ export default function Script({ job, clip, cues, lowP, player, onTrim, onEditWo
                   className="cover-handle is-start"
                   onPointerDown={onHandleDown("start")}
                   onKeyDown={onHandleKey("start")}
-                  aria-label={`In point, ${tc(range.start)}. Up and down arrows move it by a sentence.`}
+                  aria-label={`Start, ${tc(range.start)}. Up and down arrows move it by a sentence.`}
                 />
                 <button
                   type="button"
                   className="cover-handle is-end"
                   onPointerDown={onHandleDown("end")}
                   onKeyDown={onHandleKey("end")}
-                  aria-label={`Out point, ${tc(range.end)}. Up and down arrows move it by a sentence.`}
+                  aria-label={`End, ${tc(range.end)}. Up and down arrows move it by a sentence.`}
                 />
               </span>
             )}
@@ -308,7 +331,7 @@ export default function Script({ job, clip, cues, lowP, player, onTrim, onEditWo
                 {tc(pick.start)} to {tc(pick.end)}, {Math.round(pick.end - pick.start)} s
               </span>
               <button type="button" className="btn btn-chip is-on" onClick={() => commit({ start: pick.start, end: pick.end })} autoFocus>
-                Set in and out here
+                Make the clip these words
               </button>
             </div>
           )}
@@ -320,8 +343,8 @@ export default function Script({ job, clip, cues, lowP, player, onTrim, onEditWo
         )}
       </div>
       <p className="script-key">
-        <span className={"key-line" + (clip.trimmed ? " is-mine" : "")} aria-hidden="true" /> {clip.trimmed ? "the clip, trimmed by you" : "the clip the model proposed"}
-        <span className="key-wavy" aria-hidden="true" /> whisper was unsure
+        <span className={"key-line" + (clip.trimmed ? " is-mine" : "")} aria-hidden="true" /> {clip.trimmed ? "the clip, trimmed by you" : "Gemma's pick"}
+        <span className="key-wavy" aria-hidden="true" /> unsure words
       </p>
     </section>
   );

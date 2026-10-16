@@ -11,20 +11,20 @@ function itemEstimate(item, job, rates, models, running) {
   if (item.kind === "render") {
     const n = item.ids?.length ?? job?.approvedCount ?? 0;
     const e = estimateJob({ clips: n }, rates, models).render;
-    return { sec: e, what: `Render ${plural(n, "clip")}`, parts: e != null ? null : "render speed not measured yet" };
+    return { sec: e, what: `Render ${plural(n, "clip")}`, parts: e != null ? null : "render speed not timed yet" };
   }
   const est = estimateJob({ duration: job?.source?.duration, judgeN, model }, rates, models);
   if (running && job) {
     const k = KEY[job.stage];
     const st = job.stages?.[k];
     if (k === "transcribe" && st?.etaSec != null) return { sec: est.judge != null ? st.etaSec + est.judge : null, what: "Find clips", now: `Transcribing, ${Math.round((st.progress || 0) * 100)}%` };
-    if (k === "judge" && st?.etaSec != null) return { sec: st.etaSec, what: "Find clips", now: "Judging" };
+    if (k === "judge" && st?.etaSec != null) return { sec: st.etaSec, what: "Find clips", now: "Gemma is choosing" };
   }
   const sec = est.transcribe != null && est.judge != null ? est.transcribe + est.judge : null;
   let parts = null;
   if (sec == null) {
-    if (!job?.source?.duration && est.judge != null) parts = `judging about ${Math.round(est.judge / 60)} min; transcription depends on the length${rates?.rtf ? ` (${rates.rtf.toFixed(2)}x real time here)` : ""}`;
-    else parts = "not measured yet";
+    if (!job?.source?.duration && est.judge != null) parts = `Gemma takes about ${Math.round(est.judge / 60)} min, and transcribing depends on the length`;
+    else parts = "not timed yet";
   }
   return { sec, what: "Find clips", parts };
 }
@@ -38,7 +38,7 @@ export default function QueueList({ queue, jobs, rates, models }) {
     <section className="queue" aria-labelledby="queue-h">
       <div className="queue-head">
         <h2 id="queue-h" className="h-18">Overnight queue</h2>
-        <p className="dim">One job at a time. You can close the lid; each job resumes from its last finished step.</p>
+        <p className="dim">One video at a time. You can close the laptop lid, and each video carries on from its last finished step.</p>
       </div>
       <ol className="queue-list">
         {queue.items.map((item, i) => {
@@ -75,8 +75,8 @@ export default function QueueList({ queue, jobs, rates, models }) {
       </ol>
       <p className="queue-foot dim">
         {rates?.samples
-          ? `Times come from ${plural(rates.samples, "earlier job")} on this laptop and the judge speed it recorded.`
-          : "Times appear once this laptop has finished a job. Nothing here is a guess."}
+          ? `Times come from ${plural(rates.samples, "earlier video")} on this laptop.`
+          : "Times show once this laptop has finished a video. Selects does not guess them."}
       </p>
     </section>
   );

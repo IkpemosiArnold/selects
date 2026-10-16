@@ -163,7 +163,7 @@ const CueRow = memo(function CueRow({ item, lowP, clipLabel, inClip, onText, onK
   return (
     <li ref={rowRef} className={"cue" + (edited ? " is-mine" : "") + (focused ? " is-focus" : "") + (inClip ? " in-clip" : "")} data-k={item.k}>
       {clipLabel && <p className="cue-clip mono">{clipLabel}</p>}
-      <button type="button" className="cue-tc mono" onClick={() => onPlay(item.k)} title="Play this cue" tabIndex={-1}>
+      <button type="button" className="cue-tc mono" onClick={() => onPlay(item.k)} title="Play this line" tabIndex={-1}>
         {tc(item.s, { tenths: true })}
       </button>
       <div className="cue-field">
@@ -188,7 +188,7 @@ const CueRow = memo(function CueRow({ item, lowP, clipLabel, inClip, onText, onK
         {focused && (
           <>
             <button type="button" className="btn btn-chip" onMouseDown={(e) => e.preventDefault()} onClick={() => onSplit(item.k)}>
-              {caretWord ? <>Split before <q>{caretWord}</q></> : "Split at the caret"}
+              {caretWord ? <>Split before <q>{caretWord}</q></> : "Split at the cursor"}
             </button>
             {hasNext && (
               <button type="button" className="btn btn-chip" onMouseDown={(e) => e.preventDefault()} onClick={() => onMerge(item.k)}>
@@ -297,7 +297,7 @@ export default function CaptionEditor({ caps, player, visible, clipLabels, clipR
       const at = caret ?? el?.selectionStart ?? 0;
       const res = splitItem(itemsRef.current[i], at);
       if (!res) {
-        onFlash?.("Put the caret between two words to split there.");
+        onFlash?.("Put the cursor between two words to split there.");
         return;
       }
       const [a, b] = res;
@@ -359,7 +359,7 @@ export default function CaptionEditor({ caps, player, visible, clipLabels, clipR
           return;
         }
       }
-      onFlash?.("No unsure words left. Every word whisper doubted has been checked.");
+      onFlash?.("No unsure words left. You have checked every one.");
     },
     [focusK, lowP, focusCue, playCue, player, onFlash]
   );
@@ -493,7 +493,7 @@ export default function CaptionEditor({ caps, player, visible, clipLabels, clipR
     <div className="ce">
       <div className="ce-bar">
         <p className="ce-counts">
-          <span className="mono">{plural(shown.length, "cue")}</span>
+          <span className="mono">{plural(shown.length, "line")}</span>
           <span className={unsureTotal ? "ce-unsure" : "dim"}>{unsureTotal ? `${plural(unsureTotal, "unsure word")} to check` : "No unsure words left"}</span>
           {editedTotal > 0 && <span className="ce-edited">{editedTotal} edited by you</span>}
         </p>

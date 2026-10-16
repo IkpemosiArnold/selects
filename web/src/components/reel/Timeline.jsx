@@ -63,7 +63,7 @@ export default function Timeline({ job, cands, currentId, onPick, player }) {
               style={{ left: pct(c.start), width: pct(c.end - c.start) }}
               onClick={() => onPick(c.id)}
               aria-current={c.id === currentId ? "true" : undefined}
-              aria-label={`${clipName(c)}, ${tc(c.start)} to ${tc(c.end)}, ${c.status === "proposed" ? "to decide" : c.status}`}
+              aria-label={`${clipName(c)}, ${tc(c.start)} to ${tc(c.end)}, ${c.status === "proposed" ? "to check" : c.status}`}
             >
               {(!crowded || c.id === currentId || (c.rank && c.rank <= 5)) && (
                 <span className="tl-n" aria-hidden="true">{c.rank ?? "+"}</span>
