@@ -155,8 +155,29 @@ selects talk.mp4 --blur-region 0.6,0.05,0.35,0.12@12-30   # blur a box from 0:12
 A clipper that trusts a bad transcript picks bad clips: the windows, the judge, the cuts and the captions all sit on the words. So Selects checks the transcript before it spends any model time on it.
 
 - **Transcript quality gate.** After whisper finishes, Selects scores the transcript from whisper's own word probabilities: the mean, the share of words below 0.5, and a check for the loops whisper falls into when it loses the audio (repeated phrases, and text that compresses too well). Eight clean English recordings scored between 0.89 and 0.95. If the transcript is unreliable, Selects stops before judging and says what to try (a bigger model, or the right language); `--force` judges it anyway. If it is shaky, Selects carries on and warns you to check the captions.
-- **Language check by decoding, not guessing.** Whisper's built-in language detector listens to the first 30 seconds and guesses. On an elderly Nigerian woman speaking English, it said "Yoruba" with 88% confidence. So Selects defaults to English, takes three 20-second samples spread over the video, and decodes them in each candidate language (the detector's guess, English, and whatever you set). Picking the language whisper is most confident in is not enough: on that recording, decoding "as Yoruba" was more confident (0.80 mean word probability) than decoding as English (0.65), yet every word it wrote was English. So a decode that comes out as English text, whatever language it was asked for, counts as evidence for English, and the most confident of the rest wins. The detector's guess only ever shows up as a warning, and the review app changes the language in one click.
+- **Language check with several models, and a question when they disagree.** Whisper's built-in language detector is known to fail on accents, so Selects does not trust it alone. It decodes samples of the video in each likely language, has two small text models read what whisper wrote, and combines the answers with a short written rule. When the answers disagree, it asks you one question instead of guessing. Details are under "Languages and accents" below.
 - **Clips only from words whisper heard.** The first stage marks down windows with low word confidence and keeps them out of the shortlist, so the judge never reads words whisper did not really hear. In the caption review, unsure words are underlined so you can fix those first.
+
+## Languages and accents
+
+Selects is built for English first, and for English spoken with any accent. Other languages work where whisper's multilingual models work, which for many African languages is not well.
+
+**Which language is spoken?** Whisper's own detector listens to the first 30 seconds and guesses. On an elderly Nigerian woman speaking English, it said Yoruba (p = 0.90). On a British conference speaker, it said Welsh (p = 0.63). Research on accented speech finds the same problem ([arXiv 2203.16972](https://arxiv.org/abs/2203.16972)), and finds that reading the transcript helps. So Selects collects four signals that fail in different ways:
+
+1. Whisper's detector (the audio guess). It counts half, because it is the one known to fail on accents.
+2. Decode and compare. Three 20-second samples are decoded in the detector's language, in English and in the language you set, and whisper's confidence is compared.
+3. [lid-lite-608](https://huggingface.co/olaverse/lid-lite-608), a 37 MB text model for 608 languages, reads each decode.
+4. [lid-lite-5](https://huggingface.co/olaverse/lid-lite-5), a 1 MB text model for English, Hausa, Igbo, Nigerian Pidgin and Yoruba, does the same.
+
+The text models answer a simple question: when whisper was told to write Yoruba, did it write Yoruba? On the elderly speaker it wrote English (both text models agreed, p 0.99), so the speech is English. A decode that fails outright (whisper's word confidence under 0.3, as with the Welsh decode of the British speaker) counts against its language. The signals then vote with fixed weights. If a signal that was not ruled out disagrees, if the winner has less than 60% of the vote, or if the evidence goes against the language you set, Selects asks "Is the speaker using English?" (or the language it found). Answering yes keeps the transcript. Choosing another language transcribes again. The rule is in `src/core/langid/rule.mjs` and its tests in `src/core/langid.test.mjs`.
+
+Measured on 10 recordings (details in `notes/timings.md`): the elderly Nigerian speaker, the British speaker and 6 English eval talks all came out English, with no question asked. A Yoruba test set came out Yoruba. A Hausa test set did not: whisper's detector said Romanian with p = 0.17, so Selects asked instead of deciding. The text check adds about 1 to 3 seconds per video.
+
+**Accents.** When the language check finds signs of Nigerian English (whisper's detector hearing Yoruba, Hausa or Igbo in speech that turns out to be English, or Nigerian words and Pidgin in the English text), Selects transcribes with a community whisper model fine-tuned for Nigerian-accented English. On the same minute of the elderly speaker it was unsure of 2% of the words, against 20% for the default model, but it runs about 3.5 times slower. Its accuracy has not been rated by a person yet; confidence is not accuracy. `--accent ng` always uses it for English (a saved profile can remember this), `--accent none` never does, and choosing a model with `--asr-model` always wins.
+
+**Punctuation.** Whisper sometimes writes long stretches with no full stops, which makes clip boundaries and captions worse. When that happens in English, a 7.5 MB punctuation model puts full stops, commas, question marks and capitals back, and keeps whisper's words and timings. In a test on 7 talks (with whisper's own punctuation removed and then restored), it found sentence ends with an F1 score of 0.76 on average, against 0.35 for splitting at pauses, which is what Selects did before and still does if the model is missing.
+
+The models, their licences and sizes are listed in [`notes/MODELS.md`](notes/MODELS.md).
 
 ## How it picks clips
 
@@ -288,6 +309,7 @@ selects doctor                 check whisper, Ollama, the judge model and disk
 | `--language <code>` | `en` | the spoken language: an ISO code such as `en` or `yo`, or `auto` (decode and compare) |
 | `--asr-model <name>` | `auto` | the whisper model: a name in the models folder (`base.en`, `small.en`, `medium.en-q5_0`, `small`) or a path. Auto is `base.en` for English and the best installed multilingual model otherwise |
 | `--prompt <text>` | none | a short neutral context sentence passed to whisper |
+| `--accent <a>` | `auto` | `auto` uses the Nigerian-accent whisper model for English when the language check finds signs of a Nigerian accent; `ng` always uses it for English; `none` never does |
 | `--clean-audio` | off | cut rumble below 80 Hz and hiss above 7.6 kHz and even out loudness before whisper |
 | `--no-captions` | off | render clips without burned-in captions |
 | `--style <s>` | auto | `bold` (2 to 4 big words, current word in yellow) or `subtitle` (up to two lines); auto is bold for portrait and clips, subtitle for landscape caption mode |
@@ -318,6 +340,9 @@ Without a terminal to ask in (for example in a script), `selects <video>` stops 
 | `SELECTS_MODELS_DIR` | the folder of `SELECTS_WHISPER_MODEL` | where `--asr-model` names are looked up (`ggml-<name>.bin`) |
 | `SELECTS_HWACCEL` | on (macOS) | set to `0` to stop using Apple's hardware video decoder |
 | `SELECTS_FACES_BIN` | `tools/faces/faces` | the face detector used for face blur |
+| `SELECTS_LANGID_DIR` | `<models>/langid` | the text language models (`lid-lite-608/model.ftz`, `lid-lite-5/lid-lite-5.json`) |
+| `SELECTS_ACCENT_MODEL_NG` | `<models>/ggml-small-nigerian-accent.bin` | the whisper model for Nigerian-accented English |
+| `SELECTS_PUNCT_DIR` | `<models>/punct/sherpa-onnx-online-punct-en-2024-08-06` | the punctuation model |
 | `PORT` | 4317 | port for `selects serve`, if `--port` is not given |
 
 ## Rights and attribution
@@ -342,7 +367,7 @@ The talk's licence may not cover everything on screen. The test talk above is CC
 ## Limitations
 
 - Accented English is the weak spot, and how weak is not rated yet. On a test recording of an elderly Nigerian woman speaking English, whisper `base.en` was unsure of about a fifth of the words. `small.en`, `medium.en` and a community fine-tune for Nigerian-accented English were compared on the same minute (speeds under "Performance"), and their transcripts are waiting for a person who knows the speaker to rate them. [PENDING: accuracy ratings.] Until then, review the captions before you post, and expect to fix words.
-- Whisper's language detector is biased against accented English (it called that speaker's English "Yoruba" with p = 0.88), which is why Selects defaults to English and checks by decoding. Other languages work through the multilingual models (`--language yo --asr-model small`), but Yoruba transcription with the local models was poor in a quick test, and nothing beyond that has been measured. Translated (`--captions en`) and bilingual captions are planned, not built.
+- The language check has been measured on 10 recordings, not hundreds. It got all 8 English recordings and the Yoruba set right, and asked about the Hausa set instead of getting it right. Whisper's small local models transcribe Yoruba and Hausa poorly (on the Hausa set, whisper's "Hausa" output did not read as Hausa to either text model), so a correct language label does not mean a usable transcript. Igbo has no whisper model at all. The Nigerian-accent routing has fired on one speaker; the text cue for it has not fired on any recording yet. Translated (`--captions en`) and bilingual captions are planned, not built.
 - Face blur needs macOS (Apple's Vision framework). Elsewhere, blur regions by hand. Faces are sampled 4 times a second and boxes are interpolated in between, so a face that moves fast or turns away can slip out of the box for a fraction of a second; check the result before you post.
 - Slide talks usually fall back to "fit". Centre crop is used only when the motion stays in the middle of the frame. In the test talk, the slides fill the frame and the speaker is a small inset in the corner, so all 3 clips were rendered as the full frame over a blurred background, with small slide text. Face tracking is used only for privacy blur, not for reframing.
 - Hook scores cluster. In every run so far, Gemma 3 4B gave every shortlisted window a hook score of 3, so the hook (the highest weight) separates nothing. The blend with the pre-score and the listwise round are there to break the ties.

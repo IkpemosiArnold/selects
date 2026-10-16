@@ -37,12 +37,6 @@ export function accentModel(accent) {
   return null;
 }
 
-/** Silero VAD for whisper.cpp (ggml). SELECTS_VAD_MODEL overrides; null if not installed. */
-export function vadModel() {
-  const p = process.env.SELECTS_VAD_MODEL || path.join(modelsDir(), "ggml-silero-v6.2.0.bin");
-  return fs.existsSync(p) ? p : null;
-}
-
 // Multilingual models in order of preference when the language is not English. medium is
 // left out of "auto" on purpose: on a dual-core CPU it is far slower than real time.
 const MULTILINGUAL_AUTO = ["small", "small-q5_1", "base"];

@@ -221,3 +221,61 @@ All additive.
 - Sentences when punctuation is sparse (fewer than 1 sentence end per 25 words, `isSparsePunctuation` in `sentences.mjs`): a pause of 0.6 s or more (after at least 3 words) also ends a sentence, and no sentence runs past 12 s (split at its largest internal gap). Such sentences carry `soft: true`; `makeCandidates` then skips the lowercase-start and missing-full-stop rules for them (`isDanglingOpener(text, { soft })`, `isDanglingEnding(text, { soft })`) and keeps the rest. Punctuated transcripts are unchanged.
 - The posting kit reads the edited transcript: when `captions.json` has `edited: true`, `kitSource(dir, candidate)` (in `job.mjs`) gives the kit the caption words inside the clip (and their first sentence as the hook) instead of the raw whisper text. The candidate itself is not rewritten. `prompts/kit.md` now says not to invent or repeat proper names unless they appear clearly in the transcript.
 - The slide reminder only shows when it applies: `kit.json` `reminder` is the text when the job has a credit, a licence or a `sourceUrl`, and `null` when nothing is set or `settings.license` is `"own"` (own footage). `mediaReminder(settings)` in `attribution.mjs` and `needsMediaReminder(settings)` in `web/src/lib/licences.js` hold the rule. `PATCH /api/jobs/:id` and `--license` accept `"own"`.
+
+## Language ID ensemble, accent routing and punctuation (16 Oct, speech-ML)
+
+All additive. Models, licences and sizes are in `notes/MODELS.md`; measurements in `notes/timings.md`.
+
+### `job.language` additions
+
+```js
+job.language = {
+  ...,                       // setting, used, detected, compared, margin, best, decided, warning, sec (as before)
+  rule: "ensemble-1",        // a cached language.json from another rule is recomputed
+  decided: "setting" | "compare" | "ensemble" | "detector" | "default",
+  compared: [{ code, meanP, words, englishShare,
+               text: { lid608: { label: "eng_Latn", code: "en", p, pcm } | null,       // olaverse lid-lite-608 on that decode's text
+                       ng5: { eng, hau, ibo, pcm, yor, matched } | null } }],          // olaverse lid-lite-5
+  textLid: { models: ["lid-lite-608", "lid-lite-5"], sec, error: null | string } | null,
+  ensemble: {
+    language: "en",          // what the evidence says
+    used: "en",              // what Selects transcribes with (the setting when the user chose one)
+    confidence: 0.85,        // the winner's share of the weighted vote, or null with no signals
+    scores: { en: 2.45, yo: 0.45 },
+    signals: [{ id: "whisper-detect" | "whisper-decode" | "text-608" | "text-ng5", kind: "audio" | "decode" | "text",
+                model, verdict: "en" | null, p, weight, refuted: bool, margin?, detail? }],
+    disagreement: false,
+    reasons: [],             // plain phrases, e.g. "whisper-detect says Welsh", "only 52% of the vote"
+    question: null,
+  },
+  question: null | { text: "Is the speaker using English?", language: "en", choices: ["yo", ...] },  // null once answered
+  confirmed: { by: "user", language, at } | undefined,
+}
+```
+
+The rule (`src/core/langid/rule.mjs`, tested in `src/core/langid.test.mjs`): each signal votes for its verdict with `weight * p`. Weights: whisper-detect 0.5 (the signal known to fail on accents), whisper-decode 1.0 (0.5 when the decode margin is under 0.05), text-608 1.0, text-ng5 0.5. The text signals only vote when whisper wrote another language than the one it was asked for (asked for Yoruba, wrote English: a vote for English that refutes Yoruba); otherwise they have no opinion. A decode with mean word probability under 0.3 (or under 5 words) failed: its text is ignored and its language is refuted. `disagreement` is true when a signal that was not refuted votes for another language, the winner has under 60% of the vote, the user's setting differs from the evidence, or the top language cannot be transcribed by whisper (Igbo).
+
+**UI:** when `job.language.question` is not null, show `question.text` with two answers: **Yes** sends `POST /api/jobs/:id/language { language: question.language, confirm: true }` (200, returns the Job; nothing is transcribed again; `question` becomes null and `confirmed` is set). **Choose another language** offers `question.choices` first, then any code, and sends `POST /api/jobs/:id/language { language }` as before (202, transcribes again). The run is not paused while the question is open: Selects transcribes with `used` and the answer can redo it.
+
+### Accent routing
+
+- `settings.accent`: `"auto"` (default), `"ng"` (Nigerian English, always use the fine-tune for English), `"none"`. Saved in profiles. CLI `--accent auto|ng|none`. `POST /api/jobs/:id/language` also takes `accent`.
+- In `"auto"`, English is routed when the language check found a cue: whisper's detector heard Yoruba, Hausa or Igbo (p >= 0.5) in speech that turned out to be English, or the English decode's text has a Nigerian-language share of 0.25 or more (lid-lite-5) or reads as Pidgin (lid-lite-608, 0.3 or more).
+- `settings.asrModel` other than `"auto"` always wins. A missing model file is never fatal.
+- `job.accent = { accent: "ng" | null, routed: bool, model: "ggml-small-nigerian-accent.bin" | null, cues: [{ kind: "audio" | "text", note }], reason }`, and `job.asr.accent` is `"ng"` when the fine-tune transcribed.
+
+### Punctuation
+
+- `settings.punctuate` (default `true`). When the transcript is English and sparse (`isSparsePunctuation`), the Edge-Punct-Casing model (sherpa-onnx) restores full stops, commas, question marks and casing in `words.json` before sentences, candidates and captions are built. Spelling and timings are whisper's; whisper's own punctuation and capitals are kept.
+- `job.punctuation = null | { restored: bool, model, changed, sec, reason }` (`reason` says why not, for example a missing model; the pause-based fallback then applies as before).
+- `sherpa-onnx-node` is an optional dependency (prebuilt for macOS x64 and arm64, Linux, Windows).
+
+### Config (env)
+
+| Thing | Default | Env |
+|---|---|---|
+| text LID models | `<models>/langid` | `SELECTS_LANGID_DIR` |
+| Nigerian-accent whisper | `<models>/ggml-small-nigerian-accent.bin` | `SELECTS_ACCENT_MODEL_NG` |
+| punctuation model | `<models>/punct/sherpa-onnx-online-punct-en-2024-08-06` | `SELECTS_PUNCT_DIR` |
+
+VAD was measured and not adopted (whisper.cpp's built-in Silero VAD moved word times by up to 4 s and squashed pauses; see `notes/timings.md`).
