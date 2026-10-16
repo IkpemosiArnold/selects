@@ -26,6 +26,34 @@ test("auto picks the language whisper decodes most confidently, and reports the 
   assert.match(res.warning, /quick guess was Yoruba \(p = 0\.88\)/);
 });
 
+test("a non-English decode that comes out as English text cannot win (the accent trap)", () => {
+  // measured on 16 Oct: elderly Nigerian speaker, English speech, multilingual base
+  const res = chooseLanguage(
+    [
+      { code: "en", meanP: 0.65, words: 74, englishShare: 0.38 },
+      { code: "yo", meanP: 0.8, words: 82, englishShare: 0.36 },
+    ],
+    { setting: "auto", detected: { code: "yo", p: 0.9 } },
+  );
+  assert.equal(res.used, "en");
+  assert.match(res.warning, /asked to write Yoruba it wrote English/);
+  // real Yoruba text has almost no English function words, so Yoruba can still win
+  const yo = chooseLanguage(
+    [
+      { code: "en", meanP: 0.4, words: 60, englishShare: 0.3 },
+      { code: "yo", meanP: 0.7, words: 70, englishShare: 0.01 },
+    ],
+    { setting: "auto", detected: { code: "yo", p: 0.9 } },
+  );
+  assert.equal(yo.used, "yo");
+});
+
+test("englishShare counts common English function words", async () => {
+  const { englishShare } = await import("./language.mjs");
+  assert.ok(englishShare("and then she said that the market was full of people".split(" ")) >= 0.3);
+  assert.ok(englishShare("Ẹ kú àárọ̀ ọmọ mi, ṣé dáadáa ni".split(" ")) < 0.05);
+});
+
 test("an explicit setting is kept, with a warning only when another language is clearly better", () => {
   const clear = chooseLanguage([{ code: "en", meanP: 0.35, words: 40 }, { code: "fr", meanP: 0.8, words: 40 }], { setting: "en", detected: { code: "fr", p: 0.97 } });
   assert.equal(clear.used, "en");

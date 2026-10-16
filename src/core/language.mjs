@@ -17,6 +17,22 @@ export const LANGUAGE_NAMES = {
 };
 export const languageName = (c) => LANGUAGE_NAMES[c] || c;
 
+// Common English function words (no single letters: Yoruba "a" and "o" are words too).
+const EN_FUNCTION = new Set(
+  "the an and or but of to in on at for with from by as is are was were be been it its this that these those you he she we they me him her us them my your his our their not no yes do does did have has had will would can could should there here what which who when where why how so if then than just very all some any one two about up out into over after because".split(" "),
+);
+
+/**
+ * Share of decoded words that are common English function words. English text runs at
+ * about 0.3 to 0.5; text in most other languages is near 0. When whisper is told to write
+ * Yoruba and still writes English, the speech is English.
+ */
+export function englishShare(texts) {
+  const ws = texts.map((w) => String(w).toLowerCase().replace(/[^a-z']/g, "")).filter(Boolean);
+  if (!texts.length) return 0;
+  return +(ws.filter((w) => EN_FUNCTION.has(w)).length / texts.length).toFixed(3);
+}
+
 /** Three ~20 s samples spread over the video (at 15%, 50% and 85%), or one if it is short. */
 export function sampleRanges(duration, { n = 3, len = 20 } = {}) {
   if (!duration || duration <= len * n + 10) return [{ start: 0, dur: Math.min(duration || 60, 60) }];
@@ -31,8 +47,13 @@ export function sampleRanges(duration, { n = 3, len = 20 } = {}) {
  * another language decoded clearly better (by more than `warnMargin`).
  * Returns { used, best, margin, decided, warning }.
  */
-export function chooseLanguage(results, { setting = "en", detected = null, minWords = 5, warnMargin = 0.08 } = {}) {
-  const usable = results.filter((r) => r.words >= minWords).sort((a, b) => b.meanP - a.meanP);
+export function chooseLanguage(results, { setting = "en", detected = null, minWords = 5, warnMargin = 0.08, englishText = 0.2 } = {}) {
+  // Mean word probability alone is not comparable across languages: on English speech from
+  // an elderly Nigerian speaker, decoding "as Yoruba" scored 0.80 against 0.65 for English,
+  // while 100% of the "Yoruba" words were plain English. So a non-English decode that came
+  // out as English text cannot win; it is evidence for English.
+  const wroteEnglish = (r) => r.code !== "en" && r.englishShare != null && r.englishShare >= englishText;
+  const usable = results.filter((r) => r.words >= minWords && !wroteEnglish(r)).sort((a, b) => b.meanP - a.meanP);
   const best = usable[0] || null;
   const second = usable[1] || null;
   const margin = best && second ? +(best.meanP - second.meanP).toFixed(3) : null;
@@ -47,7 +68,10 @@ export function chooseLanguage(results, { setting = "en", detected = null, minWo
   }
   const pick = (c) => results.find((r) => r.code === c);
   let warning = null;
-  if (best && used !== best.code && (margin == null || best.meanP - (pick(used)?.meanP ?? 0) > warnMargin)) {
+  const fooled = results.find((r) => wroteEnglish(r) && r.code === detected?.code);
+  if (fooled && used === "en") {
+    warning = `Whisper's quick guess was ${languageName(fooled.code)} (p = ${detected.p.toFixed(2)}), but when asked to write ${languageName(fooled.code)} it wrote English, so this is English. Accented English is often misread as another language; change it if this is wrong.`;
+  } else if (best && used !== best.code && (margin == null || best.meanP - (pick(used)?.meanP ?? 0) > warnMargin)) {
     warning = `${languageName(best.code)} decoded with more confidence than ${languageName(used)} (${best.meanP.toFixed(2)} against ${(pick(used)?.meanP ?? 0).toFixed(2)}). If the speech is ${languageName(best.code)}, set the language to ${best.code}.`;
   } else if (detected && detected.code !== used) {
     const usedR = pick(used);
@@ -93,12 +117,12 @@ export async function decideLanguage(videoPath, { duration, setting = "en", reme
         const words = await decode(wav, code, outBase);
         fs.rmSync(`${outBase}.json`, { force: true });
         const meanP = words.length ? words.reduce((a, w) => a + (w.p ?? 1), 0) / words.length : 0;
-        compared.push({ code, meanP: +meanP.toFixed(3), words: words.length, sample: words.slice(0, 12).map((w) => w.w).join(" ") });
+        compared.push({ code, meanP: +meanP.toFixed(3), words: words.length, englishShare: englishShare(words.map((w) => w.w)) });
         onProgress?.({ progress: 0.1 + (0.9 * ++i) / candidates.length, note: `decoded the samples as ${languageName(code)}` });
       }
     }
     const pick = chooseLanguage(compared, { setting, detected });
-    const res = { setting, remembered, used: pick.used, detected, compared: compared.map(({ sample, ...r }) => r), margin: pick.margin, best: pick.best, decided: pick.decided, warning: pick.warning, model: path.basename(model), sec: +((Date.now() - t0) / 1000).toFixed(1) };
+    const res = { setting, remembered, used: pick.used, detected, compared, margin: pick.margin, best: pick.best, decided: pick.decided, warning: pick.warning, model: path.basename(model), sec: +((Date.now() - t0) / 1000).toFixed(1) };
     writeJsonAtomic(cacheFile, res);
     return res;
   } finally {
