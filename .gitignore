@@ -16,3 +16,6 @@ cookies*.txt
 selects-out/
 tools/faces/faces
 dist-web/
+
+# local session notes
+continuity.md
