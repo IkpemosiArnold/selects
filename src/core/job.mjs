@@ -401,7 +401,8 @@ async function runStages(id, { deps = {}, signal } = {}) {
         signal,
         onProgress: (p) => progress("language", p),
       });
-      finish("language", job.language.warning ? job.language.warning : `${job.language.used}${job.language.detected ? `, whisper guessed ${job.language.detected.code} (p = ${job.language.detected.p})` : ""}`);
+      const q = job.language.question;
+      finish("language", q ? `${q.text} The language signals disagree; Selects carries on with ${job.language.used}.` : job.language.warning ? job.language.warning : `${job.language.used}${job.language.detected ? `, whisper guessed ${job.language.detected.code} (p = ${job.language.detected.p})` : ""}`);
       emit(id, "job", job);
     }
     const lang = job.language?.used || job.settings.language || "en";
