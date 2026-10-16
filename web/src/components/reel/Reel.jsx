@@ -17,6 +17,7 @@ import Slate from "./Slate.jsx";
 import Timeline from "./Timeline.jsx";
 import Script from "./Script.jsx";
 import Sheet, { DecisionBar } from "./Sheet.jsx";
+import FaithNote from "./FaithNote.jsx";
 import { byRank, clipName, firstLine, thumbAt } from "./util.js";
 import { BlurOverlay, BlurPanel, useBlurDraft, useContentBox, trackLabelsFor, blurSummary, blurIsEmpty } from "../Blur.jsx";
 import { usePlayerTime } from "../../lib/player.js";
@@ -551,8 +552,10 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
   const phoneReview = phone && !!cur && mode === "review";
   const timeline = <Timeline job={job} cands={ranked} currentId={cur?.id} onPick={pick} player={cur ? player : null} />;
 
+  const verdictNote = job.verdict?.note || null;
+
   return (
-    <div className={"reel is-" + mode + (cur ? "" : " is-done") + (phone ? " is-phone" : "")}>
+    <div className={"reel is-" + mode + (cur ? "" : " is-done") + (phone ? " is-phone" : "") + (verdictNote && cur ? " has-verdict" : "")}>
       <Masthead job={job}>
         <div className="pile" ref={pileRef} aria-live="polite">
           <span className="pile-stack" aria-hidden="true">
@@ -574,6 +577,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
       <main className="reel-stage">
         <h1 className="sr-only">Review clips from {job.source?.name}</h1>
         <p className="sr-only" role="status" aria-live="polite">{said}</p>
+        {verdictNote && cur && mode === "review" && <p className="verdict-note">{verdictNote}</p>}
         {cur ? (
           <>
             {!phoneReview && <div className="reel-left">
@@ -640,6 +644,13 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
                       trackLabels={labels}
                     />
                   )}
+                  <FaithNote
+                    clip={cur}
+                    onFix={async (fx) => {
+                      const res = await trim(fx.start ?? cur.start, fx.end ?? cur.end);
+                      if (res) flash(fx.end != null && fx.end > cur.end ? "The clip now ends after the next sentence." : "The clip now uses the suggested cut.");
+                    }}
+                  />
                   <span className="lean is-approve" ref={(el) => (leanRef.current.a = el)} aria-hidden="true">Approve</span>
                   <span className="lean is-skip" ref={(el) => (leanRef.current.s = el)} aria-hidden="true">Skip</span>
                 </Card>
@@ -690,7 +701,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
             </div>}
           </>
         ) : (
-          <Done job={job} ranked={ranked} approved={approved} rendered={rendered} onPick={pick} onRender={renderNow} rendering={rendering} />
+          <Done job={job} ranked={ranked} approved={approved} rendered={rendered} onPick={pick} onRender={renderNow} rendering={rendering} note={verdictNote} />
         )}
       </main>
 
@@ -827,7 +838,7 @@ function Controls({ cur, mode, waiting, total, onDecide, onNudge, onTrim, onBlur
   );
 }
 
-function Done({ job, ranked, approved, rendered, onPick, onRender, rendering }) {
+function Done({ job, ranked, approved, rendered, onPick, onRender, rendering, note }) {
   return (
     <section className="done" aria-labelledby="done-h">
       <h2 id="done-h" className="done-big">
@@ -836,7 +847,7 @@ function Done({ job, ranked, approved, rendered, onPick, onRender, rendering }) 
       <p className="done-sub">
         {ranked.length
           ? "You've checked every clip. Pick one to change your mind."
-          : "Gemma found no moment that starts and ends on a full sentence. Try shorter clips in a new job."}
+          : note || "Gemma found no moment that starts and ends on a full sentence. Try shorter clips in a new job."}
       </p>
       {ranked.length > 0 && (
         <ol className="done-list">

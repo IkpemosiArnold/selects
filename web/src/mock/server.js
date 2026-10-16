@@ -54,6 +54,22 @@ export function createMockApi(params) {
     Object.assign(byRank(12), { status: "skipped" });
     Object.assign(byRank(11), { status: "skipped" });
   }
+  // Faithful cuts (coordinator, 16 Oct; fields pending in CONTRACTS.md): a check
+  // on whether the cut changes what the speaker meant, with a fix when one exists.
+  {
+    const byRank = (r) => demo.candidates.find((c) => c.rank === r);
+    const nextEnd = (t) => words.find((w) => w.e > t + 1 && /[.?!]$/.test(w.w))?.e ?? null;
+    const c2 = byRank(2);
+    const e2 = c2 && nextEnd(c2.end);
+    if (c2 && e2) c2.faithful = { verdict: "check", issue: "stops-before-turn", note: "This stops just before the speaker's \"but\". Ending here, it says the opposite of what they meant.", fix: { start: c2.start, end: e2, label: "Include the next sentence" } };
+    const c5 = byRank(5);
+    if (c5) c5.faithful = { verdict: "misleading", issue: "joke-as-claim", note: "The speaker is quoting someone they disagree with here. On its own, it sounds like their view.", fix: null };
+    for (const c of demo.candidates) if (!c.faithful) c.faithful = { verdict: "faithful", issue: null, note: null, fix: null };
+  }
+  if (scenario === "weak") {
+    demo.candidates = demo.candidates.filter((c) => c.rank <= 2);
+    demo.verdict = { strong: 0, note: "No strong clips in this video. Here are the closest 2, and why." };
+  }
   if (scenario === "worst") applyWorst(demo);
   if (scenario === "empty") demo.candidates = [];
   if (scenario === "one") demo.candidates = demo.candidates.filter((c) => c.rank === 1);
@@ -503,6 +519,9 @@ export function createMockApi(params) {
         const idx = words.findIndex((w) => w.s >= s);
         c.text = words.filter((w) => w.s >= s && w.e <= e + 0.01).map((w) => w.w).join(" ");
         c.hook = c.text.split(/(?<=[.?!])\s/)[0] || words[idx]?.w;
+        // the core checks the new cut again; here, taking the fix settles it
+        const fx = c.faithful?.fix;
+        if (fx && c.start <= (fx.start ?? c.start) + 0.05 && c.end >= (fx.end ?? c.end) - 0.05) c.faithful = { verdict: "faithful", issue: null, note: null, fix: null };
       }
       return clone(c);
     },
