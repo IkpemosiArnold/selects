@@ -21,6 +21,22 @@ Run 2 (01:00 WAT), after the fix: `selects review j_20261016_01j3 --yes`. This r
 
 Total for run 2: 1,089 s wall (18.2 min). With run 1's transcription, a 6-minute video took about 25 minutes of machine time from file to three posted-ready clips, under heavy load. Re-rendering the same 3 clips later (new caption layout) took 76.6 s, 62.3 s and 46.7 s, which shows how much the load moves these numbers.
 
+## Final run with the shipped pipeline (16 Oct, 02:44 to 03:06 WAT, load average about 35)
+
+Command: `selects .selects/media/strength-talk-6min.mp4 --yes --k 3 --credit "Jenni, EMF 2026" --license CC-BY-SA-4.0 --source-url <talk page>` (job `j_20261016_07m4`, output `selects-out/strength-talk-6min-final/`). This is the rubric as above, blended with the pre-score, plus the listwise round and credit in each kit.
+
+| Stage | Wall time | Note |
+|---|---|---|
+| Probe and thumbnails | 0.8 s | |
+| Transcribe | 129.7 s (2.2 min) | 1,232 words, 2.78x real time (the same audio took 7.0 min at load average 250) |
+| Candidates and pre-score | under 0.1 s | 37 windows passed, 8 to the judge |
+| Judge: 8 pointwise calls and 1 listwise call | 724.4 s (12.1 min) | pointwise mean 72.9 s per call (prompt 11.7 tok/s, output 2.82 tok/s on average), none cut off or failed; listwise 141.1 s (318 prompt tokens at 4.8 tok/s, 144 output tokens at 2.0 tok/s) |
+| Render, 3 clips | 65.1 s, 23.4 s, 37.7 s | clips of 41.0 s, 23.3 s, 40.4 s |
+| Posting kit, 3 calls | 169.8 s, 43.3 s, 98.9 s | |
+| Whole run | 1,293.7 s (21.6 min) | from the video file to 3 captioned, credited clips |
+
+Picks: c_0014 (02:33, 41 s, total 0.68), c_0001 (00:23, 23 s, 0.63; first in the listwise round), c_0020 (03:44, 40 s, 0.56). Run 2 had picked c_0012 instead of c_0001; the listwise round moved it down ("Generic statement, lacks a strong hook or payoff").
+
 ## Judge calls, one row per Ollama request
 
 Ollama options: temperature 0.2, num_ctx 2048, num_predict 80, keep_alive 30m, JSON schema format. Rubric (system message) about 200 tokens, the same bytes on every call. Calls 1 and 2 are from run 1 (old prompt, reason first); calls 3 to 10 are run 2.
