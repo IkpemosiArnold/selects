@@ -454,3 +454,17 @@ button, [role="button"], summary, .btn, .seg-btn, .tab { -webkit-user-select: no
   .fold-body { padding-inline: 12px; }
   .brief-line { line-height: 2.9; }
 }
+
+/* ---------- render: share and save on every clip ---------- */
+.take-go { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.take-go .btn { min-height: 44px; padding: 0 18px; }
+.take-note { flex-basis: 100%; font-size: var(--t-13); color: var(--ink-2); }
+.rights-panel { border-top: 1px solid var(--line); padding-top: 24px; }
+@media (max-width: 560px) {
+  .render-head .h-24 { font-size: 2.1rem; }
+  .takes { gap: 36px; }
+  .take { grid-template-columns: minmax(0, 1fr); justify-items: stretch; }
+  .take-card { width: min(64vw, 260px); justify-self: center; }
+  .take-go .btn { flex: 1 1 0; }
+  .kit-field .btn-chip { justify-self: start; }
+}

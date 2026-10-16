@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api.js";
 import { tc, secs, plural, aboutMinutes } from "../lib/time.js";
 import { copyText } from "../lib/hooks.js";
@@ -7,8 +7,9 @@ import { frameSvg } from "../mock/frames.js";
 import { thumbAt } from "./reel/util.js";
 import { PlayIcon } from "./reel/Card.jsx";
 import { LICENCES, needsMediaReminder } from "../lib/licences.js";
+import { canShareFiles, clipFileName, prefetchClip, shareClip } from "../lib/share.js";
 
-const REMINDER = "Check slides and on-screen media: a talk's licence may not cover every figure.";
+const REMINDER = "Check the slides and anything else on screen. The video's licence may not cover every image in it.";
 const tag = (h) => (h.startsWith("#") ? h : "#" + h);
 
 function CopyButton({ text, label, done = "Copied" }) {
@@ -29,8 +30,55 @@ function CopyButton({ text, label, done = "Copied" }) {
   );
 }
 
+function ShareSave({ url, name, title, text }) {
+  const [state, setState] = useState(null);
+  const share = canShareFiles();
+  const ref = useRef(null);
+  // Fetch the file ahead of the tap, so the share sheet opens while the tap still counts.
+  useEffect(() => {
+    if (!share || !url || !ref.current) return;
+    const io = new IntersectionObserver((es) => {
+      if (es.some((e) => e.isIntersecting)) {
+        prefetchClip(url, name)?.catch(() => {});
+        io.disconnect();
+      }
+    });
+    io.observe(ref.current);
+    return () => io.disconnect();
+  }, [share, url, name]);
+  return (
+    <div className="take-go" ref={ref}>
+      {share && (
+        <button
+          type="button"
+          className="btn btn-mark"
+          disabled={state === "busy"}
+          onClick={async () => {
+            setState("busy");
+            try {
+              const r = await shareClip({ url, name, title, text });
+              setState(r === "saved" ? "saved" : null);
+            } catch (e) {
+              setState("error:" + e.message);
+            }
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V2M5 4.5L8 1.5l3 3M3.5 7.5v6h9v-6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          {state === "busy" ? "Getting the video" : "Share"}
+        </button>
+      )}
+      <a className={"btn" + (share ? "" : " btn-mark")} href={url} download={name}>
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M5 7l3 3 3-3M3 13.5h10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        Save video
+      </a>
+      {state === "saved" && <p className="take-note" role="status">Sharing is not available here, so the video was saved instead.</p>}
+      {state?.startsWith("error:") && <p className="field-error" role="alert">{state.slice(6)}</p>}
+    </div>
+  );
+}
+
 // One rendered clip as a take: the MP4 itself at 9:16 (its first frame until
-// you play it), with the posting kit beside it.
+// you play it), with share and save, and the posting kit beside it.
 function Row({ job, c, kit }) {
   const [playing, setPlaying] = useState(false);
   const r = c.render || { status: "pending", progress: 0 };
@@ -80,7 +128,8 @@ function Row({ job, c, kit }) {
           {r.status === "running" && r.etaSec ? <span className="dim">, {aboutMinutes(r.etaSec)} left</span> : null}
         </p>
         <h2 className="take-title">{title || c.hook}</h2>
-        {done && r.stale && <p className="take-stale">Captions or blur changed since this render. Render it again to apply them.</p>}
+        {done && r.stale && <p className="take-stale">You changed the captions or the blur after this render. Render it again to use the changes.</p>}
+        {done && clip && <ShareSave url={clip} name={clipFileName(c.rank, title || c.hook)} title={title || ""} text={fullCaption} />}
         {r.status === "error" && <p className="take-error">{r.message || r.error || "This clip did not render."}</p>}
         {done && (
           <dl className="take-kit">
@@ -92,14 +141,14 @@ function Row({ job, c, kit }) {
             <div className="kit-field">
               <dt className="label">Caption</dt>
               <dd className="kit-caption">
-                <p>{captionBody || (kit === null ? "Loading the posting kit" : "No caption in the kit")}</p>
+                <p>{captionBody || (kit === null ? "Loading the caption" : "No caption yet")}</p>
                 {hashtags.length > 0 && <p className="kit-tags">{hashtags.join(" ")}</p>}
-                {kit?.attribution && <p className="kit-credit">Copying adds the credit line.</p>}
+                {kit?.attribution && <p className="kit-credit">Copying or sharing adds the credit line.</p>}
               </dd>
               <CopyButton text={fullCaption} label="Copy caption" />
             </div>
             <div className="kit-field">
-              <dt className="label">File</dt>
+              <dt className="label">On this laptop</dt>
               <dd className="mono kit-path">{file}</dd>
               <CopyButton text={file} label="Copy path" />
             </div>
@@ -122,15 +171,15 @@ function CreditBlock({ job, attribution, onSaved }) {
   return (
     <section className="credit" aria-labelledby="credit-h">
       <div className="credit-text">
-        <h2 id="credit-h" className="label">Credit on every caption</h2>
+        <h2 id="credit-h" className="label">Credit added to every caption</h2>
         {attribution ? (
           <p className="credit-line">{attribution}</p>
         ) : s.license === "own" ? (
-          <p className="credit-line dim">Own footage. No credit line is added.</p>
+          <p className="credit-line dim">Your own video. No credit line is added.</p>
         ) : s.credit || lic ? (
           <p className="credit-line">{[s.credit, lic, s.sourceUrl].filter(Boolean).join(", ")}</p>
         ) : (
-          <p className="credit-line dim">No credit set. If this is someone else's talk, add who made it and the licence.</p>
+          <p className="credit-line dim">No credit yet. If someone else made the video, add who made it and the licence.</p>
         )}
       </div>
       {!editing ? (
@@ -169,14 +218,14 @@ function CreditBlock({ job, attribution, onSaved }) {
             </select>
           </label>
           <label className="field field-wide">
-            <span className="field-label">Source link</span>
-            <input className="input" type="url" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://" spellCheck={false} />
+            <span className="field-label">Link to the original</span>
+            <input className="input" type="url" inputMode="url" autoCapitalize="none" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://" spellCheck={false} />
           </label>
           <div className="credit-actions">
             <button className="btn btn-primary" type="submit" disabled={saving}>{saving ? "Saving" : "Save credit"}</button>
             <button className="btn btn-quiet" type="button" onClick={() => setEditing(false)}>Cancel</button>
           </div>
-          <p className="field-hint">Saving rewrites the captions of clips already rendered. The videos stay as they are.</p>
+          <p className="field-hint">Saving updates the post captions of clips already rendered. The videos stay as they are.</p>
           {err && <p className="field-error" role="alert">{err}</p>}
         </form>
       )}
@@ -208,7 +257,7 @@ function CaptionsToggle({ job, refetch, done, onRerender, busy }) {
             }
           }}
         />
-        Burn captions into the clips
+        Show captions in the video
       </label>
       {changed && done > 0 && (
         <button type="button" className="btn btn-chip" disabled={busy} onClick={onRerender}>
@@ -264,11 +313,11 @@ export default function RenderScreen({ job, refetch }) {
           </h1>
           <p className="lede">
             {all === 0
-              ? "Approve clips in review, then render them here."
+              ? "Approve clips in the review, then render them here."
               : finished
-              ? "Each clip is a 9:16 MP4 with captions burned in, an SRT file, and a title and caption to post with."
+              ? "Each clip is a vertical video with the captions on it. Share it or save it, and post it with the title and caption."
               : active
-              ? `${done} of ${all} done. Only approved clips are rendered, so this is the slow part kept short.`
+              ? `${done} of ${all} done. Only the clips you approved are rendered.`
               : ""}
             {errors ? ` ${plural(errors, "clip")} did not render.` : ""}
           </p>
@@ -304,11 +353,11 @@ export default function RenderScreen({ job, refetch }) {
                   }
                 }}
               >
-                Re-render {plural(stale.length, "clip")} to apply changes
+                Render {plural(stale.length, "clip")} again with your changes
               </button>
             )}
-            <a className="btn" href={`#/job/${job.id}/captions`}>Review captions</a>
-            <a className="btn" href={`#/job/${job.id}/review`}>Back to review</a>
+            <a className="btn" href={`#/job/${job.id}/review`}>Back to the clips</a>
+            <a className="btn btn-quiet" href={`#/job/${job.id}/captions`}>Fix caption words</a>
           </div>
           <CaptionsToggle
             job={job}
@@ -326,6 +375,11 @@ export default function RenderScreen({ job, refetch }) {
           />
         </div>
 
+        <ol className="takes">
+          {list.map((c) => (
+            <Row key={c.id} job={job} c={c} kit={kits[c.id] === undefined ? null : kits[c.id] || undefined} />
+          ))}
+        </ol>
         {all > 0 && (
           <div className="rights-panel">
             <CreditBlock job={job} attribution={anyKit?.attribution ?? null} onSaved={() => setKitVersion((v) => v + 1)} />
@@ -335,17 +389,12 @@ export default function RenderScreen({ job, refetch }) {
                   <path d="M8 1.5l7 12.5H1z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
                   <path d="M8 6v4M8 11.5v1.2" stroke="currentColor" strokeWidth="1.5" />
                 </svg>
-                {anyKit?.reminder || REMINDER}
+                {REMINDER}
               </p>
             )}
           </div>
         )}
 
-        <ol className="takes">
-          {list.map((c) => (
-            <Row key={c.id} job={job} c={c} kit={kits[c.id] === undefined ? null : kits[c.id] || undefined} />
-          ))}
-        </ol>
       </main>
     </>
   );
