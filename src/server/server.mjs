@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { REPO, asrModels, ollamaModels, ollamaUrl, selectsHome, whisperBin, whisperModel } from "../core/config.mjs";
 import { measuredSpeeds } from "../core/judge.mjs";
 import { editCaptions, loadCaptions, resetCaptions, toSrt, toVtt } from "../core/captions.mjs";
-import { createJob, detectJobFaces, isRunning, jobDir, jobEvents, listJobs, loadJob, loadWords, resetTranscript, saveJob, updateCandidate, updateJobSettings } from "../core/job.mjs";
+import { createJob, detectJobFaces, refreshStale, isRunning, jobDir, jobEvents, listJobs, loadJob, loadWords, resetTranscript, saveJob, updateCandidate, updateJobSettings } from "../core/job.mjs";
 import { LOW_P } from "../core/quality.mjs";
 import { loadProfiles } from "../core/profiles.mjs";
 import { hwaccelArgs } from "../core/render.mjs";
@@ -333,15 +333,14 @@ async function route(req, res) {
     if (!Array.isArray(body.cues)) throw new HttpError(400, "Send { cues: [{ s, e, text }] }, the whole list in order.");
     const caps = editCaptions(jobDir(job.id), body.cues);
     // rendered clips and outputs no longer match the captions
-    for (const c of job.candidates || []) if (c.render?.status === "done") c.render.stale = true;
-    if (job.output?.status === "done") job.output.stale = true;
-    saveJob(job);
+    saveJob(refreshStale(loadJob(job.id)));
     jobEvents.emit(job.id, { type: "captions", data: { cues: caps.cues.length, edited: true } });
     return sendJson(res, 200, { ...caps, lowP: LOW_P });
   }
   if ((r = m(/^\/api\/jobs\/([^/]+)\/captions\/reset$/)) && method === "POST") {
     const job = getJob(r[1]);
     const caps = resetCaptions(jobDir(job.id), { style: loadCaptions(jobDir(job.id)).style });
+    saveJob(refreshStale(loadJob(job.id)));
     return sendJson(res, 200, { ...caps, lowP: LOW_P });
   }
   if ((r = m(/^\/api\/jobs\/([^/]+)\/language$/)) && method === "POST") {

@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { DEFAULT_SETTINGS, jobsDir, resolveAsrModel, resolveModel } from "./config.mjs";
-import { loadCaptions } from "./captions.mjs";
+import { clipCues, loadCaptions } from "./captions.mjs";
 import { detectFaces as realDetectFaces } from "./faces.mjs";
 import { decideLanguage as realDecideLanguage } from "./language.mjs";
 import { applyProfile } from "./profiles.mjs";
@@ -16,10 +16,10 @@ import { judge as realJudge, listwise as realListwise } from "./judge.mjs";
 import { plainKit, postingKit as realKit } from "./kit.mjs";
 import { probe as realProbe } from "./probe.mjs";
 import { curve, rank } from "./rank.mjs";
-import { render as realRender, renderFull as realRenderFull } from "./render.mjs";
+import { hwaccelArgs, render as realRender, renderFull as realRenderFull } from "./render.mjs";
 import { snapTrim, toSentences } from "./sentences.mjs";
 import { transcribe as realTranscribe } from "./transcribe.mjs";
-import { readJson, run, writeJsonAtomic } from "./util.mjs";
+import { readJson, run, sha1, writeJsonAtomic } from "./util.mjs";
 
 /**
  * Every job event goes out twice: as "event" ({ jobId, type, data }) for listeners that
@@ -153,7 +153,7 @@ async function makeThumbs(job, { count = 60 } = {}) {
   const interval = +(job.source.duration / count).toFixed(2);
   const map = job.source.videoStream != null ? `0:${job.source.videoStream}` : "0:v:0";
   await run("ffmpeg", [
-    "-v", "error", "-y", "-skip_frame", "nokey", "-i", job.source.path, "-map", map,
+    "-v", "error", "-y", ...hwaccelArgs(job.source), "-skip_frame", "nokey", "-i", job.source.path, "-map", map,
     "-vf", `fps=1/${interval},scale=trunc(iw*sar/2)*2:ih,setsar=1,scale=192:-2`,
     "-fps_mode", "vfr", "-frames:v", String(count), "-q:v", "5",
     path.join(dir, "strip-%04d.jpg"),
@@ -244,6 +244,34 @@ export async function detectJobFaces(id, { deps = {}, signal, force = false } = 
     emit(id, "faces", { status: "error", message: e.message, hint: e.hint });
     throw e;
   }
+}
+
+/**
+ * What a render depended on: the captions it showed and the blur it applied. A render whose
+ * fingerprint no longer matches is "stale" (edits since then are not in the file yet).
+ */
+export function renderFingerprint(job, c = null) {
+  const dir = jobDir(job.id);
+  let cues = [];
+  try {
+    if (fs.existsSync(path.join(dir, "captions.json")) || fs.existsSync(path.join(dir, "words.json"))) cues = loadCaptions(dir).cues;
+  } catch {}
+  const shown = c ? clipCues(cues, c.start, c.end) : cues;
+  const capText = job.settings.captions === false ? "off" : shown.map((x) => `${x.s}|${x.e}|${x.text}`).join("\n");
+  const blur = c ? (c.blur ?? job.settings.blur ?? null) : (job.settings.blur ?? null);
+  const hasBlur = !!(blur && ((blur.faces?.mode && blur.faces.mode !== "off") || blur.regions?.length));
+  return sha1(JSON.stringify({ capText, blur: hasBlur ? blur : null, style: c ? null : job.settings.captionStyle ?? "auto" })).slice(0, 12);
+}
+
+/** Recompute `stale` on every finished render and caption-mode output. Mutates and returns job. */
+export function refreshStale(job) {
+  for (const c of job.candidates || []) {
+    if (c.render?.status !== "done") continue;
+    const fp = renderFingerprint(job, c);
+    c.render.stale = c.render.inputs ? c.render.inputs !== fp : false;
+  }
+  if (job.output?.status === "done") job.output.stale = job.output.inputs ? job.output.inputs !== renderFingerprint(job) : false;
+  return job;
 }
 
 /** Check a blur spec from the UI or CLI. Returns a clean copy, or throws a 400. */
@@ -400,7 +428,7 @@ async function runStages(id, { deps = {}, signal } = {}) {
     if (job.transcriptQuality.verdict === "unreliable" && job.settings.qualityGate !== false) {
       const err = new Error(`The transcript looks unreliable (mean word confidence ${job.transcriptQuality.meanP}, ${Math.round(job.transcriptQuality.lowShare * 100)}% of words unsure), so Selects stopped before judging.`);
       err.hint = `${job.transcriptQuality.hint} To judge it anyway, resume with --force.`;
-      throw Object.assign(err, { stage: "transcribe", keepStage: true });
+      throw Object.assign(err, { stage: "transcribe", keepStage: true, suggest: job.transcriptQuality.suggest });
     }
 
     // 3. candidates (deterministic windows, prefilter, shortlist for the judge)
@@ -465,6 +493,7 @@ function fail(job, stage, e) {
     stage: stage || null,
     message: aborted ? "Stopped before it finished." : e.message || String(e),
     hint: e.hint || "Resume the job to continue from the last finished stage. Your progress is saved.",
+    ...(e.suggest ? { suggest: e.suggest } : {}),
   };
   saveJob(job);
   emit(job.id, "error", job.error);
@@ -493,7 +522,7 @@ export function updateCandidate(id, cid, patch = {}) {
   }
   if (patch.blur !== undefined) {
     c.blur = cleanBlur(patch.blur);
-    if (c.render?.status === "done") c.render = { ...c.render, stale: true }; // re-render to apply
+    refreshStale(job); // a render made with other blur boxes says so
   }
   if (patch.start != null || patch.end != null) {
     const words = loadWords(id);
@@ -560,6 +589,7 @@ export function updateJobSettings(id, patch = {}) {
     const v = patch[key] === "" ? null : patch[key];
     job.settings[key] = key === "license" && v ? normaliseLicense(v) : key === "blur" ? cleanBlur(v) : key === "captions" ? v !== false : v;
   }
+  refreshStale(job);
   for (const c of job.candidates) {
     const rel = c.render?.kit;
     if (!rel) continue;
@@ -623,7 +653,7 @@ async function renderCaptioned(id, { deps = {}, signal } = {}) {
       },
     });
     const abs = (rel) => path.join(jobDir(id), rel);
-    job.output = { status: "done", path: r.path, srt: r.srt, vtt: r.vtt, file: abs(r.path), srtFile: abs(r.srt), vttFile: abs(r.vtt), progress: 1, width: r.width, height: r.height, style: r.style, blurBoxes: r.blurBoxes, decode: r.decode, wallSec: r.wallSec };
+    job.output = { status: "done", inputs: renderFingerprint(job), stale: false, path: r.path, srt: r.srt, vtt: r.vtt, file: abs(r.path), srtFile: abs(r.srt), vttFile: abs(r.vtt), progress: 1, width: r.width, height: r.height, style: r.style, blurBoxes: r.blurBoxes, decode: r.decode, wallSec: r.wallSec };
     job.timings = { ...(job.timings || {}), renderFull: r.wallSec };
     Object.assign(job.stages.render, { status: "done", endedAt: now(), progress: 1, etaSec: 0, note: `captioned the whole video (${r.width}x${r.height})` });
     job.stage = "done";
@@ -680,7 +710,7 @@ async function renderClips(id, { ids, deps = {}, signal, kit, preset } = {}) {
           emit(id, "render", { id: c.id, preset: usePreset, ...c[field] });
         },
       });
-      c[field] = { status: "done", path: r.path, srt: r.srt, kit: null, progress: 1, reframe: r.reframe?.mode, decode: r.decode, blurBoxes: r.blurBoxes, wallSec: r.wallSec };
+      c[field] = { status: "done", inputs: renderFingerprint(job, c), stale: false, path: r.path, srt: r.srt, kit: null, progress: 1, reframe: r.reframe?.mode, decode: r.decode, blurBoxes: r.blurBoxes, wallSec: r.wallSec };
       if (kitMode) {
         let k;
         const k0 = Date.now();

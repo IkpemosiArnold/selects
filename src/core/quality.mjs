@@ -84,7 +84,10 @@ export function transcriptQuality(words, { duration = null, thresholds = THRESHO
         : rep > 0.15 && lowShare < 0.2
           ? `Whisper repeated itself (${pct(rep)} of the text is a loop), which happens when it loses track of the audio, so clips picked from it would be guesses. Try --asr-model small.en, or set --language to the language spoken.`
           : `Whisper was unsure of ${pct(lowShare)} of the words (mean confidence ${meanP.toFixed(2)}), so clips picked from this transcript would be guesses. Try --asr-model small.en, or set --language to the language spoken.`;
+  // what to try, as data (the UI words it; the CLI prints the hint)
+  const suggest = verdict === "good" ? null : { asrModel: "small.en", language: "en", force: verdict === "unreliable" };
   return {
+    suggest,
     score: +score.toFixed(3),
     meanP: +meanP.toFixed(3),
     lowShare: +lowShare.toFixed(3),
