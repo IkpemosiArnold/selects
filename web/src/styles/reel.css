@@ -405,7 +405,6 @@
   .is-ask .decide.is-lang { grid-column: 1 / -1; }
   .controls > .nudge, .controls > .tools, .controls > .hint { order: 2; }
   .hint { display: none; }
-  .pile-count .pile-skipped, .pile-count { display: none; }
   .slate-fields dd { font-size: 1.125rem; }
   .slate-line { font-size: 1.6rem; padding: 14px 14px 18px; }
   .ask-q { font-size: 2.6rem; }
@@ -424,4 +423,14 @@
 @media (prefers-contrast: more) {
   .peek img { filter: grayscale(0.35) brightness(0.35); }
   .tl-clip.is-skipped { box-shadow: inset 0 0 0 2px var(--red-ink); }
+}
+
+/* Phones: brand and Render share the first row, the file name the second. */
+@media (max-width: 560px) {
+  .masthead .btn-render { min-width: 0; padding: 0 14px; }
+  .masthead .pile-count { display: none; }
+  .masthead-right { gap: 10px; }
+}
+@media (hover: none) {
+  .tools kbd, .nudge-row kbd { display: none; }
 }

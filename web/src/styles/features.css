@@ -260,3 +260,8 @@
 @media (max-width: 1280px) {
   .review-shell .ab-keys { display: none; }
 }
+
+/* A plain progress bar (face detection). */
+.rp-bar { position: relative; height: 8px; background: var(--panel-2); border-radius: 2px; overflow: hidden; }
+.rp-fill { position: absolute; inset: 0; background: var(--ink); transform-origin: left; transition: transform 260ms linear; }
+.rp-bar.is-blue .rp-fill { background: var(--blue); }

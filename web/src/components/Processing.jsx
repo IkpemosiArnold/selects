@@ -27,6 +27,7 @@ const STEPS = [
 ];
 
 const SHOWN = 160;
+const BEFORE = ["queued", "probing", "language"];
 const GHOST = ".:·.  :.0 ·  9. :  3 ·.  #  ·:  .  6 = .  ·  x .  :";
 
 function cap(s) {
@@ -169,77 +170,110 @@ export default function Processing({ job, words, onResume }) {
   const ticks = useMemo(() => {
     const step = dur > 5400 ? 900 : dur > 1800 ? 300 : dur > 600 ? 120 : 60;
     const out = [];
-    for (let t = 0; t <= dur; t += step) out.push(t);
+    for (let t = 0; t <= dur - step * 0.4; t += step) out.push(t);
     return out;
   }, [dur]);
 
+  const steps = STEPS.filter((s) => st[s.key] && st[s.key].status !== "skipped" && !(captionMode && (s.key === "candidates" || s.key === "judge")));
+  const stepNow = steps.find((s) => st[s.key]?.status === "running" || st[s.key]?.status === "error");
+  const left = job.stage === "transcribing" ? eta : job.stage === "judging" ? jd.etaSec : null;
+
   return (
-    <>
+    <div className="proc">
       <Masthead job={job} />
-      <main className="page proc-page">
-        <ol className="steps" aria-label="Progress">
-          {STEPS.filter((s) => st[s.key] && st[s.key].status !== "skipped" && !(captionMode && (s.key === "candidates" || s.key === "judge"))).map((s) => {
-            const state = st[s.key]?.status || "pending";
-            return (
-              <li key={s.key} className={"step is-" + state} aria-current={state === "running" ? "step" : undefined}>
-                <span className="step-mark" aria-hidden="true" />
-                <span>{s.label}</span>
-                <span className="sr-only">{state === "done" ? ", done" : state === "running" ? ", in progress" : state === "error" ? ", stopped" : ""}</span>
-              </li>
-            );
-          })}
-        </ol>
-
-        <div className="proc-head" aria-live="polite">
-          <h1 className={"h-24" + (isErr ? " is-error" : "")}>{headline}</h1>
-          {sub && <p className="lede">{sub}</p>}
-          {isErr && !unreliable && (
-            <button
-              className="btn btn-primary"
-              disabled={resuming}
-              onClick={async () => {
-                setResuming(true);
-                try {
-                  await onResume();
-                } finally {
-                  setResuming(false);
-                }
-              }}
-            >
-              {resuming ? "Resuming" : "Resume"}
-            </button>
-          )}
-        </div>
-
-
-        {((job.stage === "transcribing" && !checkingLanguage) || isErr) && (
-          <div className="reel-progress">
-            <div className="rp-bar" role="progressbar" aria-label="Transcribed so far" aria-valuemin={0} aria-valuemax={Math.round(dur)} aria-valuenow={Math.round(reached)} aria-valuetext={`${tc(reached)} of ${tc(dur)}`}>
-              <div className="rp-fill" style={{ transform: `scaleX(${pct || 0})` }} />
-              {ticks.map((t) => (
-                <span key={t} className="rp-tick" style={{ left: `${(t / dur) * 100}%` }} />
-              ))}
+      <main className="proc-stage">
+        <section className="proc-left" aria-live="polite">
+          <div className="slate is-proposed">
+            <div className="slate-clap" aria-hidden="true">
+              <div className="slate-stick" />
+              <div className="slate-hinge" />
+              <div className="slate-stick slate-stick-base" />
             </div>
-            <div className="rp-labels mono">
-              <span>
-                {tc(reached)} <span className="dim">of {tc(dur)}</span>
-              </span>
-              <span className="dim">{Math.round((pct || 0) * 100)}%</span>
+            <div className="slate-board">
+              <dl className="slate-fields">
+                <div>
+                  <dt>Step</dt>
+                  <dd>
+                    {stepNow ? steps.indexOf(stepNow) + 1 : steps.filter((s) => st[s.key]?.status === "done").length}
+                    <small> of {steps.length}</small>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Heard</dt>
+                  <dd>{tc(reached)}</dd>
+                </div>
+                <div>
+                  <dt>Length</dt>
+                  <dd>{tc(dur)}</dd>
+                </div>
+                <div>
+                  <dt>Left</dt>
+                  <dd>{left != null ? tc(left) : "--:--"}</dd>
+                </div>
+              </dl>
+              <h1 className={"slate-line is-mid proc-headline" + (isErr ? " is-error" : "")}>{headline}</h1>
+              {isErr && <p className="slate-mark is-skipped">Stopped</p>}
             </div>
+            {sub && <p className="proc-sub">{sub}</p>}
+            {isErr && !unreliable && (
+              <button
+                className="btn btn-primary btn-big proc-resume"
+                disabled={resuming}
+                onClick={async () => {
+                  setResuming(true);
+                  try {
+                    await onResume();
+                  } finally {
+                    setResuming(false);
+                  }
+                }}
+              >
+                {resuming ? "Resuming" : "Resume"}
+              </button>
+            )}
+            <ol className="steps" aria-label="Progress">
+              {steps.map((s) => {
+                const state = st[s.key]?.status || "pending";
+                return (
+                  <li key={s.key} className={"step is-" + state} aria-current={state === "running" ? "step" : undefined}>
+                    <span className="step-mark" aria-hidden="true" />
+                    <span>{s.label}</span>
+                    {state === "running" && st[s.key]?.progress > 0 && <span className="step-pct mono">{Math.round(st[s.key].progress * 100)}%</span>}
+                    <span className="sr-only">{state === "done" ? ", done" : state === "running" ? ", in progress" : state === "error" ? ", stopped" : ""}</span>
+                  </li>
+                );
+              })}
+            </ol>
           </div>
-        )}
-        {job.stage === "judging" && (
-          <div className="reel-progress">
-            <div className="rp-bar is-blue" role="progressbar" aria-label="Moments judged" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((pct || 0) * 100)}>
-              <div className="rp-fill" style={{ transform: `scaleX(${pct || 0})` }} />
-            </div>
-          </div>
-        )}
+        </section>
 
         <section className="proc-transcript" aria-label="Transcript so far">
+          <p className="proc-page-head">What whisper has heard so far</p>
           <Reveal words={words} active={active} reduce={reduce} />
         </section>
       </main>
-    </>
+
+      <div className="timeline proc-timeline">
+        <div
+          className={"tl-track proc-track" + (job.stage === "judging" ? " is-judging" : "")}
+          role="progressbar"
+          aria-label={job.stage === "judging" ? "Moments judged" : "Transcribed so far"}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round((pct || 0) * 100)}
+          aria-valuetext={job.stage === "judging" ? `${Math.round((pct || 0) * 100)}%` : `${tc(reached)} of ${tc(dur)}`}
+        >
+          <span className="proc-fill" style={{ transform: `scaleX(${pct ?? (BEFORE.includes(job.stage) ? 0 : 1)})` }} />
+        </div>
+        <div className="tl-ticks" aria-hidden="true">
+          {ticks.map((t) => (
+            <span key={t} style={{ left: `${(t / (dur || 1)) * 100}%` }}>
+              {tc(t)}
+            </span>
+          ))}
+          <span className="is-end" style={{ left: "100%" }}>{tc(dur)}</span>
+        </div>
+      </div>
+    </div>
   );
 }

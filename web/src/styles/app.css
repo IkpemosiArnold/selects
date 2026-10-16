@@ -98,7 +98,7 @@ kbd {
 @media (hover: hover) and (pointer: fine) { .theme-toggle:hover { color: var(--ink); border-color: var(--line-2); } }
 
 .page { padding: 28px var(--gutter) 64px; max-width: 1240px; }
-.loading-page, .notice-page { display: grid; gap: 16px; align-content: start; }
+.loading-page, .notice-page { display: grid; gap: 16px; align-content: start; justify-items: start; }
 
 /* ---------- new job ---------- */
 .new-page { display: grid; gap: 32px; }
@@ -219,36 +219,42 @@ kbd {
 .recent-status.is-error { color: var(--red-ink); }
 .recent-date { font-size: var(--t-13); text-align: right; }
 
-/* ---------- processing ---------- */
-.proc-page { display: grid; gap: 28px; max-width: 1080px; }
-.steps { display: flex; flex-wrap: wrap; gap: 8px 28px; font-size: var(--t-13); color: var(--ink-2); }
-.step { display: inline-flex; align-items: center; gap: 8px; }
-.step-mark { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--edge); }
+/* ---------- processing: the slate, the script so far, the strip ---------- */
+.proc { min-height: 100dvh; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr); }
+.proc-stage {
+  display: grid; grid-template-columns: minmax(0, 440px) minmax(0, 760px); justify-content: center; align-items: center;
+  gap: clamp(28px, 5vw, 80px); padding: 32px var(--gutter);
+}
+.proc-left .slate { gap: 16px; }
+.proc-headline { cursor: default; }
+.proc-headline.is-error { color: var(--slate-red); }
+.proc-sub { color: var(--ink-2); max-width: 44ch; text-wrap: pretty; }
+.proc-resume { justify-self: start; }
+.steps { display: grid; gap: 8px; font-size: var(--t-13); color: var(--ink-2); margin-top: 4px; }
+.step { display: flex; align-items: center; gap: 10px; }
+.step-mark { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--edge); flex: none; }
+.step-pct { margin-left: auto; color: var(--blue-ink); }
 .step.is-done { color: var(--ink); }
 .step.is-done .step-mark { background: var(--ink); border-color: var(--ink); }
 .step.is-running { color: var(--ink); font-weight: 650; }
 .step.is-running .step-mark { border-color: var(--blue); background: var(--blue); box-shadow: 0 0 0 3px var(--blue-wash-2); }
 .step.is-error { color: var(--red-ink); font-weight: 650; }
 .step.is-error .step-mark { background: var(--red); border-color: var(--red); }
-.proc-head { display: grid; gap: 8px; justify-items: start; }
-.proc-head .h-24 { font-family: var(--mono); font-weight: 500; font-size: clamp(1.25rem, 2.4vw, 1.75rem); letter-spacing: -0.015em; }
-.proc-head .h-24.is-error { color: var(--red-ink); }
-.proc-head .btn { margin-top: 8px; }
+.proc-transcript { background: var(--page); border-radius: 8px; box-shadow: 0 0 0 1px var(--line); padding: 18px 28px 22px; min-width: 0; }
+.proc-page-head { font-size: var(--t-13); color: var(--ink-2); margin-bottom: 8px; }
+.proc .proc-track { height: 14px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
+.proc-fill { position: absolute; inset: 0; background: var(--ink-2); transform-origin: left; transition: transform 260ms linear; }
+.proc-track.is-judging .proc-fill { background: var(--blue); }
+@media (max-width: 900px) {
+  .proc-stage { grid-template-columns: minmax(0, 1fr); align-items: start; }
+}
 
-.reel-progress { display: grid; gap: 6px; }
-.rp-bar { position: relative; height: 10px; background: var(--panel-2); border-radius: 2px; overflow: hidden; }
-.rp-fill { position: absolute; inset: 0; background: var(--ink); transform-origin: left; transition: transform 260ms linear; }
-.rp-bar.is-blue .rp-fill { background: var(--blue); }
-.rp-tick { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--table); opacity: 0.5; }
-.rp-labels { display: flex; justify-content: space-between; font-size: var(--t-13); }
-
-.proc-transcript { border-top: 1px solid var(--line); padding-top: 20px; }
 .reveal {
   height: clamp(260px, 46vh, 460px); overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end;
   -webkit-mask-image: linear-gradient(transparent, #000 34%); mask-image: linear-gradient(transparent, #000 34%);
 }
-.reveal-text { font-size: var(--t-18); line-height: 1.6; max-width: 66ch; text-wrap: pretty; }
-.rv-w.is-unsure { text-decoration: underline dotted var(--edge); text-underline-offset: 4px; }
+.reveal-text { font-family: var(--mono); font-size: 0.9375rem; line-height: 1.9; max-width: 64ch; text-wrap: pretty; }
+.rv-w.is-unsure { color: var(--ink-2); }
 .rv-w.is-new { animation: word-in 220ms var(--ease-out) both; }
 @keyframes word-in {
   from { opacity: 0; filter: blur(3px); }
