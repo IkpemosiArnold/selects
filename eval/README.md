@@ -29,13 +29,16 @@ node eval/fetch-datasets.mjs video <id>               # 720p video for the demo
 
 ## Methods
 
-Selects picks in two stages: a cheap no-LLM prefilter (`shortlist` in `src/core/candidates.mjs`, text rules plus time coverage) keeps the top 8 windows, and only those go to the model. The headline comparison is **prefilter alone** against **prefilter + judge**: same 8 windows, so the difference is what the LLM adds.
+Selects picks in two stages: a cheap no-LLM prefilter (`shortlist` in `src/core/candidates.mjs`, text rules plus time coverage) keeps the top N windows (the app's default is 8), and only those go to the model. The headline comparison is **prefilter alone** against **prefilter + model** on the same N windows, so the difference is what the LLM adds.
 
-- `random`: random scores over all candidates, averaged over 200 seeds (the chance level). `random:shortlist`: the same, picking from the 8 shortlisted windows.
+- `random`: random scores over all windows, averaged over 200 seeds (the chance level). `random:shortlist@N`: the same, within the N prefiltered windows.
 - `energy`: no LLM. Mean loudness, loudness variation and words per second per window (z-scored and averaged), the signals cheap clippers use.
-- `prescore`: the core's text rules ranking all candidates. `prefilter`: the 8 shortlisted windows ranked by those rules (stage 1 alone).
-- `judge:<model>`: stage 1, then `src/core/judge.mjs` scores the 8 windows with a local Ollama model on the rubric in `src/core/prompts/judge.md`, and `src/core/rank.mjs` picks the top 5 with overlap suppression. Per-call seconds and token counts come from Ollama's response (`judge-calls.jsonl`) and feed the cost table.
-- `oracle` and `oracle:shortlist`: ceilings. If no window in the pool overlaps a label at IoU 0.5, no picker can hit it.
+- `prescore`: the core's text rules ranking all windows. `prefilter@N`: the N shortlisted windows ranked by those rules (stage 1 alone).
+- `judge:<model>@N`: the model scores the N windows with the rubric in `src/core/prompts/judge.md`; ranked by the model's own score (`judgeTotal`), then `src/core/rank.mjs` picks the top 5 with overlap suppression.
+- `shipped:<model>@N`: the same calls, ranked as the app does (0.7 model score + 0.3 text-rule score). `shipped+list:<model>@N`: plus the listwise final round (one extra call comparing the best 4 side by side).
+- `oracle` and `oracle:shortlist@N`: ceilings. If no window in the pool overlaps a label at IoU 0.5, no picker can hit it.
+
+The default plan (`--plan`) runs, in order: qwen2.5:0.5b at N = 8, 16, 24; gemma3-4b-hf at N = 8 with the listwise round; gemma3-4b-hf at N = 16; qwen2.5:0.5b on all windows. Each entry runs on every video before the next starts. Per-call seconds and token counts come from Ollama's response (`judge-calls.jsonl`) and feed the cost table.
 
 With 8 windows and k = 5, any picker takes most of the shortlist, so hit@3 and precision@3 separate methods better than hit@5.
 
@@ -51,7 +54,7 @@ With 8 windows and k = 5, any picker takes most of the shortlist, so hit@3 and p
 ## Running
 
 ```
-node eval/run-eval.mjs                 # all videos, all installed judge models
+node eval/run-eval.mjs                 # all videos, the default plan; resumable after a crash or power loss
 node eval/run-eval.mjs --limit 4       # the 4 shortest videos
 node eval/run-eval.mjs --report        # rebuild results from caches only
 node --test eval/*.test.mjs
