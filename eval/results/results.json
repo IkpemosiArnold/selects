@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-16T00:27:44.165Z",
+  "generatedAt": "2026-10-16T00:51:22.736Z",
   "k": 5,
   "iouThreshold": 0.5,
   "settings": {
@@ -11,308 +11,322 @@
   "aggregate": {
     "heatmap": {
       "oracle": {
-        "n": 1,
+        "n": 3,
         "hit3": {
-          "mean": 1,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.6666666666666666,
+          "lo": 0,
+          "hi": 1,
+          "n": 3
         },
         "p3": {
-          "mean": 1,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.6666666666666666,
+          "lo": 0,
+          "hi": 1,
+          "n": 3
         },
         "hit5": {
-          "mean": 1,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.6666666666666666,
+          "lo": 0,
+          "hi": 1,
+          "n": 3
         },
         "p5": {
-          "mean": 0.6,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.4666666666666666,
+          "lo": 0,
+          "hi": 0.8000000000000002,
+          "n": 3
         },
         "r5": {
-          "mean": 0.75,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.5833333333333334,
+          "lo": 0,
+          "hi": 1,
+          "n": 3
         },
         "miou5": {
-          "mean": 0.6881791459138475,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.5156596615916808,
+          "lo": 0,
+          "hi": 0.8587998388611945,
+          "n": 3
         },
         "hit3s": [
+          1,
+          0,
           1
         ],
         "judgeMinPerVideo": null,
         "secPerCandidate": null
       },
       "oracle:shortlist": {
-        "n": 1,
+        "n": 3,
         "hit3": {
-          "mean": 1,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.3333333333333333,
+          "lo": 0,
+          "hi": 1,
+          "n": 3
         },
         "p3": {
-          "mean": 0.6666666666666666,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.2222222222222222,
+          "lo": 0,
+          "hi": 0.6666666666666666,
+          "n": 3
         },
         "hit5": {
-          "mean": 1,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.3333333333333333,
+          "lo": 0,
+          "hi": 1,
+          "n": 3
         },
         "p5": {
-          "mean": 0.4,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.13333333333333333,
+          "lo": 0,
+          "hi": 0.4000000000000001,
+          "n": 3
         },
         "r5": {
-          "mean": 0.5,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.16666666666666666,
+          "lo": 0,
+          "hi": 0.5,
+          "n": 3
         },
         "miou5": {
-          "mean": 0.39723542568219405,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.13241180856073134,
+          "lo": 0,
+          "hi": 0.397235425682194,
+          "n": 3
         },
         "hit3s": [
-          1
+          1,
+          0,
+          0
         ],
         "judgeMinPerVideo": null,
         "secPerCandidate": null
       },
       "prescore": {
-        "n": 1,
+        "n": 3,
         "hit3": {
-          "mean": 1,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.3333333333333333,
+          "lo": 0,
+          "hi": 1,
+          "n": 3
         },
         "p3": {
-          "mean": 0.6666666666666666,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.2222222222222222,
+          "lo": 0,
+          "hi": 0.6666666666666666,
+          "n": 3
         },
         "hit5": {
-          "mean": 1,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.3333333333333333,
+          "lo": 0,
+          "hi": 1,
+          "n": 3
         },
         "p5": {
-          "mean": 0.4,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.13333333333333333,
+          "lo": 0,
+          "hi": 0.4000000000000001,
+          "n": 3
         },
         "r5": {
-          "mean": 0.5,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.16666666666666666,
+          "lo": 0,
+          "hi": 0.5,
+          "n": 3
         },
         "miou5": {
-          "mean": 0.3151431937176897,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.10504773123922989,
+          "lo": 0,
+          "hi": 0.3151431937176897,
+          "n": 3
         },
         "hit3s": [
-          1
+          1,
+          0,
+          0
         ],
         "judgeMinPerVideo": null,
         "secPerCandidate": null
       },
       "prefilter": {
-        "n": 1,
+        "n": 3,
         "hit3": {
-          "mean": 1,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.3333333333333333,
+          "lo": 0,
+          "hi": 1,
+          "n": 3
         },
         "p3": {
-          "mean": 0.6666666666666666,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.2222222222222222,
+          "lo": 0,
+          "hi": 0.6666666666666666,
+          "n": 3
         },
         "hit5": {
-          "mean": 1,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.3333333333333333,
+          "lo": 0,
+          "hi": 1,
+          "n": 3
         },
         "p5": {
-          "mean": 0.4,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.13333333333333333,
+          "lo": 0,
+          "hi": 0.4000000000000001,
+          "n": 3
         },
         "r5": {
-          "mean": 0.5,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.16666666666666666,
+          "lo": 0,
+          "hi": 0.5,
+          "n": 3
         },
         "miou5": {
-          "mean": 0.3151431937176897,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.10504773123922989,
+          "lo": 0,
+          "hi": 0.3151431937176897,
+          "n": 3
         },
         "hit3s": [
-          1
+          1,
+          0,
+          0
         ],
         "judgeMinPerVideo": null,
         "secPerCandidate": null
       },
       "random": {
-        "n": 1,
+        "n": 3,
         "hit3": {
-          "mean": 0.175,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.14333333333333334,
+          "lo": 0,
+          "hi": 0.255,
+          "n": 3
         },
         "p3": {
-          "mean": 0.06166666666666669,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.05166666666666667,
+          "lo": 0,
+          "hi": 0.09333333333333334,
+          "n": 3
         },
         "hit5": {
-          "mean": 0.26,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.225,
+          "lo": 0,
+          "hi": 0.415,
+          "n": 3
         },
         "p5": {
-          "mean": 0.05799999999999996,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.052999999999999936,
+          "lo": 0,
+          "hi": 0.10099999999999985,
+          "n": 3
         },
         "r5": {
-          "mean": 0.0725,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.06624999999999999,
+          "lo": 0,
+          "hi": 0.12625,
+          "n": 3
         },
         "miou5": {
-          "mean": 0.12262320304943021,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.08855230625945192,
+          "lo": 0,
+          "hi": 0.14303371572892554,
+          "n": 3
         },
         "hit3s": [
-          0.175
+          0.175,
+          0,
+          0.255
         ],
         "judgeMinPerVideo": null,
         "secPerCandidate": null
       },
       "random:shortlist": {
-        "n": 1,
+        "n": 3,
         "hit3": {
-          "mean": 0.675,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.225,
+          "lo": 0,
+          "hi": 0.6750000000000002,
+          "n": 3
         },
         "p3": {
-          "mean": 0.2733333333333336,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.0911111111111112,
+          "lo": 0,
+          "hi": 0.2733333333333336,
+          "n": 3
         },
         "hit5": {
-          "mean": 0.94,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.3133333333333333,
+          "lo": 0,
+          "hi": 0.94,
+          "n": 3
         },
         "p5": {
-          "mean": 0.2820000000000001,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.09400000000000003,
+          "lo": 0,
+          "hi": 0.2820000000000001,
+          "n": 3
         },
         "r5": {
-          "mean": 0.3525,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.1175,
+          "lo": 0,
+          "hi": 0.3525,
+          "n": 3
         },
         "miou5": {
-          "mean": 0.22454429737573206,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.07484809912524402,
+          "lo": 0,
+          "hi": 0.22454429737573203,
+          "n": 3
         },
         "hit3s": [
-          0.675
+          0.675,
+          0,
+          0
         ],
         "judgeMinPerVideo": null,
         "secPerCandidate": null
       },
       "energy": {
-        "n": 1,
+        "n": 3,
         "hit3": {
           "mean": 0,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "lo": 0,
+          "hi": 0,
+          "n": 3
         },
         "p3": {
           "mean": 0,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "lo": 0,
+          "hi": 0,
+          "n": 3
         },
         "hit5": {
           "mean": 0,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "lo": 0,
+          "hi": 0,
+          "n": 3
         },
         "p5": {
           "mean": 0,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "lo": 0,
+          "hi": 0,
+          "n": 3
         },
         "r5": {
           "mean": 0,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "lo": 0,
+          "hi": 0,
+          "n": 3
         },
         "miou5": {
-          "mean": 0.09847563851023654,
-          "lo": null,
-          "hi": null,
-          "n": 1
+          "mean": 0.03282521283674551,
+          "lo": 0,
+          "hi": 0.09847563851023654,
+          "n": 3
         },
         "hit3s": [
+          0,
+          0,
           0
         ],
         "judgeMinPerVideo": null,
@@ -641,8 +655,512 @@
       },
       "timings": {
         "transcribeSec": 201.149,
-        "candidatesSec": 0.152,
+        "candidatesSec": 0.069,
         "nCandidates": 142
+      },
+      "nShortlist": 8
+    },
+    {
+      "id": "ASvx-QG6o04",
+      "title": "💥7 POWERFUL Body Language Hacks for Job Interviews",
+      "duration": 646,
+      "nWords": 2316,
+      "nCandidates": 3,
+      "labels": {
+        "heatmap": [
+          {
+            "start": 77.64,
+            "end": 103.52,
+            "source": "heatmap",
+            "weight": 0.791
+          },
+          {
+            "start": 213.51,
+            "end": 265.27,
+            "source": "heatmap",
+            "weight": 0.984
+          },
+          {
+            "start": 290.86,
+            "end": 310.86,
+            "source": "heatmap",
+            "weight": 0.95
+          },
+          {
+            "start": 355.56,
+            "end": 375.56,
+            "source": "heatmap",
+            "weight": 0.668
+          },
+          {
+            "start": 400.85,
+            "end": 420.85,
+            "source": "heatmap",
+            "weight": 0.739
+          }
+        ],
+        "human": []
+      },
+      "methods": {
+        "oracle": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0
+            }
+          }
+        },
+        "oracle:shortlist": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0
+            }
+          }
+        },
+        "prescore": {
+          "preds": [
+            {
+              "id": "c_0001",
+              "start": 0.1,
+              "end": 24.99,
+              "total": 0.58,
+              "hook": "You are going for a job interview.",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0
+            }
+          }
+        },
+        "prefilter": {
+          "preds": [
+            {
+              "id": "c_0001",
+              "start": 0.1,
+              "end": 24.99,
+              "total": 0.58,
+              "hook": "You are going for a job interview.",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0
+            }
+          }
+        },
+        "random": {
+          "preds": [
+            {
+              "id": "c_0001",
+              "start": 0.1,
+              "end": 24.99,
+              "total": 0.6270739405881613,
+              "hook": "You are going for a job interview.",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0
+            }
+          },
+          "seeds": 200
+        },
+        "random:shortlist": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0
+            }
+          },
+          "seeds": 200
+        },
+        "energy": {
+          "preds": [
+            {
+              "id": "c_0001",
+              "start": 0.1,
+              "end": 24.99,
+              "total": 1,
+              "hook": "You are going for a job interview.",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0
+            }
+          }
+        }
+      },
+      "timings": {
+        "transcribeSec": 182.589,
+        "candidatesSec": 0.001,
+        "nCandidates": 3
+      },
+      "nShortlist": 3
+    },
+    {
+      "id": "CBYhVcO4WgI",
+      "title": "Lecture 1 - How to Start a Startup (Sam Altman, Dustin Moskovitz)",
+      "duration": 900,
+      "nWords": 3142,
+      "nCandidates": 234,
+      "labels": {
+        "heatmap": [
+          {
+            "start": 255.96,
+            "end": 315.96,
+            "source": "heatmap",
+            "weight": 0.34
+          },
+          {
+            "start": 447.61,
+            "end": 473.94,
+            "source": "heatmap",
+            "weight": 0.322
+          },
+          {
+            "start": 500.27,
+            "end": 552.93,
+            "source": "heatmap",
+            "weight": 0.338
+          },
+          {
+            "start": 782.56,
+            "end": 842.56,
+            "source": "heatmap",
+            "weight": 0.44
+          }
+        ],
+        "human": []
+      },
+      "methods": {
+        "oracle": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 1,
+              "p5": 0.8,
+              "r5": 1,
+              "miou5": 0.8587998388611945
+            }
+          }
+        },
+        "oracle:shortlist": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0
+            }
+          }
+        },
+        "prescore": {
+          "preds": [
+            {
+              "id": "c_0104",
+              "start": 345.84,
+              "end": 400.4,
+              "total": 0.75,
+              "hook": "Remember that the idea will expand and become more ambitious as you go.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0185",
+              "start": 654.76,
+              "end": 683.84,
+              "total": 0.75,
+              "hook": "You should think about this.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0113",
+              "start": 376.52,
+              "end": 430.4,
+              "total": 0.73,
+              "hook": "The idea should come first and the startup should come second.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0020",
+              "start": 53.16,
+              "end": 92.6,
+              "total": 0.72,
+              "hook": "We've taught a lot of this at YC already, but it's all been off the record.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0006",
+              "start": 6.6,
+              "end": 64.28,
+              "total": 0.69,
+              "hook": ">> Can people hear on the back?",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0
+            }
+          }
+        },
+        "prefilter": {
+          "preds": [
+            {
+              "id": "c_0104",
+              "start": 345.84,
+              "end": 400.4,
+              "total": 0.75,
+              "hook": "Remember that the idea will expand and become more ambitious as you go.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0185",
+              "start": 654.76,
+              "end": 683.84,
+              "total": 0.75,
+              "hook": "You should think about this.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0113",
+              "start": 376.52,
+              "end": 430.4,
+              "total": 0.73,
+              "hook": "The idea should come first and the startup should come second.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0020",
+              "start": 53.16,
+              "end": 92.6,
+              "total": 0.72,
+              "hook": "We've taught a lot of this at YC already, but it's all been off the record.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0006",
+              "start": 6.6,
+              "end": 64.28,
+              "total": 0.69,
+              "hook": ">> Can people hear on the back?",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0
+            }
+          }
+        },
+        "random": {
+          "preds": [
+            {
+              "id": "c_0198",
+              "start": 704.44,
+              "end": 745.44,
+              "total": 0.9984868622850627,
+              "hook": "There are a lot of different ways to talk about the right kind of market.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0010",
+              "start": 25.88,
+              "end": 53.16,
+              "total": 0.9948229456786066,
+              "hook": "I'm the president of Y Combinator.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0036",
+              "start": 101.2,
+              "end": 157.8,
+              "total": 0.9945340014528483,
+              "hook": "Much of it doesn't apply in other cases, and I want to warn people upfront that if you try and do these things in a lot of big companies or non-startups, it won't work.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0108",
+              "start": 368.48,
+              "end": 393.24,
+              "total": 0.9916538530960679,
+              "hook": "This is an important part of a good idea.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0052",
+              "start": 161.08,
+              "end": 213.92,
+              "total": 0.9893774879164994,
+              "hook": "One of the exciting things about startups is that they are surprisingly even playing field.",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0.255,
+              "hit5": 0.415,
+              "p3": 0.09333333333333335,
+              "p5": 0.10099999999999985,
+              "r5": 0.12625,
+              "miou5": 0.14303371572892554
+            }
+          },
+          "seeds": 200
+        },
+        "random:shortlist": {
+          "preds": [],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0
+            }
+          },
+          "seeds": 200
+        },
+        "energy": {
+          "preds": [
+            {
+              "id": "c_0194",
+              "start": 693,
+              "end": 717.24,
+              "total": 1,
+              "hook": "You can basically change everything in a startup, but the market.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0176",
+              "start": 628.21,
+              "end": 654.76,
+              "total": 0.9282180826848608,
+              "hook": "You also really want to take the time to think about how the market's going to evolve.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0053",
+              "start": 181.88,
+              "end": 206.64,
+              "total": 0.8194788069217004,
+              "hook": "Before we jump in on the how, I want to talk about why you should start a startup.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0016",
+              "start": 44.88,
+              "end": 70.2,
+              "total": 0.8125785034489956,
+              "hook": "So we think that we can teach that 30 percent in this class.",
+              "reason": null,
+              "scores": null
+            },
+            {
+              "id": "c_0034",
+              "start": 101.2,
+              "end": 126.68,
+              "total": 0.7727656751805178,
+              "hook": "Much of it doesn't apply in other cases, and I want to warn people upfront that if you try and do these things in a lot of big companies or non-startups, it won't work.",
+              "reason": null,
+              "scores": null
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0
+            }
+          }
+        }
+      },
+      "timings": {
+        "transcribeSec": 214.167,
+        "candidatesSec": 0.028,
+        "nCandidates": 234
       },
       "nShortlist": 8
     }

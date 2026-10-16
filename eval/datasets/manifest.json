@@ -125,45 +125,51 @@
     ]
   },
   {
-    "id": "Efi9wa4Fwds",
-    "title": "Keynote: A Conversation with Linus Torvalds",
-    "channel": "The Linux Foundation",
-    "url": "https://www.youtube.com/watch?v=Efi9wa4Fwds",
+    "id": "iqm-XEqpayc",
+    "title": "Sheryl Sandberg Gives UC Berkeley Commencement Keynote Speech",
+    "channel": "UC Berkeley",
+    "url": "https://www.youtube.com/watch?v=iqm-XEqpayc",
     "license": "CC BY 3.0",
     "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
     "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-16)",
-    "localPath": "eval/media/Efi9wa4Fwds.webm",
+    "localPath": "eval/media/iqm-XEqpayc.webm",
     "duration": 900,
     "evalRange": [
       0,
       900
     ],
-    "fullDuration": 1508,
-    "heatmapPath": "eval/datasets/info/Efi9wa4Fwds.json",
+    "fullDuration": 1541,
+    "heatmapPath": "eval/datasets/info/iqm-XEqpayc.json",
     "labels": [
       {
-        "start": 105.99,
-        "end": 165.99,
+        "start": 92.52,
+        "end": 123.36,
         "source": "heatmap",
-        "weight": 0.321
+        "weight": 0.504
       },
       {
-        "start": 196.17,
-        "end": 226.35,
+        "start": 323.82,
+        "end": 354.66,
         "source": "heatmap",
-        "weight": 0.135
+        "weight": 0.689
       },
       {
-        "start": 407.43,
-        "end": 452.7,
+        "start": 508.86,
+        "end": 568.86,
         "source": "heatmap",
-        "weight": 0.118
+        "weight": 0.628
       },
       {
-        "start": 784.68,
-        "end": 829.95,
+        "start": 601.38,
+        "end": 632.22,
         "source": "heatmap",
-        "weight": 0.172
+        "weight": 1
+      },
+      {
+        "start": 678.48,
+        "end": 709.32,
+        "source": "heatmap",
+        "weight": 0.594
       }
     ]
   },

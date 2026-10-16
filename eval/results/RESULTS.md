@@ -1,20 +1,20 @@
 # Selects eval results
 
-Generated 2026-10-16 00:27 UTC by `node eval/run-eval.mjs`. Machine: Intel i5-7360U (2 cores, 2017), 16 GB, no GPU.
+Generated 2026-10-16 00:51 UTC by `node eval/run-eval.mjs`. Machine: Intel i5-7360U (2 cores, 2017), 16 GB, no GPU.
 
-Videos scored: **n = 1** of 6 in the manifest. Each method picks its top 5 clips (20 to 60 s) from the same candidate windows.
+Videos scored: **n = 3** of 6 in the manifest. Each method picks its top 5 clips (20 to 60 s) from the same candidate windows.
 
 ## Against YouTube Most Replayed peaks (proxy labels)
 
 | Method | n | hit@3 (95% CI) | precision@3 | hit@5 | precision@5 | recall@5 | mean best IoU (95% CI) | judge time per video | s per window |
 |---|---|---|---|---|---|---|---|---|---|
-| random over all candidates (mean of 200 seeds) | 1 | 18% | 6% | 26% | 6% | 7% | 0.12 | - | - |
-| energy: loudness + speech rate, no LLM | 1 | 0% | 0% | 0% | 0% | 0% | 0.10 | - | - |
-| text rules over all candidates, no LLM | 1 | 100% | 67% | 100% | 40% | 50% | 0.32 | - | - |
-| random from the shortlist (mean of 200 seeds) | 1 | 68% | 27% | 94% | 28% | 35% | 0.22 | - | - |
-| **prefilter alone** (stage 1, no LLM) | 1 | 100% | 67% | 100% | 40% | 50% | 0.32 | - | - |
-| ceiling: best possible from the shortlist | 1 | 100% | 67% | 100% | 40% | 50% | 0.40 | - | - |
-| ceiling: best possible from all candidates | 1 | 100% | 100% | 100% | 60% | 75% | 0.69 | - | - |
+| random over all candidates (mean of 200 seeds) | 3 | 14% (0% to 26%) | 5% | 23% | 5% | 7% | 0.09 (0.00 to 0.14) | - | - |
+| energy: loudness + speech rate, no LLM | 3 | 0% (0% to 0%) | 0% | 0% | 0% | 0% | 0.03 (0.00 to 0.10) | - | - |
+| text rules over all candidates, no LLM | 3 | 33% (0% to 100%) | 22% | 33% | 13% | 17% | 0.11 (0.00 to 0.32) | - | - |
+| random from the shortlist (mean of 200 seeds) | 3 | 23% (0% to 68%) | 9% | 31% | 9% | 12% | 0.07 (0.00 to 0.22) | - | - |
+| **prefilter alone** (stage 1, no LLM) | 3 | 33% (0% to 100%) | 22% | 33% | 13% | 17% | 0.11 (0.00 to 0.32) | - | - |
+| ceiling: best possible from the shortlist | 3 | 33% (0% to 100%) | 22% | 33% | 13% | 17% | 0.13 (0.00 to 0.40) | - | - |
+| ceiling: best possible from all candidates | 3 | 67% (0% to 100%) | 67% | 67% | 47% | 58% | 0.52 (0.00 to 0.86) | - | - |
 
 ## Against human picks
 
@@ -25,10 +25,12 @@ No human labels yet. Run `node eval/label.mjs` and mark 5 moments per video.
 | Video | evaluated length | windows (judged) | transcribe |
 |---|---|---|---|
 | "I'm a Machine" An interview with Fabiano Caruana / GibChess | 10:17 | 142 (8) | 3:21 | 
+| 💥7 POWERFUL Body Language Hacks for Job Interviews | 10:46 | 3 (3) | 3:03 | 
+| Lecture 1 - How to Start a Startup (Sam Altman, Dustin Mosko | 15:00 | 234 (8) | 3:34 | 
 
 ## How to read this, and caveats
 
-- **n is small (1 video).** Confidence intervals are percentile bootstrap over videos; with n this small they are wide, and a difference whose interval crosses zero is not a finding.
+- **n is small (3 videos).** Confidence intervals are percentile bootstrap over videos; with n this small they are wide, and a difference whose interval crosses zero is not a finding.
 - **Most Replayed is a proxy.** It records where viewers rewatch or seek to, which is not the same as where a good standalone short is. Replays also gather around slides, demos and jokes that need visual context, which an audio-only picker cannot see.
 - **The heatmap is coarse.** YouTube gives about 100 segments per video (one per 6 to 27 s for these videos), so label boundaries are only accurate to a segment. Hit at IoU 0.5 is strict against such labels; the mean best IoU column and the two ceiling rows show how much is reachable at all.
 - **Random is the chance level**, averaged over 200 seeds on the same candidate windows, so it is not a single lucky or unlucky draw.
