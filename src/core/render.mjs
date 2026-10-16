@@ -231,7 +231,10 @@ export function hwaccelArgs(src) {
 export function gpuScaleOk(src) {
   return hwaccelArgs(src).length > 0 && process.env.SELECTS_GPU_SCALE !== "0" && ["yuv420p", "yuvj420p", "nv12"].includes(src.pixFmt);
 }
-const GPU_INPUT = ["-hwaccel", "videotoolbox", "-hwaccel_output_format", "videotoolbox_vld", "-noautorotate"];
+// -display_rotation 0 (not -noautorotate): with -noautorotate ffmpeg copies the source's
+// rotation into the output, so a frame we already turned upright would be turned again by
+// every player. Found on the first real run: the clips came out sideways.
+const GPU_INPUT = ["-hwaccel", "videotoolbox", "-hwaccel_output_format", "videotoolbox_vld", "-display_rotation:v", "0"];
 
 /** Filters that turn a frame stored with a rotation upright (what autorotate would add). */
 export function uprightFilter(rotation) {
