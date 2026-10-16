@@ -20,7 +20,19 @@ export const LANGUAGE_NAMES = {
   ln: "Lingala", sn: "Shona", ur: "Urdu", bn: "Bengali", id: "Indonesian", vi: "Vietnamese", th: "Thai", fa: "Persian",
   he: "Hebrew", el: "Greek", sv: "Swedish", da: "Danish", no: "Norwegian", fi: "Finnish", cy: "Welsh", ga: "Irish",
 };
-export const languageName = (c) => LANGUAGE_NAMES[c] || c;
+let displayNames = null;
+try {
+  displayNames = new Intl.DisplayNames(["en"], { type: "language" });
+} catch {}
+/** "yo" -> "Yoruba"; any other code through Intl ("ro" -> "Romanian"), else the code itself. */
+export const languageName = (c) => {
+  if (LANGUAGE_NAMES[c]) return LANGUAGE_NAMES[c];
+  try {
+    const n = displayNames?.of(c);
+    if (n && n !== c && !/unknown/i.test(n)) return n;
+  } catch {}
+  return c;
+};
 
 // Common English function words (no single letters: Yoruba "a" and "o" are words too).
 const EN_FUNCTION = new Set(

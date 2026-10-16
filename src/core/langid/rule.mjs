@@ -16,7 +16,7 @@
 // models have no opinion (whisper can also translate, so "asked for English, wrote English"
 // proves little).
 import { languageName } from "../language.mjs";
-import { WHISPER_LANGS } from "./codes.mjs";
+import { iso3Of, NIGERIAN, WHISPER_LANGS } from "./codes.mjs";
 
 /** Vote weights. The detector counts half: it is the signal known to fail on accents. */
 export const WEIGHTS = { "whisper-detect": 0.5, "whisper-decode": 1.0, "text-608": 1.0, "text-ng5": 0.5 };
@@ -25,7 +25,21 @@ export const MIN_CONFIDENCE = 0.6;
 /** A text verdict needs this many decoded words and this probability to count. */
 export const TEXT_MIN_WORDS = 8;
 export const TEXT_MIN_P = 0.5;
+/**
+ * A decode with a mean word probability under this failed: whisper could not write the
+ * speech in that language. Its text is noise (lid-lite-608 read a failed Welsh decode of
+ * British English as Welsh, p = 1.0), so the text models skip it, and the failure itself
+ * refutes that language.
+ */
+export const DECODE_FAIL = 0.3;
+/**
+ * Whisper's detector under this p is unsure. A non-English verdict that rests on an unsure
+ * detector is asked about, not decided: on Hausa speech the detector said Romanian
+ * (p = 0.17), and whisper's "Romanian" decode read as Romanian text too.
+ */
+export const DETECT_SURE = 0.5;
 const NG5_CODES = { eng: "en", hau: "ha", ibo: "ig", pcm: "en", yor: "yo" };
+const NG5_DOMAIN = new Set(["eng", ...NIGERIAN]);
 
 /** lid-lite-5's verdict for one text: { code, p } from its class probabilities, or null. */
 export function ng5Verdict(probs) {
@@ -37,17 +51,19 @@ export function ng5Verdict(probs) {
 }
 
 /**
- * One text signal across all decodes. decodes: [{ asked, words, verdict: { code, p } | null }].
+ * One text signal across all decodes. decodes: [{ asked, words, meanP, verdict: { code, p } | null }].
  * A decode refutes its language when its text is in another language (p >= TEXT_MIN_P).
+ * Failed decodes (meanP < DECODE_FAIL) are skipped.
  * Returns { verdict, p, refuted: codes[], detail: [...] } (verdict null = no opinion).
  */
-export function textSignal(decodes, { minWords = TEXT_MIN_WORDS, minP = TEXT_MIN_P } = {}) {
+export function textSignal(decodes, { minWords = TEXT_MIN_WORDS, minP = TEXT_MIN_P, failP = DECODE_FAIL } = {}) {
   const detail = [];
   const votes = {};
   const refuted = [];
   for (const d of decodes) {
-    if (!d.verdict || d.words < minWords) {
-      detail.push({ asked: d.asked, text: null, p: null, note: d.verdict ? "too few words" : "no verdict" });
+    if (!d.verdict || d.words < minWords || (d.meanP != null && d.meanP < failP)) {
+      const note = !d.verdict ? "no verdict" : d.words < minWords ? "too few words" : "the decode failed";
+      detail.push({ asked: d.asked, text: null, p: null, note });
       continue;
     }
     const { code, p } = d.verdict;
@@ -75,9 +91,15 @@ export function textSignal(decodes, { minWords = TEXT_MIN_WORDS, minP = TEXT_MIN
  */
 export function ensemble({ setting = "auto", detected = null, decode = null, compared = [] } = {}) {
   const signals = [];
-  const t608 = textSignal(compared.map((c) => ({ asked: c.code, words: c.words, verdict: c.text?.lid608 ? { code: c.text.lid608.code, p: c.text.lid608.p } : null })));
-  const tng5 = textSignal(compared.filter((c) => ["en", "yo", "ha", "ig"].includes(c.code)).map((c) => ({ asked: c.code, words: c.words, verdict: ng5Verdict(c.text?.ng5) })));
-  const refutedByText = new Set([...t608.refuted, ...tng5.refuted]);
+  const t608 = textSignal(compared.map((c) => ({ asked: c.code, words: c.words, meanP: c.meanP, verdict: c.text?.lid608 ? { code: c.text.lid608.code, p: c.text.lid608.p } : null })));
+  // lid-lite-5 knows five languages and calls any other text one of them (it read a garbled
+  // decode of American English as Hausa, p = 0.99), so it only speaks on text that
+  // lid-lite-608 places in those five (or when lid-lite-608 is not installed)
+  const inNg5 = (c) => !c.text?.lid608 || NG5_DOMAIN.has(iso3Of(c.text.lid608.label || ""));
+  const tng5 = textSignal(compared.filter((c) => ["en", "yo", "ha", "ig"].includes(c.code)).map((c) => ({ asked: c.code, words: c.words, meanP: c.meanP, verdict: inNg5(c) ? ng5Verdict(c.text?.ng5) : null })));
+  // a language is refuted when its decode came out in another language, or failed outright
+  const failed = compared.filter((c) => c.meanP != null && (c.meanP < DECODE_FAIL || c.words < 5)).map((c) => c.code);
+  const refutedByText = new Set([...t608.refuted, ...tng5.refuted, ...failed]);
 
   if (detected) {
     signals.push({ id: "whisper-detect", kind: "audio", model: "whisper (multilingual)", verdict: detected.code, p: detected.p, weight: WEIGHTS["whisper-detect"], refuted: refutedByText.has(detected.code) });
@@ -111,6 +133,7 @@ export function ensemble({ setting = "auto", detected = null, decode = null, com
     reasons.push(`${s.id} says ${languageName(s.verdict)}`);
   }
   if (confidence != null && confidence < MIN_CONFIDENCE) reasons.push(`only ${Math.round(confidence * 100)}% of the vote`);
+  if (setting === "auto" && language !== "en" && detected?.code === language && detected.p < DETECT_SURE) reasons.push(`whisper's detector is unsure (p = ${detected.p})`);
   if (used !== language && total > 0) reasons.push(`you chose ${languageName(used)}, the evidence says ${languageName(language)}`);
   if (ranked.length && ranked[0][0] !== language) reasons.push(`${languageName(ranked[0][0])} cannot be transcribed by whisper`);
   const disagreement = reasons.length > 0;

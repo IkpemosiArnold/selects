@@ -13,7 +13,8 @@ const ng5 = (top, p = 0.95) => {
   o[top] = p;
   return o;
 };
-const dec = (code, textCode, p = 0.95, words = 60, ng = null) => ({ code, words, meanP: 0.7, text: { lid608: textCode ? { code: textCode, p } : null, ng5: ng } });
+const LABEL = { en: "eng_Latn", yo: "yor_Latn", ha: "hau_Latn", ig: "ibo_Latn", fr: "fra_Latn", cy: "cym_Latn", ro: "ron_Latn" };
+const dec = (code, textCode, p = 0.95, words = 60, ng = null, meanP = 0.7, label = LABEL[textCode]) => ({ code, words, meanP, text: { lid608: textCode ? { label, code: textCode, p } : null, ng5: ng } });
 const sig = (r, id) => r.signals.find((s) => s.id === id);
 
 test("the grandmother case: English speech the detector calls Yoruba comes out English, with no question", () => {
@@ -181,4 +182,44 @@ test("accent routing: cues, settings, the user's model choice and a missing mode
   assert.match(kept.reason, /set to small\.en/);
   assert.equal(accentRoute({ language: "yo", accent: "ng", cues, exists: yes }).model, null);
   assert.match(accentRoute({ language: "en", cues, exists: () => false }).reason, /not installed/);
+});
+
+test("British English the detector calls Welsh: a failed Welsh decode refutes Welsh, and its text is ignored", () => {
+  // measured (16 Oct, EMF talk): detector cy p = 0.63; decoding as Welsh gave mean p 0.064,
+  // and lid-lite-608 still read that junk as Welsh (p = 1.0); as Yoruba, 0.098, read as Welsh 0.71
+  const r = ensemble({
+    setting: "auto",
+    detected: { code: "cy", p: 0.633 },
+    decode: { best: "en", margin: 0.807 },
+    compared: [dec("cy", "cy", 1, 63, null, 0.064), dec("en", "en", 0.987, 188, ng5("eng"), 0.905), dec("yo", "cy", 0.713, 47, ng5("ibo", 0.25), 0.098)],
+  });
+  assert.equal(r.language, "en");
+  assert.equal(r.disagreement, false);
+  assert.equal(sig(r, "whisper-detect").refuted, true);
+  assert.equal(sig(r, "text-608").verdict, null);
+  assert.equal(sig(r, "text-608").detail[0].note, "the decode failed");
+});
+
+test("lid-lite-5 only speaks on text that lid-lite-608 places in its five languages", () => {
+  // measured: a decode of American English forced to Yoruba came out garbled; lid-lite-608
+  // said French at p 0.20 (no vote), lid-lite-5 said Hausa at p 0.99
+  const garbled = { code: "yo", words: 67, meanP: 0.583, text: { lid608: { label: "fra_Latn", code: "fr", p: 0.196 }, ng5: ng5("hau", 0.99) } };
+  const r = ensemble({ setting: "auto", detected: { code: "en", p: 0.997 }, decode: { best: "en", margin: 0.26 }, compared: [dec("en", "en", 0.99, 210, ng5("eng", 0.99), 0.845), garbled] });
+  assert.equal(r.language, "en");
+  assert.equal(r.disagreement, false);
+  assert.equal(sig(r, "text-ng5").verdict, null);
+  assert.equal(sig(r, "text-608").verdict, null, "p 0.20 is under the bar");
+});
+
+test("a non-English verdict that rests on an unsure detector is asked about", () => {
+  // measured: FLEURS Hausa, detector "ro" p = 0.17; the English decode was empty
+  const r = ensemble({ setting: "auto", detected: { code: "ro", p: 0.173 }, decode: { best: "ro", margin: null }, compared: [dec("ro", "ro", 1, 74, null, 0.43), { code: "en", words: 0, meanP: 0, text: { lid608: null, ng5: null } }] });
+  assert.equal(r.language, "ro");
+  assert.equal(r.disagreement, true);
+  assert.match(r.reasons.join(";"), /detector is unsure \(p = 0\.173\)/);
+  assert.equal(r.question.text, "Is the speaker using Romanian?");
+  // a sure detector with a clean decode is not asked about (FLEURS Yoruba: p = 0.54)
+  const yo = ensemble({ setting: "auto", detected: { code: "yo", p: 0.54 }, decode: { best: "yo", margin: null }, compared: [dec("yo", "yo", 0.96, 109, ng5("yor", 0.92), 0.677), { code: "en", words: 4, meanP: 0.748, text: { lid608: null, ng5: null } }] });
+  assert.equal(yo.language, "yo");
+  assert.equal(yo.disagreement, false);
 });
