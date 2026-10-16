@@ -23,7 +23,7 @@ test("proxy judges a clip through Gemma and keeps clip text out of its log", asy
     assert.equal(r.headers.get("access-control-allow-origin"), "http://localhost:4319");
     const j = await r.json();
     assert.match(j.text, /"hook"/);
-    assert.equal(j.model, "gemma-4-31b-it");
+    assert.equal(j.model, "gemma-4-26b-a4b-it");
     const sent = s.mock.seen.at(-1);
     assert.equal(sent.key, "test-key");
     assert.ok(!JSON.stringify(sent.body).includes("not sent"), "only the slim task reaches Google");
@@ -51,12 +51,12 @@ test("proxy refuses other payloads, other origins and floods", async () => {
 });
 
 test("proxy falls back to the next Gemma model when one is not served", async () => {
-  const s = await setup({ model: "missing-model", fallbacks: ["gemma-3-27b-it"] });
+  const s = await setup({ model: "missing-model", fallbacks: ["gemma-4-31b-it"] });
   try {
     const r = await fetch(`${s.url}/v1/task`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind: "listwise", top: [clip, clip, clip] }) });
     const j = await r.json();
     assert.equal(r.status, 200);
-    assert.equal(j.model, "gemma-3-27b-it");
+    assert.equal(j.model, "gemma-4-31b-it");
     assert.match(j.text, /ranking/);
   } finally {
     s.close();

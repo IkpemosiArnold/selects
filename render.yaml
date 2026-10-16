@@ -44,10 +44,14 @@ services:
     envVars:
       - key: GEMINI_API_KEY
         sync: false
+      # the Gemma models the Gemini API serves (16 Oct 2026): the 26B MoE answered judge
+      # calls in about 2 s, the 31B dense model in up to a minute
       - key: GEMMA_MODEL
-        value: gemma-4-31b-it
+        value: gemma-4-26b-a4b-it
       - key: GEMMA_FALLBACKS
-        value: gemma-4-26b-a4b-it,gemma-3-27b-it
+        value: gemma-4-31b-it
+      - key: GEMMA_TIMEOUT_MS
+        value: "25000"
       # the static site's URL, for example https://selects-web.onrender.com
       - key: ALLOWED_ORIGINS
         sync: false

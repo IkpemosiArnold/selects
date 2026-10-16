@@ -70,3 +70,36 @@ test("Gemini call retries without a refused feature and reports quota errors pla
   const quota = async () => new Response(JSON.stringify({ error: { message: "Resource exhausted" } }), { status: 429 });
   await assert.rejects(geminiGenerate({ key: "k", model: "m", messages: [{ role: "user", content: "x" }], fetchImpl: quota }), (e) => e.status === 429 && /quota/.test(e.hint));
 });
+
+test("Gemini call: a slow answer times out, a transient failure is retried once", async () => {
+  let n = 0;
+  const flaky = async (url, init) => {
+    n++;
+    if (n === 1) return new Response("", { status: 404 }); // the free tier's empty 404
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "{}" }] } }] }));
+  };
+  const ok = await geminiGenerate({ key: "k", model: "m", messages: [{ role: "user", content: "x" }], fetchImpl: flaky, backoffMs: 1 });
+  assert.equal(ok.attempts, 2);
+  const hang = (url, init) => new Promise((_, rej) => init.signal.addEventListener("abort", () => rej(Object.assign(new Error("aborted"), { name: "AbortError" }))));
+  const t0 = Date.now();
+  await assert.rejects(geminiGenerate({ key: "k", model: "m", messages: [{ role: "user", content: "x" }], fetchImpl: hang, timeoutMs: 50, backoffMs: 1 }), (e) => e.transient && e.status === 0 && e.attempts === 2 && /within/.test(e.message));
+  assert.ok(Date.now() - t0 < 2000);
+  const notFound = async () => new Response(JSON.stringify({ error: { message: "models/x is not found" } }), { status: 404 });
+  await assert.rejects(geminiGenerate({ key: "k", model: "x", messages: [{ role: "user", content: "x" }], fetchImpl: notFound, backoffMs: 1 }), (e) => !e.transient && e.attempts === 1);
+});
+
+test("batch judge: one call scores every clip on its own; cut-off answers keep the complete clips", () => {
+  const cands = [cand, { ...cand, id: "c_0002", text: "Second clip text here." }, { ...cand, id: "c_0003", text: "Third." }];
+  const t = buildTask({ kind: "judgeBatch", candidates: cands }, prompts);
+  assert.match(t.messages[1].content, /Clip A, 30 seconds:[\s\S]*Clip C, 30 seconds:/);
+  assert.deepEqual(t.schema.properties.clips.items.properties.clip.enum, ["A", "B", "C"]);
+  assert.equal(t.maxTokens, 40 + 210);
+  const full = readTask({ kind: "judgeBatch", candidates: cands }, { text: JSON.stringify({ clips: ["A", "B", "C"].map((clip, i) => ({ clip, hook: i + 1, standalone: 3, payoff: 3, clarity: 3, reason: "ok" })) }) });
+  assert.equal(full.complete, true);
+  assert.equal(full.byLetter.C.hook, 3);
+  const cut = readTask({ kind: "judgeBatch", candidates: cands }, { text: '{"clips":[{"clip":"A","hook":4,"standalone":3,"payoff":2,"clarity":5,"reason":"Good."},{"clip":"B","hook":2,"standalone":' });
+  assert.equal(cut.complete, false);
+  assert.deepEqual(Object.keys(cut.byLetter), ["A"]);
+  assert.equal(checkTaskShape(slimTask({ kind: "judgeBatch", candidates: cands })), null);
+  assert.match(checkTaskShape({ kind: "judgeBatch", candidates: Array(9).fill(cand) }), /1 to 8/);
+});

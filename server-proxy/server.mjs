@@ -6,7 +6,7 @@
 // general chatbot), rate limits per IP and overall, and never logs or stores clip text.
 //
 //   GEMINI_API_KEY   required: a Google AI Studio key
-//   GEMMA_MODEL      default gemma-4-31b-it (falls back through GEMMA_FALLBACKS on a 404)
+//   GEMMA_MODEL      default gemma-4-26b-a4b-it (falls back through GEMMA_FALLBACKS when a model is not served)
 //   ALLOWED_ORIGINS  comma-separated origins allowed to call it (the static site's URL)
 //   PORT             default 8787
 //
@@ -22,7 +22,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const PROMPTS = Object.fromEntries(["judge", "listwise", "kit"].map((k) => [k, fs.readFileSync(path.join(here, "../src/core/prompts", `${k}.md`), "utf8")]));
 
 export const LIMITS = {
-  perIpPerMinute: 12, // a full Selects run is 8 judge calls, 1 listwise call and a few kits
+  perIpPerMinute: 20, // a full Selects run is 8 judge calls, 1 listwise call and a kit per rendered clip
   perIpPerDay: 300,
   globalPerMinute: 25, // the free Gemma quota is about 30 requests a minute per key
   globalPerDay: 12000, // and about 14,400 a day
@@ -55,12 +55,13 @@ const clientIp = (req) => String(req.headers["x-forwarded-for"] || "").split(","
 
 export function createProxy({
   key = process.env.GEMINI_API_KEY,
-  model = process.env.GEMMA_MODEL || "gemma-4-31b-it",
-  fallbacks = (process.env.GEMMA_FALLBACKS || "gemma-4-26b-a4b-it,gemma-3-27b-it").split(",").map((s) => s.trim()).filter(Boolean),
+  model = process.env.GEMMA_MODEL || "gemma-4-26b-a4b-it",
+  fallbacks = (process.env.GEMMA_FALLBACKS || "gemma-4-31b-it").split(",").map((s) => s.trim()).filter(Boolean),
   origins = (process.env.ALLOWED_ORIGINS || "http://localhost:4319,http://localhost:5173,http://127.0.0.1:4319").split(",").map((s) => s.trim()).filter(Boolean),
   base = process.env.GEMINI_BASE || GEMINI_BASE,
   limits = LIMITS,
   limiter = makeLimiter(),
+  timeoutMs = Number(process.env.GEMMA_TIMEOUT_MS || 25000), // per call, then one retry (src/core/gemini.mjs)
   log = (line) => console.log(line),
 } = {}) {
   let features = {};
@@ -126,7 +127,7 @@ export function createProxy({
     const tryModels = [current, ...fallbacks.filter((m) => m !== current)];
     for (const m of tryModels) {
       try {
-        const r = await geminiGenerate({ key, model: m, messages, schema, maxTokens: Math.max(256, maxTokens * 3), temperature: 0.2, features, base });
+        const r = await geminiGenerate({ key, model: m, messages, schema, maxTokens: Math.max(256, maxTokens * 3), temperature: 0.2, features, base, timeoutMs });
         features = r.features;
         current = m;
         counts.ok++;
@@ -134,10 +135,11 @@ export function createProxy({
         log(JSON.stringify({ at: new Date().toISOString(), kind: task.kind, model: m, ms: Date.now() - t0, promptTokens: r.promptTokens, outTokens: r.outTokens }));
         return send(res, 200, { text: r.text, model: m, promptTokens: r.promptTokens, outTokens: r.outTokens, finish: r.finish }, origin);
       } catch (e) {
-        if (e.status === 404 && m !== tryModels[tryModels.length - 1]) continue;
+        if (e.status === 404 && !e.transient && m !== tryModels[tryModels.length - 1]) continue;
         counts.failed++;
         log(JSON.stringify({ at: new Date().toISOString(), kind: task.kind, model: m, ms: Date.now() - t0, error: e.status || "network" }));
-        return send(res, e.status === 429 ? 429 : 502, { error: e.status === 429 ? "The free Gemma quota is used up for now." : "Gemma did not answer.", hint: e.hint || "Try again in a minute, or switch to Private mode." }, origin);
+        // 504 for a timeout: the page then judges that clip on the device instead
+        return send(res, e.status === 429 ? 429 : e.status === 0 ? 504 : 502, { error: e.status === 429 ? "The free Gemma quota is used up for now." : e.status === 0 ? "Gemma did not answer in time." : "Gemma did not answer.", hint: e.hint || "Try again in a minute, or switch to Private mode.", transient: !!e.transient }, origin);
       }
     }
   });
@@ -145,5 +147,5 @@ export function createProxy({
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT || 8787);
-  createProxy().listen(port, () => console.log(`selects proxy on :${port}, model ${process.env.GEMMA_MODEL || "gemma-4-31b-it"}, key ${process.env.GEMINI_API_KEY ? "set" : "MISSING"}`));
+  createProxy().listen(port, () => console.log(`selects proxy on :${port}, model ${process.env.GEMMA_MODEL || "gemma-4-26b-a4b-it"}, key ${process.env.GEMINI_API_KEY ? "set" : "MISSING"}`));
 }

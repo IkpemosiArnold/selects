@@ -65,46 +65,78 @@ export function refusedFeature(message) {
   return null;
 }
 
+/** Retry once after this many ms when Google's free tier stumbles (a 5xx, an empty 404, a timeout). */
+export const RETRY_BACKOFF_MS = 2000;
+/** A call that has not answered in this long is abandoned (the free tier has taken almost 5 minutes). */
+export const CALL_TIMEOUT_MS = 25000;
+
+const transient = (status, body) => status >= 500 || status === 408 || (status === 404 && !String(body || "").trim());
+
 /**
- * One generateContent call. fetchImpl defaults to the global fetch. Returns
- * { text, finish, promptTokens, outTokens, wallSec, features } where features says what
- * the model accepted, so the caller can reuse it. Throws an Error with .status and .hint.
+ * One generateContent call, with a timeout and one retry for transient failures. fetchImpl
+ * defaults to the global fetch. Returns { text, finish, promptTokens, outTokens, wallSec,
+ * features, attempts } where features says what the model accepted, so the caller can reuse
+ * it. Throws an Error with .status (0 for a timeout or network failure), .transient and .hint.
  */
-export async function geminiGenerate({ key, model, messages, schema, maxTokens, temperature, features = {}, fetchImpl = globalThis.fetch, signal, base = GEMINI_BASE }) {
+export async function geminiGenerate({ key, model, messages, schema, maxTokens, temperature, features = {}, fetchImpl = globalThis.fetch, signal, base = GEMINI_BASE, timeoutMs = CALL_TIMEOUT_MS, retries = 1, backoffMs = RETRY_BACKOFF_MS }) {
   const feats = { ...features };
   const t0 = Date.now();
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const res = await fetchImpl(`${base}/models/${encodeURIComponent(model)}:generateContent`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify(geminiBody(messages, { schema, maxTokens, temperature, features: feats })),
-      signal,
-    });
-    const body = await res.text();
-    let json = null;
+  let attempts = 0;
+  let lastErr = null;
+  for (let tries = 0; tries < 6; tries++) {
+    attempts++;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), timeoutMs);
+    const onAbort = () => ctl.abort();
+    signal?.addEventListener("abort", onAbort, { once: true });
+    let res;
+    let body = "";
     try {
-      json = JSON.parse(body);
-    } catch {}
-    if (res.ok) return { ...readGemini(json), wallSec: +((Date.now() - t0) / 1000).toFixed(2), features: feats };
-    const message = json?.error?.message || body.slice(0, 200) || `HTTP ${res.status}`;
-    const feature = res.status === 400 ? refusedFeature(message) : null;
-    if (feature && feats[feature] !== false) {
-      feats[feature] = false;
-      continue;
+      res = await fetchImpl(`${base}/models/${encodeURIComponent(model)}:generateContent`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify(geminiBody(messages, { schema, maxTokens, temperature, features: feats })),
+        signal: ctl.signal,
+      });
+      body = await res.text();
+    } catch (e) {
+      res = null;
+      if (signal?.aborted) throw Object.assign(new Error("Stopped before it finished."), { name: "AbortError" });
+      lastErr = Object.assign(new Error(ctl.signal.aborted ? `Gemma did not answer within ${Math.round(timeoutMs / 1000)} s.` : `Could not reach the Gemini API: ${e.message}`), { status: 0, transient: true, hint: "Google's free Gemma is slow or busy right now." });
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
     }
-    const err = new Error(`Gemini API ${res.status}: ${message}`);
-    err.status = res.status;
-    err.hint =
-      res.status === 429
-        ? "The free Gemma quota is used up for now (about 30 requests a minute). Wait a minute, or switch to Private mode."
-        : res.status === 400 && /api key/i.test(message)
-          ? "The API key was not accepted. Paste a key from Google AI Studio (aistudio.google.com/apikey)."
-          : res.status === 403
-            ? "This key cannot use the Gemini API. Check it in Google AI Studio."
-            : res.status === 404
-              ? `The model ${model} is not served right now. Try another Gemma model.`
-              : "Try again in a minute, or switch to Private mode.";
-    throw err;
+    if (res) {
+      let json = null;
+      try {
+        json = JSON.parse(body);
+      } catch {}
+      if (res.ok) return { ...readGemini(json), wallSec: +((Date.now() - t0) / 1000).toFixed(2), features: feats, attempts };
+      const message = json?.error?.message || body.slice(0, 200) || `HTTP ${res.status}`;
+      const feature = res.status === 400 ? refusedFeature(message) : null;
+      if (feature && feats[feature] !== false) {
+        feats[feature] = false;
+        tries--; // a refused feature is not a failed attempt
+        attempts--;
+        continue;
+      }
+      lastErr = new Error(`Gemini API ${res.status}: ${message}`);
+      lastErr.status = res.status;
+      lastErr.transient = transient(res.status, body);
+      lastErr.hint =
+        res.status === 429
+          ? "The free Gemma quota is used up for now (about 30 requests a minute). Wait a minute, or switch to Private mode."
+          : res.status === 400 && /api key/i.test(message)
+            ? "The API key was not accepted. Paste a key from Google AI Studio (aistudio.google.com/apikey)."
+            : res.status === 403
+              ? "This key cannot use the Gemini API. Check it in Google AI Studio."
+              : res.status === 404 && !lastErr.transient
+                ? `The model ${model} is not served right now. Try another Gemma model.`
+                : "Google's free Gemma is slow or busy right now.";
+    }
+    if (!lastErr.transient || attempts > retries) break;
+    await new Promise((r) => setTimeout(r, backoffMs * attempts));
   }
-  throw Object.assign(new Error("The Gemini API refused every request shape."), { hint: "Switch to Private mode." });
+  throw Object.assign(lastErr, { attempts, wallSec: +((Date.now() - t0) / 1000).toFixed(2) });
 }
