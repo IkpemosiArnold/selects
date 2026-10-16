@@ -1,0 +1,654 @@
+/* Direction 3: the contact sheet. A print of the whole roll on white paper,
+   black film strips with edge numbers, marked up with a china marker. */
+.cs {
+  --cs-table: #e8edeb;
+  --cs-paper: #fbfcfb;
+  --cs-ink: #1d2126;
+  --cs-ink-2: #4f5a60;
+  --cs-rule: rgba(29, 33, 38, 0.13);
+  --cs-film: #15171a;
+  --cs-print: #a9b2b7;
+  --cs-blue: #2f5fd0;
+  --cs-mark-blue: #7ea1f3;
+  --cs-yellow: #f2be22;
+  --cs-red: #c8402f;
+  --cs-mark-red: #ff7a66;
+  --cs-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  min-height: 100vh;
+  background: var(--cs-table);
+  color: var(--cs-ink);
+  font-family: var(--sans);
+}
+body[data-direction="contact-sheet"] {
+  background: #e8edeb;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .cs {
+    --cs-table: #15181c;
+    --cs-paper: #262b31;
+    --cs-ink: #e8edeb;
+    --cs-ink-2: #a3adb2;
+    --cs-rule: rgba(232, 237, 235, 0.13);
+    --cs-film: #0b0c0e;
+    --cs-blue: #6e95f0;
+    --cs-red: #e47a69;
+  }
+  :root:not([data-theme="light"]) body[data-direction="contact-sheet"] {
+    background: #15181c;
+  }
+}
+:root[data-theme="dark"] .cs {
+  --cs-table: #15181c;
+  --cs-paper: #262b31;
+  --cs-ink: #e8edeb;
+  --cs-ink-2: #a3adb2;
+  --cs-rule: rgba(232, 237, 235, 0.13);
+  --cs-film: #0b0c0e;
+  --cs-blue: #6e95f0;
+  --cs-red: #e47a69;
+}
+:root[data-theme="dark"] body[data-direction="contact-sheet"] {
+  background: #15181c;
+}
+.cs-mono {
+  font-family: var(--mono);
+  font-feature-settings: "tnum" 1;
+}
+.cs-dim {
+  color: var(--cs-ink-2);
+}
+
+/* ---------- bar ---------- */
+.cs-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  height: 56px;
+  padding: 0 clamp(16px, 2.4vw, 32px);
+  background: var(--cs-table);
+  border-bottom: 1px solid var(--cs-rule);
+}
+.cs .dx-file {
+  font: 400 14px var(--mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.cs .dx-file-dur,
+.cs-bar-info {
+  color: var(--cs-ink-2);
+}
+.cs-bar-info {
+  margin: 0;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.cs-bar-count {
+  margin: 0 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--cs-ink-2);
+  white-space: nowrap;
+}
+.cs-legend {
+  width: 22px;
+  height: 12px;
+  border-radius: 6px;
+  margin-left: 8px;
+  border: 2.5px solid var(--cs-blue);
+}
+.cs-legend.is-mine {
+  border: 3px solid var(--cs-yellow);
+  box-shadow: 0 0 0 1px rgba(29, 33, 38, 0.6), inset 0 0 0 1px rgba(29, 33, 38, 0.6);
+}
+.cs-render {
+  font: 650 15px/1 var(--sans);
+  padding: 11px 18px;
+  border-radius: 6px;
+  border: 0;
+  background: var(--cs-ink);
+  color: var(--cs-table);
+  cursor: pointer;
+}
+.cs-render:disabled {
+  background: transparent;
+  color: var(--cs-ink-2);
+  box-shadow: inset 0 0 0 1px var(--cs-rule);
+  cursor: default;
+}
+
+/* ---------- desk ---------- */
+.cs-desk {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: clamp(20px, 3vw, 40px);
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 24px clamp(16px, 2.4vw, 32px) 80px;
+  align-items: start;
+}
+.cs-main {
+  background: var(--cs-paper);
+  padding: 34px clamp(14px, 2.4vw, 36px) 40px;
+  border-radius: 2px;
+  box-shadow: 0 1px 1px rgba(29, 33, 38, 0.05), 0 16px 40px -24px rgba(29, 33, 38, 0.4);
+  min-width: 0;
+}
+.cs-sheet-wrap {
+  position: relative;
+}
+.cs-sheet {
+  position: relative;
+  outline-offset: 10px;
+  cursor: crosshair;
+}
+.cs-strip {
+  position: absolute;
+  left: -10px;
+  right: -10px;
+  background: var(--cs-film);
+  border-radius: 1px;
+}
+.cs-frame {
+  position: absolute;
+  background: #000;
+}
+.cs-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.cs-frame.is-focus {
+  outline: 2px solid var(--cs-yellow);
+  outline-offset: 2px;
+}
+.cs-edge {
+  position: absolute;
+  left: 2px;
+  font: 500 10px/1 var(--mono);
+  color: var(--cs-print);
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+.cs-said {
+  position: absolute;
+  left: 0;
+  right: 0;
+  margin: 0;
+  font: 400 11.5px/1.35 var(--mono);
+  color: var(--cs-ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  pointer-events: none;
+}
+.cs-said .is-unsure {
+  color: var(--cs-ink-2);
+  opacity: 0.75;
+}
+.cs-said .is-quiet {
+  color: var(--cs-ink-2);
+  font-style: italic;
+}
+.cs-q {
+  position: absolute;
+  right: 6px;
+  top: 4px;
+  font: 800 30px/1 var(--sans);
+  color: var(--cs-mark-red);
+  rotate: 8deg;
+  text-shadow: 0 0 0 #000, 1px 1px 0 rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+/* The china marker. */
+.cs-marks {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.cs-mark path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.cs-mark-line {
+  stroke: var(--cs-mark-blue);
+  stroke-width: 3;
+}
+.cs-mark.is-sel .cs-mark-line {
+  stroke-width: 4.5;
+}
+.cs-mark.is-mine .cs-mark-under {
+  stroke: #000;
+  stroke-width: 9;
+  opacity: 0.55;
+}
+.cs-mark.is-mine .cs-mark-line {
+  stroke: var(--cs-yellow);
+  stroke-width: 5.5;
+}
+.cs-mark.is-cut .cs-mark-line {
+  stroke: var(--cs-mark-red);
+  stroke-dasharray: 0.02 0.015;
+  stroke-width: 2.5;
+}
+.cs-cross {
+  stroke: var(--cs-mark-red);
+  stroke-width: 5;
+}
+.cs-in {
+  fill: none;
+  stroke: var(--cs-yellow);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+.cs-n {
+  position: absolute;
+  z-index: 3;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 13px;
+  border: 0;
+  font: 700 14px/26px var(--mono);
+  background: var(--cs-blue);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 0 0 2px var(--cs-paper);
+}
+.cs-n.is-mine {
+  background: var(--cs-yellow);
+  color: #1d2126;
+}
+.cs-n.is-cut {
+  background: var(--cs-red);
+  text-decoration: line-through;
+}
+.cs-n.is-sel {
+  box-shadow: 0 0 0 2px var(--cs-paper), 0 0 0 4px var(--cs-ink);
+}
+:root[data-theme="dark"] .cs-n:not(.is-mine) {
+  color: #10141a;
+}
+
+/* The loupe: the one motion moment. */
+.cs-loupe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 10;
+  width: 150px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms;
+  will-change: transform;
+}
+.cs-loupe.is-on {
+  opacity: 1;
+}
+.cs-lens {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background-color: #000;
+  background-repeat: no-repeat;
+  box-shadow: 0 0 0 5px #1d2126, 0 0 0 6px rgba(255, 255, 255, 0.25), 0 18px 40px -10px rgba(0, 0, 0, 0.6);
+}
+.cs-loupe-read {
+  margin-top: 12px;
+  width: 250px;
+  translate: -50px 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #1d2126;
+  color: #e8edeb;
+  font: 400 12.5px/1.4 var(--mono);
+}
+.cs-loupe-tc {
+  display: block;
+  color: #f2be22;
+  margin-bottom: 2px;
+}
+.cs-loupe-words .is-unsure {
+  color: #8c979d;
+}
+
+/* ---------- panel ---------- */
+.cs-panel {
+  position: sticky;
+  top: 80px;
+  display: grid;
+  gap: 14px;
+}
+.cs-viewer {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.cs-viewer video,
+.cs-viewer img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.cs-play {
+  position: absolute;
+  left: 10px;
+  bottom: 12px;
+  font: 650 13px/1 var(--sans);
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(253, 254, 253, 0.94);
+  color: #1d2126;
+  cursor: pointer;
+}
+.cs-viewer-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--cs-yellow);
+  transform-origin: left;
+}
+.cs-meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+.cs-chip {
+  font: 700 13px/1 var(--mono);
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: var(--cs-blue);
+  color: #fff;
+}
+:root[data-theme="dark"] .cs-chip:not(.is-mine) {
+  color: #10141a;
+}
+.cs-chip.is-mine {
+  background: var(--cs-yellow);
+  color: #1d2126;
+}
+.cs-chip.is-cut {
+  background: transparent;
+  color: var(--cs-red);
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+.cs-hook {
+  margin: 0;
+  font: 500 23px/1.2 var(--mono);
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+.cs-why {
+  margin: 0;
+  color: var(--cs-blue);
+  line-height: 1.45;
+}
+.cs-rubric {
+  margin: -4px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 13px;
+  color: var(--cs-ink-2);
+}
+.cs-rubric b {
+  font: 600 13px var(--mono);
+  color: var(--cs-blue);
+}
+.cs-actions {
+  display: flex;
+  gap: 8px;
+}
+.cs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font: 650 15px/1 var(--sans);
+  padding: 11px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--cs-rule);
+  background: var(--cs-paper);
+  color: var(--cs-ink);
+  cursor: pointer;
+  transition: transform 140ms var(--cs-ease);
+}
+.cs-btn:active {
+  transform: scale(0.97);
+}
+.cs-approve {
+  background: var(--cs-ink);
+  color: var(--cs-paper);
+  border-color: var(--cs-ink);
+}
+.cs-approve.is-on {
+  background: var(--cs-yellow);
+  border-color: rgba(29, 33, 38, 0.5);
+  color: #1d2126;
+}
+.cs-btn.is-cut {
+  color: var(--cs-red);
+  border-color: currentColor;
+}
+.cs-help {
+  margin: 0;
+  font-size: 13px;
+  color: var(--cs-ink-2);
+}
+.cs-panel-empty {
+  display: grid;
+  gap: 10px;
+  padding-top: 8px;
+  color: var(--cs-ink-2);
+  line-height: 1.5;
+}
+.cs-panel-empty p {
+  margin: 0;
+}
+.cs-panel-big {
+  color: var(--cs-ink);
+  font: 500 23px/1.2 var(--mono) !important;
+  letter-spacing: -0.025em;
+}
+.cs-link {
+  justify-self: start;
+  font: 600 14px/1.2 var(--sans);
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  color: var(--cs-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--cs-rule);
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+/* ---------- language ---------- */
+.cs-ask {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 1fr);
+  gap: clamp(20px, 4vw, 64px);
+  align-items: end;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 36px clamp(16px, 2.4vw, 32px) 28px;
+}
+.cs-ask-q {
+  display: grid;
+  gap: 14px;
+}
+.cs-question {
+  margin: 0;
+  font: 500 clamp(38px, 4.6vw, 64px) / 1 var(--mono);
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+.cs-ask-why {
+  margin: 0;
+  max-width: 58ch;
+  color: var(--cs-ink-2);
+  font-size: 16px;
+  line-height: 1.5;
+}
+.cs-ask-a {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.cs-ask-a.is-pick {
+  grid-template-columns: 1fr 1fr;
+}
+.cs-answer {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  text-align: left;
+  padding: 16px;
+  border-radius: 10px;
+  border: 1px solid var(--cs-rule);
+  background: var(--cs-paper);
+  color: var(--cs-ink);
+  cursor: pointer;
+  transition: transform 140ms var(--cs-ease), border-color 140ms;
+}
+.cs-answer:active {
+  transform: scale(0.98);
+}
+.cs-answer:hover {
+  border-color: var(--cs-ink);
+}
+.cs-answer b {
+  font-size: 19px;
+}
+.cs-answer span {
+  font-size: 13.5px;
+  line-height: 1.4;
+  opacity: 0.8;
+}
+.cs-answer.is-yes {
+  background: var(--cs-ink);
+  color: var(--cs-paper);
+  border-color: var(--cs-ink);
+}
+.cs-answer.is-lang {
+  padding: 12px 14px;
+}
+.cs-other {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px dashed var(--cs-rule);
+  border-radius: 10px;
+  font-weight: 600;
+}
+.cs-other select {
+  font: inherit;
+  font-weight: 400;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--cs-rule);
+  background: var(--cs-paper);
+  color: var(--cs-ink);
+}
+.cs-anyway {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--cs-ink-2);
+}
+.cs-main-lang {
+  max-width: calc(1440px - 2 * clamp(16px, 2.4vw, 32px));
+  margin: 0 auto 80px;
+}
+.cs-sheet-note {
+  margin: -16px 0 22px;
+  font-size: 13px;
+  color: var(--cs-ink-2);
+}
+.cs-hear {
+  position: sticky;
+  bottom: 16px;
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--cs-ink);
+  color: var(--cs-paper);
+  font: 500 14px var(--mono);
+  width: fit-content;
+}
+.cs-hear .cs-link {
+  color: inherit;
+}
+.cs-hear-bar {
+  width: 160px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+}
+.cs-hear-bar i {
+  display: block;
+  height: 100%;
+  background: var(--cs-yellow);
+  transform-origin: left;
+}
+
+/* ---------- small screens ---------- */
+@media (max-width: 1040px) {
+  .cs-desk {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cs-panel {
+    position: static;
+  }
+  .cs-bar-info {
+    display: none;
+  }
+  .cs-ask {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  .cs-bar .dx-file,
+  .cs-bar-count {
+    display: none;
+  }
+  .cs-render {
+    margin-left: auto;
+  }
+  .cs-ask-a {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cs-loupe {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cs-loupe {
+    transition: none;
+  }
+}

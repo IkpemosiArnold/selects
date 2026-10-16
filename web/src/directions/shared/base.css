@@ -1,0 +1,77 @@
+/* Shared by the three directions: the switcher, keycaps, screen-reader text.
+   Each direction owns its own tokens and layout in its folder. */
+.dx-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.dx-switch {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 50;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: #1d2126;
+  font: 500 12px/1 var(--sans);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+.dx-switch a {
+  color: #c9d1d4;
+  text-decoration: none;
+  padding: 7px 10px;
+  border-radius: 999px;
+}
+.dx-switch a[aria-current="page"] {
+  background: #e8edeb;
+  color: #1d2126;
+}
+.dx-switch a:hover:not([aria-current]) {
+  color: #fff;
+}
+@media (max-width: 640px) {
+  .dx-switch {
+    left: 12px;
+    right: 12px;
+    justify-content: space-between;
+    overflow-x: auto;
+  }
+}
+
+/* A keycap: the shortcut drawn as the key it is. */
+.dx-key {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.6em;
+  height: 1.6em;
+  padding: 0 0.35em;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  border-bottom-width: 2px;
+  font: 600 0.75em/1 var(--mono);
+  opacity: 0.8;
+}
+
+.dx-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  text-decoration: none;
+  color: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-direction] *,
+  [data-direction] *::before,
+  [data-direction] *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
