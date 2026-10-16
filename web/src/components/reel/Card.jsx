@@ -64,7 +64,7 @@ export default function Card({ job, clip, player, cues, captionsOn = true, lowP 
   const into = Math.min(1, Math.max(0, (t - clip.start) / len));
 
   return (
-    <div className={"card-frame" + (fit ? " is-fit" : "")} ref={frameRef} aria-label={label}>
+    <div className={"card-frame" + (fit ? " is-fit" : "")} ref={frameRef} role="group" aria-label={label}>
       {poster && <img className="card-backdrop" src={poster} alt="" draggable={false} />}
       {src && !missing ? (
         <video

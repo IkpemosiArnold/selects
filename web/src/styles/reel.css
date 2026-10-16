@@ -66,7 +66,7 @@
   text-wrap: balance; overflow-wrap: anywhere; border-radius: 0 0 6px 6px;
 }
 .slate-line.is-mid { font-size: clamp(1.5rem, 2.05vw, 1.95rem); }
-.slate-line.is-long { font-size: clamp(1.25rem, 1.6vw, 1.5rem); line-height: 1.15; }
+.slate-line.is-long { font-size: clamp(1.25rem, 1.6vw, 1.5rem); line-height: 1.15; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; line-clamp: 6; overflow: hidden; }
 @media (hover: hover) and (pointer: fine) {
   .slate-line:hover { background: rgba(232, 237, 235, 0.04); }
 }
@@ -215,7 +215,6 @@
 @media (hover: hover) and (pointer: fine) { .nudge-row button:hover, .tool:hover { border-color: var(--ink-2); } }
 .tools { display: grid; gap: 6px; margin-top: 6px; }
 .tool { border-color: transparent; padding-inline: 4px; min-height: 32px; color: var(--ink); }
-.tool[aria-pressed="true"] { color: var(--yellow); }
 .hint { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 6px; font-size: var(--t-13); color: var(--ink-2); }
 .hint-undo { background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
 
@@ -433,4 +432,13 @@
 }
 @media (hover: none) {
   .tools kbd, .nudge-row kbd { display: none; }
+}
+
+/* Narrow windows and 200% zoom: the file name gives way first. */
+.masthead-file { overflow: hidden; }
+@media (max-width: 1100px) {
+  .pile-count { display: none; }
+}
+@media (max-width: 820px) {
+  .masthead-file .mono { display: none; }
 }

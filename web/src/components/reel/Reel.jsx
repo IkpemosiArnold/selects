@@ -31,7 +31,7 @@ function isTyping(el) {
 // real card already plays the next clip.
 function snapshot(frame, video, fit) {
   const r = frame.getBoundingClientRect();
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const dpr = 1; // the still shrinks as it flies; one pixel per point keeps the encode quick on old laptops
   const c = document.createElement("canvas");
   c.width = Math.round(r.width * dpr);
   c.height = Math.round(r.height * dpr);
@@ -82,6 +82,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
   const [flying, setFlying] = useState([]); // approved ids whose card is still in the air
   const [toast, setToast] = useState(null);
   const [rendering, setRendering] = useState(false);
+  const [said, setSaid] = useState(""); // what a screen reader hears after a decision
   const history = useRef([]);
   const cardRef = useRef(null);
   const frameRef = useRef(null);
@@ -283,6 +284,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
       if (c.status !== status) patch(c, { status }, { status });
       forward.current = !!next;
       setCurrentId(next?.id ?? null);
+      setSaid(`${status === "approved" ? "Approved" : "Skipped"} ${clipName(c).toLowerCase()}. ${next ? `Now ${clipName(next).toLowerCase()}: ${next.hook || ""}` : "Every clip has a decision."}`);
       if (mode === "blur") setMode("review");
     },
     [cur, mode, nextOf, reduce, patch] // eslint-disable-line react-hooks/exhaustive-deps
@@ -500,6 +502,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
 
       <main className="reel-stage">
         <h1 className="sr-only">Review clips from {job.source?.name}</h1>
+        <p className="sr-only" role="status" aria-live="polite">{said}</p>
         {cur ? (
           <>
             <div className="reel-left">
@@ -570,18 +573,6 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
                   <span className="lean is-skip" ref={(el) => (leanRef.current.s = el)} aria-hidden="true">Skip</span>
                 </Card>
               </div>
-              {ghosts.map((g) => (
-                <div
-                  key={g.key}
-                  className={"ghost is-" + g.status}
-                  style={{ left: g.rect.left, top: g.rect.top, width: g.rect.width, height: g.rect.height }}
-                  ref={(el) => launch(el, g)}
-                  aria-hidden="true"
-                >
-                  <img src={g.url} alt="" />
-                  {g.status === "approved" && <span className="ghost-stamp">Approved</span>}
-                </div>
-              ))}
             </div>
 
             <div className="reel-right">
@@ -633,6 +624,19 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
       </main>
 
       <Timeline job={job} cands={ranked} currentId={cur?.id} onPick={pick} player={cur ? player : null} />
+      {ghosts.map((g) => (
+        <div
+          key={g.key}
+          className={"ghost is-" + g.status}
+          style={{ left: g.rect.left, top: g.rect.top, width: g.rect.width, height: g.rect.height }}
+          ref={(el) => launch(el, g)}
+          aria-hidden="true"
+        >
+          <img src={g.url} alt="" />
+          {g.status === "approved" && <span className="ghost-stamp">Approved</span>}
+        </div>
+      ))}
+
 
       {toast && (
         <div key={toast.at} className={"toast is-" + toast.kind} role={toast.kind === "error" ? "alert" : "status"}>
@@ -736,10 +740,19 @@ function Done({ job, ranked, approved, rendered, onPick, onRender, rendering }) 
         </ol>
       )}
       <div className="done-go">
-        <button type="button" className="btn btn-primary btn-render btn-big" disabled={!approved.length || rendering} onClick={onRender}>
-          {approved.length ? `Render ${plural(approved.length, "clip")}` : "Approve a clip to render it"}
-        </button>
-        <a className="btn btn-quiet" href={`#/job/${job.id}/captions`}>Check the captions first</a>
+        {ranked.length > 0 ? (
+          <>
+            <button type="button" className="btn btn-primary btn-render btn-big" disabled={!approved.length || rendering} onClick={onRender}>
+              {approved.length ? `Render ${plural(approved.length, "clip")}` : "Approve a clip to render it"}
+            </button>
+            <a className="btn btn-quiet" href={`#/job/${job.id}/captions`}>Check the captions first</a>
+          </>
+        ) : (
+          <>
+            <a className="btn btn-primary btn-big" href="#/">Start a new job</a>
+            <a className="btn btn-quiet" href={`#/job/${job.id}/captions`}>Caption the whole video instead</a>
+          </>
+        )}
         {rendered > 0 && (
           <a className="btn btn-quiet" href={`#/job/${job.id}/render`}>
             See {plural(rendered, "rendered clip")}

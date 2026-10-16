@@ -38,10 +38,13 @@ export default function Timeline({ job, cands, currentId, onPick, player }) {
   const ticks = useMemo(() => {
     const step = dur > 5400 ? 900 : dur > 1800 ? 300 : dur > 600 ? 120 : dur > 120 ? 60 : 10;
     const out = [];
-    for (let t = 0; t <= dur - step * 0.4; t += step) out.push(t);
+    // leave room for the end time, which is always shown
+    for (let t = 0; t <= dur - step * 0.6; t += step) out.push(t);
     return out;
   }, [dur]);
   const pct = (t) => `${(t / dur) * 100}%`;
+  // With many clips the numbers collide: keep the best few, and the current one.
+  const crowded = cands.length > 12;
   return (
     <nav className="timeline" aria-label="Clips in the video">
       <div className="tl-track">
@@ -62,7 +65,9 @@ export default function Timeline({ job, cands, currentId, onPick, player }) {
               aria-current={c.id === currentId ? "true" : undefined}
               aria-label={`${clipName(c)}, ${tc(c.start)} to ${tc(c.end)}, ${c.status === "proposed" ? "to decide" : c.status}`}
             >
-              <span className="tl-n" aria-hidden="true">{c.rank ?? "+"}</span>
+              {(!crowded || c.id === currentId || (c.rank && c.rank <= 5)) && (
+                <span className="tl-n" aria-hidden="true">{c.rank ?? "+"}</span>
+              )}
             </button>
           ))}
         </div>
