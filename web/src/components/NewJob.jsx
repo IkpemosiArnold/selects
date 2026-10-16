@@ -7,9 +7,16 @@ import QueueList from "./QueueList.jsx";
 import { thumbAt } from "./reel/util.js";
 import { measuredRates } from "../lib/estimate.js";
 import { LICENCES } from "../lib/licences.js";
-import { LANGUAGES } from "../lib/languages.js";
+import { LANGUAGES, languageName } from "../lib/languages.js";
 
 
+
+// "gemma3-4b-hf:latest" reads as "Gemma 3 4B"; other names stay as they are.
+function modelLabel(name) {
+  if (!name) return "Gemma";
+  const m = String(name).match(/gemma[-_ ]?(\d+(?:\.\d+)?)\D*?(\d+(?:\.\d+)?)b/i);
+  return m ? `Gemma ${m[1]} ${m[2]}B` : name;
+}
 
 function healthIssues(h) {
   if (!h) return [];
@@ -22,14 +29,14 @@ function healthIssues(h) {
     });
   if (!h.ollama)
     out.push({
-      what: "Ollama is not running, so Selects cannot judge the moments.",
+      what: "Ollama is not running, so Gemma cannot pick the moments.",
       fix: "Start Ollama, then reload this page.",
       code: "ollama serve",
     });
   else if (!h.models?.length)
     out.push({
-      what: "Ollama is running but has no Gemma model.",
-      fix: "Pull one, then reload. The 1b model is faster; the 4b model judges better.",
+      what: "Ollama is running, but it has no Gemma model.",
+      fix: "Download one, then reload. The 1b model is faster, and the 4b model picks better clips.",
       code: "ollama pull gemma3:4b",
     });
   if (h.diskFreeGb != null && h.diskFreeGb < 5)
@@ -45,25 +52,26 @@ function statusLine(j) {
   const approved = j.approvedCount ?? j.candidates?.filter((c) => c.status === "approved").length ?? 0;
   const rendered = j.candidates?.filter((c) => c.render?.status === "done").length || 0;
   if (j.settings?.mode === "caption") {
-    if (j.stage === "ready") return j.transcriptQuality?.verdict === "shaky" ? "Captions ready, check the unsure words" : "Captions ready to review";
-    if (j.stage === "done") return j.output?.stale ? "Captioned, captions changed since" : "Captioned video rendered";
+    if (j.stage === "ready") return j.transcriptQuality?.verdict === "shaky" ? "Captions ready. Check the unsure words" : "Captions ready to check";
+    if (j.stage === "done") return j.output?.stale ? "Captions changed since the render" : "Captioned video ready";
     if (j.stage === "rendering") return "Rendering the captioned video";
   }
   switch (j.stage) {
     case "ready":
-      return approved ? `${approved} approved of ${n}` : n ? `Ready to review, ${plural(n, "clip")}` : "Ready to review";
+      return approved ? `${approved} of ${n} approved` : n ? `${plural(n, "clip")} to check` : "Ready to check";
     case "done":
       return rendered ? `Rendered ${plural(rendered, "clip")}` : approved ? `Rendered ${plural(approved, "clip")}` : "Rendered";
     case "rendering":
       return "Rendering";
     case "error":
-      return "Stopped. Open it to resume";
+      return "Stopped. Open it to carry on";
     case "queued":
       return "Waiting its turn";
     default: {
       const k = { probing: "probe", transcribing: "transcribe", candidates: "candidates", judging: "judge" }[j.stage];
       const p = j.stages?.[k]?.progress;
-      return `${j.stage[0].toUpperCase() + j.stage.slice(1)}${p ? ` ${Math.round(p * 100)}%` : ""}`;
+      const what = { probing: "Opening the video", language: "Checking the language", transcribing: "Transcribing", candidates: "Finding moments", judging: "Gemma is choosing" }[j.stage] || j.stage;
+      return `${what}${p ? `, ${Math.round(p * 100)}%` : ""}`;
     }
   }
 }
@@ -146,7 +154,7 @@ export default function NewJob() {
     if (found) {
       setPath(found);
     } else {
-      setHint(`Your browser hides which folder ${file.name} is in. Type the full path, for example ~/Movies/${file.name}`);
+      setHint(`Your browser does not say which folder ${file.name} is in. Type where it is, for example ~/Movies/${file.name}`);
       pathRef.current?.focus();
     }
   };
@@ -166,7 +174,7 @@ export default function NewJob() {
   const submit = async (e, how = "now") => {
     e?.preventDefault?.();
     if (!path.trim()) {
-      setError("Add the path to a video first.");
+      setError("Choose a video first.");
       pathRef.current?.focus();
       return;
     }
@@ -185,7 +193,7 @@ export default function NewJob() {
       };
       const job = await api.createJob(path.trim(), settings, { queueOnly: how === "queue" });
       if (how === "queue") {
-        setNotice(`Queued ${job.source?.name}. It starts when the jobs ahead of it finish.`);
+        setNotice(`Added ${job.source?.name} to the overnight queue. It starts when the jobs ahead of it finish.`);
         setPath("");
         setBusy(false);
         api.queue().then(setQueue).catch(() => {});
@@ -194,7 +202,7 @@ export default function NewJob() {
       }
       go(`#/job/${job.id}`);
     } catch (err) {
-      setError(err.message || "Selects could not start that job.");
+      setError(err.message || "Selects could not start on that video.");
       setBusy(false);
     }
   };
@@ -203,6 +211,20 @@ export default function NewJob() {
   const issues = health?.unreachable
     ? [{ what: "Selects cannot reach its local server.", fix: "Start it in a terminal, then reload this page.", code: "npm run serve" }]
     : healthIssues(health);
+
+  const langLabel = language === "auto" ? "language found for you" : `in ${languageName(language)}`;
+  const summary =
+    mode === "caption"
+      ? `Captions for the whole video, ${langLabel}.`
+      : `Up to ${plural(Number(k) || 0, "clip")}, ${minLen} to ${maxLen} seconds each, ${langLabel}. ${modelLabel(model)} picks them.`;
+  const licName = LICENCES.find(([v]) => v === license)?.[1];
+  const creditSummary = credit.trim()
+    ? [credit.trim(), license && license !== "other" ? licName : null].filter(Boolean).join(", ")
+    : license === "own"
+    ? "Your own video. No credit line is added."
+    : "None yet. Add one if someone else made the video.";
+  const picked = path.trim();
+  const pickedName = picked.split(/[\\/]/).pop();
 
   return (
     <>
@@ -235,12 +257,39 @@ export default function NewJob() {
           >
             <div className="perfs" aria-hidden="true" />
             <div className="leader-body">
-              <h1 className="leader-title">Drop a long video here, or choose a file.</h1>
-              <p className="leader-sub">Nothing leaves this laptop.</p>
+              <h1 className="leader-title">{mode === "caption" ? "Add captions to a whole video." : "Turn a long video into short, captioned clips."}</h1>
+              <p className="leader-sub">
+                {mode === "caption"
+                  ? "Selects writes the captions, you fix any word, and it renders the video with them. Nothing is uploaded."
+                  : "Gemma picks the best moments and says why. You approve each clip before anything is rendered. Nothing is uploaded."}
+              </p>
               <div className="leader-actions">
-                <button type="button" className="btn btn-quiet-on-film" onClick={() => fileRef.current?.click()}>
-                  Choose a file
-                </button>
+                {picked ? (
+                  <>
+                    <p className="picked">
+                      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="3" width="13" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M6.5 6v4l3.5-2z" fill="currentColor" /></svg>
+                      <span className="picked-name" title={picked}><MiddleTruncate text={pickedName} tail={10} /></span>
+                    </p>
+                    <div className="leader-buttons">
+                      <button className="btn btn-mark btn-big" type="submit" disabled={busy}>
+                        {busy ? "Starting" : mode === "caption" ? "Caption this video" : "Find clips"}
+                      </button>
+                      <button type="button" className="btn btn-quiet-on-film" onClick={() => fileRef.current?.click()} disabled={busy}>
+                        Choose another
+                      </button>
+                    </div>
+                    <button className="linkish on-film" type="button" disabled={busy} onClick={(e) => submit(e, "queue")}>
+                      Add it to the overnight queue instead
+                    </button>
+                  </>
+                ) : (
+                  <div className="leader-buttons">
+                    <button type="button" className="btn btn-mark btn-big" onClick={() => fileRef.current?.click()}>
+                      Choose a video
+                    </button>
+                    <span className="leader-or">or drop one here</span>
+                  </div>
+                )}
                 <input
                   ref={fileRef}
                   type="file"
@@ -258,36 +307,36 @@ export default function NewJob() {
             </svg>
             <div className="perfs" aria-hidden="true" />
           </div>
+          {notice && <p className="field-ok" role="status">{notice}</p>}
+          {error && <p id="path-error" className="field-error" role="alert">{error}</p>}
 
-          <div className="new-grid">
-            <div className="new-left">
-              <label className="label" htmlFor="path">Video path</label>
-              <div className="path-row">
-                <input
-                  id="path"
-                  ref={pathRef}
-                  className="input mono"
-                  value={path}
-                  onChange={(e) => setPath(e.target.value)}
-                  placeholder="~/Movies/talk.mp4"
-                  spellCheck={false}
-                  autoComplete="off"
-                  aria-describedby={hint ? "path-hint" : error ? "path-error" : undefined}
-                  aria-invalid={!!error}
-                />
-                <button className="btn btn-primary" type="submit" disabled={busy}>
-                  {busy ? "Starting" : mode === "caption" ? "Caption the video" : "Find clips"}
-                </button>
-                <button className="btn" type="button" disabled={busy} onClick={(e) => submit(e, "queue")}>
-                  Queue for overnight
-                </button>
-              </div>
-              {notice && <p className="field-ok" role="status">{notice}</p>}
-              {hint && <p id="path-hint" className="field-hint">{hint}</p>}
-              {error && <p id="path-error" className="field-error" role="alert">{error}</p>}
+          <div className="path-field">
+            <label className="field-label" htmlFor="path">Or type where the video is on this laptop</label>
+            <input
+              id="path"
+              ref={pathRef}
+              className="input mono"
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              placeholder="~/Movies/talk.mp4"
+              spellCheck={false}
+              autoComplete="off"
+              autoCapitalize="none"
+              autoCorrect="off"
+              enterKeyHint="go"
+              aria-describedby={hint ? "path-hint" : error ? "path-error" : undefined}
+              aria-invalid={!!error}
+            />
+            {hint && <p id="path-hint" className="field-hint">{hint}</p>}
+          </div>
 
-              <fieldset className="lengths">
-                <legend className="label">The brief</legend>
+          <div className="folds">
+            <details className="fold">
+              <summary>
+                <span className="fold-h">{mode === "caption" ? "Caption settings" : "Clip settings"}</span>
+                <span className="fold-sum">{summary}</span>
+              </summary>
+              <div className="fold-body">
                 <div className="mode-row">
                   <div className="seg seg-light" role="radiogroup" aria-label="What to make">
                     {[["clips", "Find clips"], ["caption", "Caption the whole video"]].map(([v, l]) => (
@@ -302,37 +351,49 @@ export default function NewJob() {
                       {LANGUAGES.slice(0, 1).map(([c, n]) => (
                         <option key={c} value={c}>{n}</option>
                       ))}
-                      <option value="auto">Detect automatically</option>
+                      <option value="auto">Find it for me</option>
                       {LANGUAGES.slice(1).map(([c, n]) => (
                         <option key={c} value={c}>{n}</option>
                       ))}
                     </select>
                   </label>
                 </div>
+                {language === "auto" && (
+                  <p className="field-hint">Selects tries a few short samples in each likely language. Accented English is often mistaken for another language, so pick English here if you know it.</p>
+                )}
                 {mode === "caption" ? (
                   <p className="brief-line caption-brief">
-                    Transcribe the whole video, let you correct the captions and blur what should not be seen, then burn the captions in. The video keeps its shape. No clips, no judge model.
+                    Selects writes captions for the whole video. You fix any wrong word and blur what should not be seen, then it renders the video with the captions on it. The video keeps its shape, and Gemma is not used.
                   </p>
                 ) : (
-                <p className="brief-line">
-                  Clips from
-                  <input className="input num mono" type="number" min={5} max={180} value={minLen} onChange={(e) => setMinLen(e.target.value)} aria-label="Shortest clip in seconds" />
-                  to
-                  <input className="input num mono" type="number" min={10} max={180} value={maxLen} onChange={(e) => setMaxLen(e.target.value)} aria-label="Longest clip in seconds" />
-                  seconds, up to
-                  <input className="input num mono" type="number" min={1} max={30} value={k} onChange={(e) => setK(e.target.value)} aria-label="Number of clips to propose" />
-                  clips, in 9:16 with captions. The model reads the best
-                  <input className="input num mono" type="number" min={2} max={30} value={judgeN} onChange={(e) => setJudgeN(e.target.value)} aria-label="Moments the model reads" />
-                  moments.
-                </p>
+                  <>
+                    <p className="brief-line">
+                      Up to
+                      <input className="input num mono" type="number" inputMode="numeric" min={1} max={30} value={k} onChange={(e) => setK(e.target.value)} aria-label="Most clips to suggest" />
+                      clips, each
+                      <input className="input num mono" type="number" inputMode="numeric" min={5} max={180} value={minLen} onChange={(e) => setMinLen(e.target.value)} aria-label="Shortest clip in seconds" />
+                      to
+                      <input className="input num mono" type="number" inputMode="numeric" min={10} max={180} value={maxLen} onChange={(e) => setMaxLen(e.target.value)} aria-label="Longest clip in seconds" />
+                      seconds long. Gemma reads the best
+                      <input className="input num mono" type="number" inputMode="numeric" min={2} max={30} value={judgeN} onChange={(e) => setJudgeN(e.target.value)} aria-label="Moments Gemma reads" />
+                      moments to choose them.
+                    </p>
+                    {models ? (
+                      <ModelControl models={models} value={model} onChange={setModel} judgeN={Number(judgeN) || 8} rates={rates} />
+                    ) : (
+                      <div className="model-control is-loading" aria-busy="true" />
+                    )}
+                  </>
                 )}
-                {language === "auto" && (
-                  <p className="field-hint">Selects compares a few samples in each likely language. Accented English is often guessed as another language, so choose it here if you know it.</p>
-                )}
-              </fieldset>
+              </div>
+            </details>
 
-              <fieldset className="rights">
-                <legend className="label">Credit</legend>
+            <details className="fold">
+              <summary>
+                <span className="fold-h">Credit the original</span>
+                <span className="fold-sum">{creditSummary}</span>
+              </summary>
+              <div className="fold-body">
                 <div className="rights-grid">
                   <label className="field">
                     <span className="field-label">Who made it</span>
@@ -347,29 +408,17 @@ export default function NewJob() {
                     </select>
                   </label>
                   <label className="field field-wide">
-                    <span className="field-label">Source link</span>
-                    <input className="input" type="url" inputMode="url" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://" autoComplete="off" spellCheck={false} />
+                    <span className="field-label">Link to the original</span>
+                    <input className="input" type="url" inputMode="url" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://" autoComplete="off" spellCheck={false} autoCapitalize="none" />
                   </label>
                 </div>
                 <p className="field-hint">
                   {license === "own"
-                    ? "Your own footage needs no credit line. Add one anyway if you want your name on the post."
-                    : "Added to every caption, so the original gets credit and the licence is followed."}
+                    ? "Your own video needs no credit line. Add one anyway if you want your name on the post."
+                    : "Selects adds this to the caption of every clip, so the person who made the video gets credit and the licence is followed."}
                 </p>
-              </fieldset>
-            </div>
-            <div className="new-right">
-              {mode === "caption" ? (
-                <div className="model-control">
-                  <p className="label">No judge model needed</p>
-                  <p className="dim">Captioning uses whisper only. You review every caption before anything is rendered.</p>
-                </div>
-              ) : models ? (
-                <ModelControl models={models} value={model} onChange={setModel} judgeN={Number(judgeN) || 8} rates={rates} />
-              ) : (
-                <div className="model-control is-loading" aria-busy="true" />
-              )}
-            </div>
+              </div>
+            </details>
           </div>
         </form>
 
@@ -377,7 +426,7 @@ export default function NewJob() {
 
         {jobs.length > 0 && (
           <section className="recent" aria-labelledby="recent-h">
-            <h2 id="recent-h" className="h-18">On this laptop</h2>
+            <h2 id="recent-h" className="h-18">Your videos</h2>
             <ul className="shelf">
               {jobs.map((summary) => {
                 const j = full[summary.id] ? { ...summary, ...full[summary.id] } : summary;

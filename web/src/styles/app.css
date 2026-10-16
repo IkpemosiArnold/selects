@@ -1,6 +1,6 @@
 /* ---------- base ---------- */
 *, *::before, *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
 body {
   margin: 0;
   background: var(--table);
@@ -101,7 +101,7 @@ kbd {
 .loading-page, .notice-page { display: grid; gap: 16px; align-content: start; justify-items: start; }
 
 /* ---------- new job ---------- */
-.new-page { display: grid; gap: 32px; }
+.new-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; }
 .health { border-left: 3px solid var(--red); padding: 4px 0 4px 16px; display: grid; gap: 12px; max-width: 72ch; }
 .health ul { display: grid; gap: 14px; }
 .health-what { font-weight: 650; }
@@ -111,7 +111,7 @@ kbd {
   font-size: var(--t-13); user-select: all; overflow-wrap: anywhere;
 }
 
-.new-form { display: grid; gap: 28px; }
+.new-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; max-width: 980px; }
 /* The empty state is a length of film leader waiting on the light table. */
 .leader {
   background: var(--film); color: #e8edeb; border-radius: 12px; overflow: hidden; display: grid; grid-template-rows: 18px 1fr 18px;
@@ -393,4 +393,64 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   .rv-w.is-new { animation: none; }
   .btn, .rp-fill, .proc-fill, .take-progress span, .take-play { transition: none; }
+}
+
+
+/* ---------- touch: the platform layer ---------- */
+button, a, [role="button"], summary, .seg-btn, label { touch-action: manipulation; }
+button, [role="button"], summary, .btn, .seg-btn, .tab { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+@media (pointer: coarse) {
+  input, textarea, select, .input, .input.num, .lang-field .input, .ask-other .input, .lq-form .input { font-size: 16px; }
+  .btn { min-height: 44px; }
+  .btn-chip { min-height: 40px; }
+  .input.num { min-height: 44px; }
+  .seg-light .seg-btn { min-height: 40px; }
+  .theme-toggle { min-height: 44px; min-width: 44px; justify-content: center; }
+}
+
+/* ---------- home: one action, the rest folded away ---------- */
+.btn-mark { background: var(--yellow); color: var(--on-yellow); border-color: var(--yellow); }
+@media (hover: hover) and (pointer: fine) { .btn-mark:hover:not(:disabled) { background: color-mix(in srgb, var(--yellow) 88%, #fff); border-color: var(--yellow); } }
+.leader-body { gap: 16px; }
+.leader-sub { max-width: 46ch; line-height: 1.45; color: #c3cbcf; }
+.leader-actions { display: grid; gap: 12px; justify-items: start; margin-top: 10px; }
+.leader-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+.leader-or { color: var(--film-print); font-size: var(--t-15); }
+@media (hover: none) { .leader-or { display: none; } }
+.picked { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; color: #e8edeb; font-weight: 650; }
+.picked svg { flex: none; color: var(--yellow); }
+.picked-name { display: flex; min-width: 0; white-space: nowrap; }
+.linkish.on-film { color: #c3cbcf; text-decoration-color: rgba(232, 237, 235, 0.35); font-weight: 500; }
+.path-field { display: grid; gap: 6px; max-width: 560px; }
+.path-field .input { min-height: 44px; }
+.folds { display: grid; gap: 10px; }
+.fold { border: 1px solid var(--line-2); border-radius: 10px; background: var(--panel); }
+.fold > summary {
+  list-style: none; cursor: pointer; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "h icon" "sum icon";
+  align-items: center; gap: 2px 16px; padding: 12px 16px; min-height: 56px; border-radius: 10px;
+}
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::after {
+  content: ""; grid-area: icon; width: 9px; height: 9px; border-right: 2px solid var(--ink-2); border-bottom: 2px solid var(--ink-2);
+  transform: rotate(45deg) translateY(-3px); transition: transform 200ms var(--ease-out);
+}
+.fold[open] > summary::after { transform: rotate(225deg) translate(-2px, -1px); }
+.fold > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .fold > summary:hover { background: var(--panel-2); } }
+.fold-h { grid-area: h; font-weight: 650; }
+.fold-sum { grid-area: sum; font-size: var(--t-13); color: var(--ink-2); min-width: 0; }
+.fold-body { display: grid; gap: 16px; padding: 4px 16px 18px; }
+.fold-body .model-control { margin-top: 6px; }
+.fold-body .mode-row { margin: 0; }
+.fold-body .brief-line { margin: 0; }
+@media (prefers-reduced-motion: reduce) { .fold > summary::after { transition: none; } }
+@media (max-width: 560px) {
+  .leader-body { padding: 24px 18px; }
+  .leader-title { font-size: 1.6rem; }
+  .leader-sub { font-size: var(--t-15); }
+  .leader-buttons { width: 100%; }
+  .leader-buttons .btn-big { flex: 1 1 auto; }
+  .shelf { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; }
+  .fold-body { padding-inline: 12px; }
+  .brief-line { line-height: 2.9; }
 }

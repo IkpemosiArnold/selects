@@ -9,8 +9,8 @@ export default function ModelControl({ models, value, onChange, judgeN = 8, rate
   if (!models?.length) {
     return (
       <div className="model-control is-empty">
-        <p className="label">Model</p>
-        <p className="dim">No local model found yet. Pull one with <code>ollama pull gemma3:4b</code>, then reload.</p>
+        <p className="label">Gemma's model</p>
+        <p className="dim">There is no Gemma model on this laptop yet. Download one with <code>ollama pull gemma3:4b</code>, then reload.</p>
       </div>
     );
   }
@@ -21,18 +21,20 @@ export default function ModelControl({ models, value, onChange, judgeN = 8, rate
   const est = per ? per * judgeN : null;
   const cap = (x) => x[0].toUpperCase() + x.slice(1);
   const timeText = est
-    ? `${cap(aboutMinutes(est))} to judge ${judgeN} moments, at ${Math.round(per)} s each on this laptop.`
-    : "Judge speed not measured yet on this laptop. The first run will time it.";
-  const rtfText = rates?.rtf ? `Transcription runs at ${rates.rtf.toFixed(2)}x real time here.` : "Transcription speed not measured yet.";
+    ? `${cap(aboutMinutes(est))} for Gemma to read ${judgeN} moments on this laptop, ${Math.round(per)} s each.`
+    : "Selects has not timed this model on this laptop yet. Your first job will.";
+  const rtfText = rates?.rtf
+    ? `Transcribing a 10-minute video takes ${aboutMinutes(600 / rates.rtf)} here.`
+    : "Selects has not timed transcribing on this laptop yet.";
   return (
     <div className="model-control">
       <div className="mc-head">
-        <label htmlFor={id} className="label">Judge model</label>
+        <label htmlFor={id} className="label">Gemma's model</label>
         <span className="mc-name mono">{m.name}</span>
       </div>
       <div className="mc-ends" aria-hidden="true">
         <span>Faster</span>
-        <span>Smarter</span>
+        <span>Better picks</span>
       </div>
       <div className="mc-track" style={{ "--stops": sorted.length }}>
         <input
@@ -43,7 +45,7 @@ export default function ModelControl({ models, value, onChange, judgeN = 8, rate
           step={1}
           value={idx}
           disabled={sorted.length < 2}
-          aria-valuetext={`${m.name}, ${est ? aboutMinutes(est) + " to judge" : "not measured yet"}`}
+          aria-valuetext={`${m.name}, ${est ? aboutMinutes(est) + " to read the moments" : "not timed yet"}`}
           onChange={(e) => onChange(sorted[Number(e.target.value)].name)}
         />
         <div className="mc-stops" aria-hidden="true">
@@ -70,7 +72,7 @@ export default function ModelControl({ models, value, onChange, judgeN = 8, rate
       )}
       <p className={"mc-time" + (est ? "" : " dim")}>{timeText}</p>
       <p className="mc-time dim">{rtfText}</p>
-      <p className="mc-meta mono dim">{m.sizeGb != null ? `${m.sizeGb} GB` : ""}</p>
+      {m.sizeGb != null && <p className="mc-meta dim">Uses {m.sizeGb} GB of disk.</p>}
     </div>
   );
 }
