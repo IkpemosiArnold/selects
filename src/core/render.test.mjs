@@ -35,3 +35,21 @@ test("SRT cues are numbered and timed", () => {
   assert.match(srt, /^1\n00:00:00,000 --> 00:00:00,/);
   assert.match(srt, /\n2\n/);
 });
+
+test("caption layout keeps one line when it fits, else balances two lines", async () => {
+  const { layoutCaption } = await import("./render.mjs");
+  const c = { fontSize: 80, maxWidth: 900 };
+  const measure = (t, s) => t.length * s * 0.55; // a fake monospace-ish font
+  const one = layoutCaption(["that", "we", "should"], c, measure);
+  assert.equal(one.lines.length, 1);
+  const shrunk = layoutCaption(["that", "we", "should", "challenge"], c, measure);
+  assert.equal(shrunk.lines.length, 1, "shrinks up to 15% to stay on one line");
+  assert.ok(shrunk.size < 80 && shrunk.size >= 68);
+  const two = layoutCaption(["that", "we", "should", "challenging"], c, measure);
+  assert.equal(two.lines.length, 2);
+  assert.deepEqual(
+    two.lines.map((l) => l.map((x) => x.t).join(" ")),
+    ["that we should", "challenging"],
+  );
+  assert.deepEqual(two.lines.flat().map((x) => x.i), [0, 1, 2, 3]);
+});

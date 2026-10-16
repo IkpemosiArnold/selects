@@ -106,6 +106,33 @@ export function captionChunks(words, { maxWords = 4, maxChars = 22, pause = 0.5 
 /** Caption display text: drop trailing commas and full stops (keep ? and !). */
 const display = (w) => w.replace(/[,.;:]+$/, "");
 
+/**
+ * Lay a caption out: one line if it fits (shrinking the font by up to 15%), otherwise two
+ * lines split where they are closest to equal width, so no single word is left hanging.
+ * measure(text, size) returns a width in pixels. Returns { size, lines: [[{i, t, tw}]] }.
+ */
+export function layoutCaption(texts, c, measure) {
+  const widths = (s) => texts.map((t) => measure(t, s));
+  const lineW = (ws, s) => ws.reduce((a, b) => a + b, 0) + measure(" ", s) * Math.max(0, ws.length - 1);
+  const asLines = (ws, cut) => [texts.slice(0, cut), texts.slice(cut)].filter((l) => l.length).map((l, li) => l.map((t, k) => ({ i: li === 0 ? k : cut + k, t, tw: ws[li === 0 ? k : cut + k] })));
+  for (let s = c.fontSize; s >= Math.round(c.fontSize * 0.85); s -= 2) {
+    const ws = widths(s);
+    if (lineW(ws, s) <= c.maxWidth) return { size: s, lines: asLines(ws, texts.length) };
+  }
+  for (let s = c.fontSize; s >= 40; s -= 4) {
+    const ws = widths(s);
+    let best = null;
+    for (let cut = 1; cut < texts.length; cut++) {
+      const w = Math.max(lineW(ws.slice(0, cut), s), lineW(ws.slice(cut), s));
+      if (!best || w < best.w) best = { cut, w };
+    }
+    if (best && best.w <= c.maxWidth) return { size: s, lines: asLines(ws, best.cut) };
+    if (!best && lineW(ws, s) <= c.maxWidth) return { size: s, lines: asLines(ws, texts.length) };
+  }
+  const s = 40;
+  return { size: s, lines: asLines(widths(s), texts.length) };
+}
+
 /** Draw one caption frame. highlightIdx = -1 draws a transparent frame. */
 export function drawCaption(chunkWords, highlightIdx, opts) {
   ensureFont();
@@ -113,30 +140,12 @@ export function drawCaption(chunkWords, highlightIdx, opts) {
   const canvas = createCanvas(width, c.boxHeight);
   const ctx = canvas.getContext("2d");
   if (highlightIdx < 0 || !chunkWords?.length) return canvas.toBuffer("image/png");
-  let size = c.fontSize;
   const font = (s) => `bold ${s}px "${FONT_FAMILY}"`;
   const texts = chunkWords.map((w) => display(w.w));
-  // lay out into at most two lines; shrink the font if a single word is too wide
-  let lines;
-  for (;;) {
-    ctx.font = font(size);
-    const space = ctx.measureText(" ").width;
-    lines = [[]];
-    let lineW = 0;
-    texts.forEach((t, i) => {
-      const tw = ctx.measureText(t).width;
-      const cur = lines[lines.length - 1];
-      if (cur.length && lineW + space + tw > c.maxWidth) {
-        lines.push([]);
-        lineW = 0;
-      }
-      lines[lines.length - 1].push({ i, t, tw });
-      lineW += (lines[lines.length - 1].length > 1 ? space : 0) + tw;
-    });
-    const widest = Math.max(...lines.map((l) => l.reduce((a, x) => a + x.tw, 0) + space * (l.length - 1)));
-    if ((lines.length <= 2 && widest <= c.maxWidth) || size <= 40) break;
-    size -= 6;
-  }
+  const { size, lines } = layoutCaption(texts, c, (t, s) => {
+    ctx.font = font(s);
+    return ctx.measureText(t).width;
+  });
   ctx.font = font(size);
   const space = ctx.measureText(" ").width;
   const lineH = size * 1.18;
