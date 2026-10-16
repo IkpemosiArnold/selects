@@ -14,3 +14,4 @@ cookies*.txt
 .env
 .DS_Store
 selects-out/
+tools/faces/faces
