@@ -231,3 +231,57 @@ test("whisper's notes never reach sentences, candidates or captions; laughter is
   const events = JSON.parse(fs.readFileSync(path.join(dir, "events.json"), "utf8"));
   assert.ok(events.some((e) => e.type === "laughter"));
 });
+
+test("the posting kit is written from the edited captions, not the raw whisper text", async () => {
+  const { editCaptions, loadCaptions } = await import("./captions.mjs");
+  const job = createJob(video, { k: 2, model: "mock", qualityGate: false });
+  const ready = await runJob(job.id, { deps: mocks({ probe: 0, transcribe: 0, judge: 0 }) });
+  const c = ready.candidates[0];
+  updateCandidate(job.id, c.id, { status: "approved" });
+  const dir = jobDir(job.id);
+  // a person fixes an ASR error inside the clip: "tried" was really "Jedidiah's plan"
+  const cues = loadCaptions(dir).cues;
+  const i = cues.findIndex((q) => q.s >= c.start && q.e <= c.end && / tried /.test(` ${q.text} `));
+  assert.ok(i >= 0);
+  editCaptions(dir, cues.map((q, j) => ({ s: q.s, e: q.e, text: j === i ? q.text.replace("tried", "tested Jedidiah's plan") : q.text })));
+  const seen = [];
+  const deps = {
+    render: async (_j, cand, { jobDir: d }) => {
+      fs.mkdirSync(path.join(d, "clips"), { recursive: true });
+      fs.writeFileSync(path.join(d, "clips", `${cand.id}.mp4`), "mp4");
+      return { path: `clips/${cand.id}.mp4`, srt: `clips/${cand.id}.srt`, wallSec: 1 };
+    },
+    postingKit: async (cand) => {
+      seen.push(cand);
+      return { title: "T", caption: "C.", hashtags: [] };
+    },
+  };
+  await renderJob(job.id, { deps });
+  assert.equal(seen.length, 1);
+  assert.match(seen[0].text, /tested Jedidiah's plan/);
+  assert.equal(seen[0].id, c.id);
+  assert.equal(loadJob(job.id).candidates.find((x) => x.id === c.id).text, c.text, "the candidate itself is not rewritten");
+});
+
+test("a plain kit takes its title from the edited first line", async () => {
+  const { editCaptions, loadCaptions } = await import("./captions.mjs");
+  const job = createJob(video, { k: 2, model: "mock", qualityGate: false, kit: "plain" });
+  const ready = await runJob(job.id, { deps: mocks({ probe: 0, transcribe: 0, judge: 0 }) });
+  const c = ready.candidates[0];
+  updateCandidate(job.id, c.id, { status: "approved" });
+  const dir = jobDir(job.id);
+  const cues = loadCaptions(dir).cues;
+  const first = cues.findIndex((q) => q.s >= c.start - 1e-6);
+  editCaptions(dir, cues.map((q, j) => ({ s: q.s, e: q.e, text: j === first ? "Edited opener" : q.text })));
+  const done = await renderJob(job.id, {
+    deps: {
+      render: async (_j, cand, { jobDir: d }) => {
+        fs.mkdirSync(path.join(d, "clips"), { recursive: true });
+        fs.writeFileSync(path.join(d, "clips", `${cand.id}.mp4`), "mp4");
+        return { path: `clips/${cand.id}.mp4`, srt: `clips/${cand.id}.srt`, wallSec: 1 };
+      },
+    },
+  });
+  const kit = JSON.parse(fs.readFileSync(path.join(dir, done.candidates.find((x) => x.id === c.id).render.kit), "utf8"));
+  assert.match(kit.title, /^Edited opener/);
+});

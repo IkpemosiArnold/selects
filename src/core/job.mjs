@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { DEFAULT_SETTINGS, jobsDir, resolveAsrModel, resolveModel } from "./config.mjs";
-import { clipCues, loadCaptions } from "./captions.mjs";
+import { captionsFile, clipCues, loadCaptions, textInRange } from "./captions.mjs";
 import { detectFaces as realDetectFaces } from "./faces.mjs";
 import { decideLanguage as realDecideLanguage } from "./language.mjs";
 import { applyProfile } from "./profiles.mjs";
@@ -556,6 +556,20 @@ export function updateCandidate(id, cid, patch = {}) {
   return c;
 }
 
+/**
+ * What the posting kit reads for a clip: the person's edited captions when there are any,
+ * so a fixed ASR error (a misheard name) is not repeated in the title or caption. Without
+ * edits, the candidate as it is.
+ */
+export function kitSource(dir, c) {
+  const caps = readJson(captionsFile(dir), null);
+  if (!caps?.edited || !Array.isArray(caps.cues)) return c;
+  const text = textInRange(caps.cues, c.start, c.end);
+  if (!text) return c;
+  const hook = text.match(/^.*?[.!?]["')\]]*(?=\s|$)/)?.[0] || text.split(/\s+/).slice(0, 14).join(" ");
+  return { ...c, text, hook };
+}
+
 /** Write clips/<cid>.kit.json: the model's (or plain) kit plus credit for the source. */
 function writeKit(job, c, k) {
   const kitRel = `clips/${c.id}.kit.json`;
@@ -729,9 +743,9 @@ async function renderClips(id, { ids, deps = {}, signal, kit, preset } = {}) {
         let k;
         const k0 = Date.now();
         try {
-          k = kitMode === "model" ? await d.postingKit(c, { model: job.settings.model, signal, cacheDir: dir }) : plainKit(c);
+          k = kitMode === "model" ? await d.postingKit(kitSource(dir, c), { model: job.settings.model, signal, cacheDir: dir }) : plainKit(kitSource(dir, c));
         } catch {
-          k = plainKit(c);
+          k = plainKit(kitSource(dir, c));
         }
         const kitRel = writeKit(job, c, k);
         c.title = k.title;

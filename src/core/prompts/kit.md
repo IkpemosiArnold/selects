@@ -10,7 +10,7 @@ Given the transcript of one clip, return:
 - caption: one or two plain sentences (under 200 characters) that tell a stranger what they will get from watching. No emojis, no dashes.
 - hashtags: three to five lowercase hashtags without the # sign, specific to the topic (for example "strengthtraining", not "viral" or "fyp").
 
-Only use facts that are in the transcript.
+Only use facts that are in the transcript. Do not invent or repeat proper names (people, places, brands) unless they appear clearly in the transcript; if a name looks garbled or unsure, describe the idea instead.
 
 <!-- user -->
 Transcript of the clip ({{duration}} seconds):

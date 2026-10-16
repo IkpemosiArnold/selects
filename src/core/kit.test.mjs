@@ -22,3 +22,16 @@ test("postingKit logs its call, creating a missing cacheDir first", async () => 
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("the kit prompt tells the model not to invent or repeat unclear proper names", async () => {
+  let sys = "";
+  await postingKit(clip, {
+    model: "m",
+    request: async (messages) => {
+      sys = messages[0].content;
+      return { title: "t", caption: "c", hashtags: ["a", "b", "c"] };
+    },
+  });
+  assert.match(sys, /proper names/i);
+  assert.match(sys, /describ/i);
+});

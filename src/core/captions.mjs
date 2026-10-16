@@ -154,6 +154,15 @@ export function clipCues(cues, start, end, offset = start) {
   return out;
 }
 
+/** The words of the cues inside [start, end] as one string, in their own times (no shift). */
+export function textInRange(cues, start, end) {
+  return clipCues(cues, start, end, 0)
+    .map((c) => c.text)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // ---- captions.json in a job folder -------------------------------------------------
 
 export const captionsFile = (dir) => path.join(dir, "captions.json");
