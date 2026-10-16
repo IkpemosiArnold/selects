@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Masthead } from "../App.jsx";
 import { tc, aboutMinutes } from "../lib/time.js";
 import { useReducedMotion } from "../lib/hooks.js";
+import LanguageQuality, { plainHint } from "./LanguageQuality.jsx";
 
 const STEPS = [
   { key: "probe", label: "Read the file" },
+  { key: "language", label: "Check the language" },
   { key: "transcribe", label: "Transcribe" },
   { key: "candidates", label: "Find moments" },
   { key: "judge", label: "Judge with the model" },
@@ -96,7 +98,7 @@ function Reveal({ words, active, reduce }) {
   );
 }
 
-export default function Processing({ job, words, onResume }) {
+export default function Processing({ job, words, onResume, onRetranscribe }) {
   const reduce = useReducedMotion();
   const [resuming, setResuming] = useState(false);
   const dur = job.source?.duration || 0;
@@ -105,7 +107,11 @@ export default function Processing({ job, words, onResume }) {
   const tr = st.transcribe || {};
   const jd = st.judge || {};
   const isErr = job.stage === "error";
-  const active = job.stage === "transcribing" && !isErr;
+  const lg = st.language || {};
+  const checkingLanguage = lg.status === "running";
+  const active = job.stage === "transcribing" && !isErr && !checkingLanguage;
+  const captionMode = job.settings?.mode === "caption";
+  const unreliable = isErr && job.error?.stage === "transcribe" && job.transcriptQuality?.verdict === "unreliable";
 
   // Honest numbers: prefer what the server measured; otherwise derive them.
   let rtfText = tr.note || (tr.speed ? `transcribing at ${tr.speed}x real time` : null);
@@ -122,13 +128,18 @@ export default function Processing({ job, words, onResume }) {
   let headline, sub;
   if (isErr) {
     headline = job.error?.message || "The job stopped.";
-    sub = job.error?.hint || "Resume to continue from the last saved step.";
+    sub = unreliable
+      ? "Say which language is spoken, or try a bigger speech model, and Selects transcribes it again."
+      : plainHint(job.error?.hint) || "Resume to continue from the last saved step.";
   } else if (job.stage === "queued") {
     headline = "Waiting for the job ahead of this one.";
     sub = "It starts by itself. You can close the lid; progress is saved after each step.";
   } else if (job.stage === "probing") {
     headline = "Reading the file.";
     sub = `${job.source?.name}`;
+  } else if (checkingLanguage) {
+    headline = "Checking which language is spoken.";
+    sub = "Selects decodes a few short samples in each likely language and keeps the one whisper hears best.";
   } else if (job.stage === "transcribing") {
     headline = cap(rtfText || "Transcribing") + ".";
     sub = eta != null ? `${cap(aboutMinutes(eta))} left. You can close this tab; progress is saved.` : "Working out the speed on this laptop.";
@@ -153,7 +164,7 @@ export default function Processing({ job, words, onResume }) {
       <Masthead job={job} />
       <main className="page proc-page">
         <ol className="steps" aria-label="Progress">
-          {STEPS.map((s) => {
+          {STEPS.filter((s) => st[s.key] && st[s.key].status !== "skipped" && !(captionMode && (s.key === "candidates" || s.key === "judge"))).map((s) => {
             const state = st[s.key]?.status || "pending";
             return (
               <li key={s.key} className={"step is-" + state} aria-current={state === "running" ? "step" : undefined}>
@@ -168,7 +179,7 @@ export default function Processing({ job, words, onResume }) {
         <div className="proc-head" aria-live="polite">
           <h1 className={"h-24" + (isErr ? " is-error" : "")}>{headline}</h1>
           {sub && <p className="lede">{sub}</p>}
-          {isErr && (
+          {isErr && !unreliable && (
             <button
               className="btn btn-primary"
               disabled={resuming}
@@ -186,7 +197,16 @@ export default function Processing({ job, words, onResume }) {
           )}
         </div>
 
-        {(job.stage === "transcribing" || isErr) && (
+        {(job.language || job.transcriptQuality) && (
+          <LanguageQuality
+            job={job}
+            variant="block"
+            onRetranscribe={onRetranscribe}
+            onForce={captionMode ? null : () => onResume({ force: true })}
+          />
+        )}
+
+        {((job.stage === "transcribing" && !checkingLanguage) || isErr) && (
           <div className="reel-progress">
             <div className="rp-bar" role="progressbar" aria-label="Transcribed so far" aria-valuemin={0} aria-valuemax={Math.round(dur)} aria-valuenow={Math.round(reached)} aria-valuetext={`${tc(reached)} of ${tc(dur)}`}>
               <div className="rp-fill" style={{ transform: `scaleX(${pct || 0})` }} />
