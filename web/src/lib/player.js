@@ -11,6 +11,7 @@ export function createPlayer() {
   let raf = 0;
   let lastFrame = 0;
   let lastNotify = 0;
+  let stopAt = null; // playSpan: pause here once, then forget it
   const subs = new Set(); // React subscribers, about 15 times a second
   const frameSubs = new Set(); // DOM subscribers, every frame
 
@@ -31,6 +32,11 @@ export function createPlayer() {
       time += Math.min(0.1, (now - (lastFrame || now)) / 1000);
     }
     lastFrame = now;
+    if (stopAt != null && time >= stopAt) {
+      stopAt = null;
+      api.pause();
+      return;
+    }
     if (win.end > win.start && time >= win.end) {
       time = win.start;
       if (video) video.currentTime = win.start;
@@ -70,13 +76,25 @@ export function createPlayer() {
       raf = requestAnimationFrame(loop);
       notify(true);
     },
+    // Play one stretch (a caption cue) and stop at its end.
+    playSpan(s, e) {
+      api.seek(Math.max(win.start, s));
+      stopAt = e;
+      if (!playing) {
+        playing = true;
+        lastFrame = 0;
+        if (video) video.play().catch(() => { playing = false; notify(true); });
+        raf = requestAnimationFrame(loop);
+        notify(true);
+      }
+    },
     pause() {
       playing = false;
       cancelAnimationFrame(raf);
       if (video) video.pause();
       notify(true);
     },
-    toggle() { (playing ? api.pause : api.play)(); },
+    toggle() { stopAt = null; (playing ? api.pause : api.play)(); },
     subscribe(f) { subs.add(f); return () => subs.delete(f); },
     onFrame(f) { frameSubs.add(f); return () => frameSubs.delete(f); },
     destroy() { cancelAnimationFrame(raf); subs.clear(); frameSubs.clear(); },

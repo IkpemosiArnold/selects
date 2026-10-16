@@ -5,6 +5,8 @@ import NewJob from "./components/NewJob.jsx";
 import Processing from "./components/Processing.jsx";
 import Review from "./components/Review.jsx";
 import RenderScreen from "./components/RenderScreen.jsx";
+import CaptionStudio from "./components/CaptionStudio.jsx";
+import { useFaces } from "./components/Blur.jsx";
 
 function useHashRoute() {
   const parse = () => {
@@ -105,12 +107,16 @@ export function Masthead({ job, children }) {
   );
 }
 
-const STAGE_KEY = { probing: "probe", transcribing: "transcribe", candidates: "candidates", judging: "judge", rendering: "render" };
+const STAGE_KEY = { probing: "probe", language: "language", transcribing: "transcribe", candidates: "candidates", judging: "judge", rendering: "render" };
+const BEFORE_READY = ["queued", "probing", "language", "transcribing", "candidates", "judging"];
 
 function JobView({ jobId, view }) {
   const [job, setJob] = useState(null);
   const [words, setWords] = useState([]);
   const [loadError, setLoadError] = useState(null);
+  const [captionsVersion, setCaptionsVersion] = useState(0);
+  const faces = useFaces(jobId);
+  const facesEvent = faces.onEvent;
   const jobRef = useRef(null);
   jobRef.current = job;
 
@@ -175,6 +181,14 @@ function JobView({ jobId, view }) {
             ),
           };
         });
+      } else if (type === "output" && data) {
+        setJob((j) => (j ? { ...j, output: { ...j.output, ...data } } : j));
+      } else if (type === "quality" && data) {
+        setJob((j) => (j ? { ...j, transcriptQuality: data } : j));
+      } else if (type === "faces" && data) {
+        facesEvent(data);
+      } else if (type === "captions") {
+        setCaptionsVersion((v) => v + 1);
       } else if (type === "error" && data) {
         setJob((j) => (j ? { ...j, stage: "error", error: data } : j));
       }
@@ -183,7 +197,7 @@ function JobView({ jobId, view }) {
       alive = false;
       off();
     };
-  }, [jobId, refetch]);
+  }, [jobId, refetch, facesEvent]);
 
   const updateCandidate = useCallback((c) => {
     setJob((j) => (j ? { ...j, candidates: j.candidates.map((x) => (x.id === c.id ? { ...x, ...c } : x)) } : j));
@@ -212,22 +226,52 @@ function JobView({ jobId, view }) {
     );
   }
 
-  const processing = ["queued", "probing", "transcribing", "candidates", "judging"].includes(job.stage) ||
-    (job.stage === "error" && job.error?.stage !== "render" && !job.candidates?.length);
-  if (processing) return <Processing job={job} words={words} onResume={async () => {
-    await api.resume(jobId);
+  const captionMode = job.settings?.mode === "caption";
+  const processing = BEFORE_READY.includes(job.stage) ||
+    (job.stage === "error" &&
+      (captionMode
+        ? ["probe", "language", "transcribe"].includes(job.error?.stage) || job.stages?.transcribe?.status !== "done"
+        : job.error?.stage !== "render" && !job.candidates?.length));
+  // A new language or speech model starts the transcript again from scratch.
+  const retranscribe = async (body) => {
+    await api.setLanguage(jobId, body);
+    setWords([]);
+    const j = await refetch();
+    if (j && !BEFORE_READY.includes(j.stage)) setJob({ ...j, stage: "queued" });
+    go(`#/job/${jobId}`);
+  };
+  if (processing) return <Processing job={job} words={words} onRetranscribe={retranscribe} onResume={async (body) => {
+    await api.resume(jobId, body);
     await refetch();
   }} />;
 
-  const renderView = view === "render" || (job.stage === "rendering" && view !== "review");
-  if (renderView || (job.stage === "done" && view !== "review")) {
-    return <RenderScreen job={job} />;
-  }
-  return <Review job={job} words={words} onCandidate={updateCandidate} onRender={async (ids) => {
+  const startRender = async (ids) => {
     await api.render(job.id, ids);
     setJob((j) => ({ ...j, stage: "rendering", candidates: j.candidates.map((c) => (ids.includes(c.id) ? { ...c, render: { status: "pending", progress: 0 } } : c)) }));
     go(`#/job/${job.id}/render`);
-  }} />;
+  };
+
+  if (captionMode || view === "captions") {
+    return (
+      <CaptionStudio
+        job={job}
+        words={words}
+        mode={captionMode ? "caption" : "clips"}
+        faces={faces}
+        captionsVersion={captionsVersion}
+        onJob={setJob}
+        refetch={refetch}
+        onRetranscribe={retranscribe}
+        onRender={startRender}
+      />
+    );
+  }
+
+  const renderView = view === "render" || (job.stage === "rendering" && view !== "review");
+  if (renderView || (job.stage === "done" && view !== "review")) {
+    return <RenderScreen job={job} refetch={refetch} />;
+  }
+  return <Review job={job} words={words} faces={faces} onCandidate={updateCandidate} onRetranscribe={retranscribe} refetch={refetch} onRender={startRender} />;
 }
 
 export default function App() {
