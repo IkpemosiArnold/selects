@@ -7,7 +7,12 @@ import { parseArgs } from "node:util";
 import { FONT_PATH, ollamaModels, ollamaUrl, resolveModel, selectsHome, whisperBin, whisperModel } from "../src/core/config.mjs";
 import { attributionLine, licenseCheck, MEDIA_REMINDER, normaliseLicense } from "../src/core/attribution.mjs";
 import { WEIGHTS, measuredSpeeds } from "../src/core/judge.mjs";
-import { createJob, jobDir, jobEvents, listJobs, loadJob, renderJob, resumeJob, runJob, updateCandidate, updateJobSettings } from "../src/core/job.mjs";
+import { createJob, detectJobFaces, jobDir, jobEvents, listJobs, loadJob, renderJob, resumeJob, runJob, updateCandidate, updateJobSettings } from "../src/core/job.mjs";
+import { editCaptions, loadCaptions, parseSubtitles, toSrt } from "../src/core/captions.mjs";
+import { parseRegion } from "../src/core/blur.mjs";
+import { facesAvailable } from "../src/core/faces.mjs";
+import { languageName } from "../src/core/language.mjs";
+import { asrModels } from "../src/core/config.mjs";
 import { drainQueue, enqueue, queueState } from "../src/core/queue.mjs";
 import { diskFreeGb, run, slugify, tc } from "../src/core/util.mjs";
 
@@ -15,6 +20,7 @@ const HELP = `selects: pull the best clips from a long video. Everything runs on
 
 Usage
   selects <video> [options]      find clips, ask before cutting, render the approved ones
+  selects caption <video>        caption the whole video (its own aspect, no clipping): MP4, SRT, VTT
   selects review <job-id>        review and render a job that already ran (for example overnight)
   selects queue add <video...>   queue videos for overnight mode
   selects queue run              work through the queue, one video at a time
@@ -36,6 +42,23 @@ Options
   --license <id>    the source's licence, for example CC-BY-SA-4.0 (adds the licence link)
   --source-url <u>  where the source video lives (added to the credit)
   --yes             approve every proposed clip without asking
+  --force           judge clips even when the transcript looks unreliable
+
+Speech and captions (clips and caption mode)
+  --language <code> spoken language: en (default), auto (decode and compare), or a code like yo
+  --asr-model <m>   whisper model: auto (base.en for English), small.en, medium.en-q5_0, a path...
+  --prompt <text>   a short neutral context for whisper
+  --clean-audio     cut rumble and hiss and even out loudness before whisper
+  --no-captions     render clips without burned-in captions
+  --style <s>       caption look: bold (2 to 4 words, current word yellow) or subtitle (two lines)
+  --captions <l>    source (default); en and both are planned
+  --edit            (caption) write an editable SRT, wait for you to fix it, then render
+  --srt <file>      (caption) use your corrected SRT; words keep their timings
+
+Privacy blur
+  --blur-faces <m>  all, or others (everyone except the main speaker); macOS only
+  --blur-region <r> x,y,w,h as fractions of the frame, optionally @start-end in seconds;
+                    repeat for more regions, for example --blur-region 0.6,0.05,0.35,0.1@12-30
   -h, --help        show this help
 `;
 
@@ -54,7 +77,7 @@ function fmtEta(sec) {
   return `about ${(sec / 3600).toFixed(1)} h left`;
 }
 
-const STAGE_NAMES = { probe: "Reading video", transcribe: "Transcribing", candidates: "Finding windows", judge: "Judging", render: "Rendering" };
+const STAGE_NAMES = { probe: "Reading video", language: "Checking the language", transcribe: "Transcribing", candidates: "Finding windows", judge: "Judging", render: "Rendering" };
 
 /** Show stage progress: one live line on a terminal, a line every 15 s otherwise. */
 function progressReporter(jobId) {
@@ -187,6 +210,7 @@ async function finishJob(job, values) {
       say("No clips approved, so nothing was rendered.");
       return;
     }
+    await prepareFaces(job, [job.settings.blur, ...approved.map((c) => c.blur)]);
     say("");
     say(`Rendering ${approved.length} clip${approved.length === 1 ? "" : "s"}${values.preview ? " as fast previews" : ""}...`);
     job = await renderJob(job.id, { preset: values.preview ? "preview" : undefined, kit: values["plain-kit"] ? "plain" : undefined });
@@ -245,6 +269,7 @@ async function cmdClip(video, values) {
     credit: values.credit,
     license: values.license,
     sourceUrl: values["source-url"],
+    ...speechSettings(values),
   };
   if (!checkLicense(values.license)) process.exit(1);
   let job;
@@ -260,8 +285,160 @@ async function cmdClip(video, values) {
   const t0 = Date.now();
   job = await runJob(job.id);
   stop();
+  printSpeech(job);
   if (job.stage !== "error") say(dim(`Found clips in ${((Date.now() - t0) / 60000).toFixed(1)} min.`));
   await finishJob(job, values);
+}
+
+/** Speech, caption and blur settings from the flags (shared by clips and caption mode). */
+function speechSettings(values) {
+  const blur = blurFromFlags(values);
+  return {
+    language: values.language,
+    asrModel: values["asr-model"],
+    asrPrompt: values.prompt,
+    asrPreprocess: values["clean-audio"] ? "clean" : undefined,
+    captions: values["no-captions"] ? false : undefined,
+    captionStyle: values.style,
+    captionLang: values.captions,
+    qualityGate: values.force ? false : undefined,
+    blur: blur ?? undefined,
+  };
+}
+
+function blurFromFlags(values) {
+  const regions = (values["blur-region"] || []).map((r) => {
+    try {
+      return parseRegion(r);
+    } catch (e) {
+      say(red(e.message));
+      say(e.hint);
+      process.exit(1);
+    }
+  });
+  const mode = values["blur-faces"];
+  if (mode && !["all", "others"].includes(mode)) {
+    say(red(`--blur-faces takes all or others, not "${mode}".`));
+    process.exit(1);
+  }
+  if (!mode && !regions.length) return null;
+  return { faces: { mode: mode || "off", tracks: [] }, regions };
+}
+
+/** Say which language and model were used, and how much to trust the transcript. */
+function printSpeech(job) {
+  const L = job.language;
+  if (L?.warning) say(yellow(`Language: ${L.warning}`));
+  else if (L) say(dim(`Language: ${languageName(L.used)}${L.detected ? ` (whisper's guess: ${languageName(L.detected.code)}, p = ${L.detected.p})` : ""}`));
+  if (L?.compared?.length) say(dim(`Decode and compare: ${L.compared.map((c) => `${c.code} ${c.meanP}`).join(", ")}${L.margin != null ? `, margin ${L.margin}` : ""}`));
+  const q = job.transcriptQuality;
+  if (q) {
+    const line = `Transcript ${q.verdict}: mean word confidence ${q.meanP}, ${Math.round(q.lowShare * 100)}% of words unsure${job.asr ? `, ${job.asr.model} at ${job.asr.speed}x real time` : ""}.`;
+    say(q.verdict === "good" ? dim(line) : yellow(line));
+    if (q.verdict === "shaky" && q.hint) say(yellow(q.hint));
+  }
+}
+
+/** Detect faces before rendering when face blur is on (macOS). Returns false if it failed. */
+async function prepareFaces(job, blurSpecs) {
+  if (!blurSpecs.some((b) => b?.faces?.mode && b.faces.mode !== "off")) return true;
+  if (!facesAvailable()) {
+    say(yellow(process.platform === "darwin" ? "Face blur needs the face detector: run sh tools/faces/build.sh. Rendering without face blur." : "Face blur needs macOS. Rendering with manual regions only."));
+    return false;
+  }
+  say("Finding faces...");
+  try {
+    const res = await detectJobFaces(job.id);
+    const main = res.tracks.find((t) => t.main);
+    say(dim(`${res.tracks.length} face track${res.tracks.length === 1 ? "" : "s"} in ${res.sec} s${main ? `; main speaker ${main.id} (${tc(main.start)} to ${tc(main.end)})` : ""}.`));
+    return true;
+  } catch (e) {
+    say(yellow(`Face detection failed: ${e.message}`));
+    return false;
+  }
+}
+
+async function cmdCaption(target, values) {
+  let job;
+  if (/^j_\d{8}_/.test(target)) {
+    job = loadJob(target);
+  } else {
+    try {
+      job = createJob(target, { mode: "caption", ...speechSettings(values) });
+    } catch (e) {
+      say(red(e.message));
+      if (e.hint) say(e.hint);
+      process.exit(1);
+    }
+  }
+  if (values.captions && values.captions !== "source") say(yellow(`--captions ${values.captions} is not built yet; captioning in the spoken language.`));
+  say(`${bold(job.source.name)}  ${dim(`caption job ${job.id}`)}`);
+  if (job.stage !== "ready" && job.stage !== "done") {
+    const stop = progressReporter(job.id);
+    job = job.stage === "queued" && Object.values(job.stages).every((s) => s.status === "pending") ? await runJob(job.id) : await resumeJob(job.id);
+    stop();
+    if (job.stage === "error") return fail(job);
+  }
+  printSpeech(job);
+  const dir = jobDir(job.id);
+  const outDir = path.resolve(values.out || path.join("selects-out", path.parse(job.source.name).name));
+  fs.mkdirSync(outDir, { recursive: true });
+  const base = path.parse(job.source.name).name;
+  if (values.srt) {
+    const text = fs.readFileSync(path.resolve(values.srt), "utf8");
+    const cues = parseSubtitles(text);
+    if (!cues.length) {
+      say(red(`No subtitles found in ${values.srt}.`));
+      process.exit(1);
+    }
+    const caps = editCaptions(dir, cues);
+    say(`Read ${cues.length} captions from ${values.srt}; ${caps.cues.reduce((a, c) => a + c.words.filter((w) => w.edited).length, 0)} words changed, timings kept.`);
+  } else if (values.edit) {
+    const editFile = path.join(outDir, `${base}.edit.srt`);
+    fs.writeFileSync(editFile, toSrt(loadCaptions(dir).cues));
+    say(`Wrote ${editFile}`);
+    say("Fix the words in any text editor. Keep the numbers and times as they are; you can join or split lines.");
+    if (!process.stdin.isTTY) {
+      say(`Then run: selects caption ${job.id} --srt "${editFile}"`);
+      process.exitCode = 2;
+      return;
+    }
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    await rl.question("Press Enter when you have saved the file. ");
+    rl.close();
+    const caps = editCaptions(dir, parseSubtitles(fs.readFileSync(editFile, "utf8")));
+    say(`Read your edits: ${caps.cues.length} captions.`);
+  }
+  job = loadJob(job.id);
+  const blur = job.settings.blur;
+  await prepareFaces(job, [blur]);
+  say("Rendering the captioned video...");
+  const stop = progressReporter(job.id);
+  const onOut = ({ type, data }) => {
+    if (type === "output" && data.status === "running" && isTTY) process.stdout.write(`\r\x1b[2KRendering ${Math.round((data.progress ?? 0) * 100)}%`);
+  };
+  jobEvents.on(job.id, onOut);
+  job = await renderJob(job.id);
+  jobEvents.off(job.id, onOut);
+  stop();
+  if (isTTY) process.stdout.write("\n");
+  if (job.stage === "error") return fail(job);
+  const place = (rel, name) => {
+    const dst = path.join(outDir, name);
+    fs.rmSync(dst, { force: true });
+    try {
+      fs.linkSync(path.join(dir, rel), dst);
+    } catch {
+      fs.copyFileSync(path.join(dir, rel), dst);
+    }
+    return dst;
+  };
+  const mp4 = place(job.output.path, `${base}-captioned.mp4`);
+  place(job.output.srt, `${base}.srt`);
+  place(job.output.vtt, `${base}.vtt`);
+  say(yellow(`Captioned ${job.source.name} (${job.output.width}x${job.output.height}, ${job.output.style} captions) in ${job.output.wallSec} s:`));
+  say(`  ${mp4}`);
+  say(dim(`  plus ${base}.srt and ${base}.vtt in the same folder`));
 }
 
 async function cmdReview(id, values) {
@@ -283,8 +460,9 @@ async function cmdReview(id, values) {
   if (job.stage !== "ready" && job.stage !== "done") {
     say(`Resuming ${id} from ${job.stage}...`);
     const stop = progressReporter(id);
-    job = await resumeJob(id);
+    job = await resumeJob(id, { force: !!values.force });
     stop();
+    printSpeech(job);
   }
   await finishJob(job, values);
 }
@@ -359,6 +537,9 @@ async function cmdDoctor() {
   add("Judge model", have ? "ok" : version ? "fail" : "warn", have ? `${judgeModel}, ${have.sizeGb} GB` : `${judgeModel} is not pulled`, `ollama pull ${judgeModel}  (or pass --model with one of: ${models.map((m) => m.name).join(", ") || "none installed"})`);
   const speeds = measuredSpeeds();
   if (speeds[judgeModel]) add("Judge speed", "ok", `measured ${speeds[judgeModel].secPerCandidate} s per clip on this machine (${speeds[judgeModel].n} clips)`, "");
+  const installed = asrModels();
+  add("Whisper models", installed.length ? "ok" : "warn", installed.map((m) => `${m.name} (${m.sizeMb} MB)`).join(", ") || "none found", "Put ggml models in the models folder (SELECTS_MODELS_DIR). small.en handles accents better than base.en.");
+  add("Face blur", facesAvailable() ? "ok" : "warn", facesAvailable() ? "Apple Vision face detector built" : process.platform === "darwin" ? "not built" : "needs macOS (manual blur regions still work)", "Run sh tools/faces/build.sh");
   let canvasOk = false;
   try {
     await import("@napi-rs/canvas");
@@ -394,6 +575,18 @@ async function main() {
       credit: { type: "string" },
       license: { type: "string" },
       "source-url": { type: "string" },
+      force: { type: "boolean" },
+      language: { type: "string" },
+      "asr-model": { type: "string" },
+      prompt: { type: "string" },
+      "clean-audio": { type: "boolean" },
+      "no-captions": { type: "boolean" },
+      style: { type: "string" },
+      captions: { type: "string" },
+      edit: { type: "boolean" },
+      srt: { type: "string" },
+      "blur-faces": { type: "string" },
+      "blur-region": { type: "string", multiple: true },
       help: { type: "boolean", short: "h" },
     },
   });
@@ -407,6 +600,10 @@ async function main() {
   if (cmd === "queue") return cmdQueue(rest[0], rest.slice(1), values);
   if (cmd === "jobs") return cmdJobs();
   if (cmd === "review") return cmdReview(rest[0], values);
+  if (cmd === "caption") {
+    if (!rest[0]) return say("Usage: selects caption <video or job-id> [--language en] [--edit | --srt fixed.srt] [--blur-faces others]");
+    return cmdCaption(rest[0], values);
+  }
   return cmdClip(cmd, values);
 }
 
