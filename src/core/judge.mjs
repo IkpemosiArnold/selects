@@ -51,7 +51,10 @@ export function salvageJudge(text) {
     out[k] = +m[1];
   }
   const r = String(text).match(/"reason"\s*:\s*"((?:[^"\\]|\\.)*)/);
-  let reason = r ? r[1].replace(/\\"/g, '"').trim() : "";
+  let reason = r ? r[1].replace(/\\"/g, '"') : "";
+  // models sometimes close the string with a curly quote and then ramble on
+  reason = reason.split(/[\u201d"]\s*[}\n]|\n/)[0].replace(/[\u201d]$/, "").trim();
+  if (/[.!?][\u201d']?$/.test(reason)) reason = reason.replace(/[\u201d']$/, "");
   if (reason && !/[.!?]$/.test(reason)) {
     const ws = reason.split(/\s+/).slice(0, -1); // the last word may be cut in half
     while (ws.length && /^(the|a|an|at|of|to|and|but|or|with|for|in|on|into|from|by|that|which|is|was|its|their|this)$/i.test(ws[ws.length - 1].replace(/[,;:]$/, ""))) ws.pop();

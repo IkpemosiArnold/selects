@@ -67,6 +67,8 @@ test("salvageJudge keeps the scores from an answer cut off in the reason", async
   assert.equal(s.reason, "Opens on a strong claim about strength but the ending trails off");
   assert.equal(salvageJudge('{"hook":1,"standalone":1,"payoff":1,"clarity":1,"reason":"Ends on the promise of a').reason, "Ends on the promise");
   assert.equal(salvageJudge('{"reason": "Long reason first and then nothing'), null);
+  const curly = '{"hook": 3, "standalone": 3, "payoff": 2, "clarity": 4, "reason": "The low-risk claim is intriguing, but the shift to them needs clarification.\u201d} 11 words. 11 words. 11.';
+  assert.equal(salvageJudge(curly).reason, "The low-risk claim is intriguing, but the shift to them needs clarification.");
 });
 
 test("judge uses a salvaged answer instead of failing the job", async () => {
