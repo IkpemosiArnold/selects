@@ -623,7 +623,7 @@ async function renderCaptioned(id, { deps = {}, signal } = {}) {
       },
     });
     const abs = (rel) => path.join(jobDir(id), rel);
-    job.output = { status: "done", path: r.path, srt: r.srt, vtt: r.vtt, file: abs(r.path), srtFile: abs(r.srt), vttFile: abs(r.vtt), progress: 1, width: r.width, height: r.height, style: r.style, blurBoxes: r.blurBoxes, wallSec: r.wallSec };
+    job.output = { status: "done", path: r.path, srt: r.srt, vtt: r.vtt, file: abs(r.path), srtFile: abs(r.srt), vttFile: abs(r.vtt), progress: 1, width: r.width, height: r.height, style: r.style, blurBoxes: r.blurBoxes, decode: r.decode, wallSec: r.wallSec };
     job.timings = { ...(job.timings || {}), renderFull: r.wallSec };
     Object.assign(job.stages.render, { status: "done", endedAt: now(), progress: 1, etaSec: 0, note: `captioned the whole video (${r.width}x${r.height})` });
     job.stage = "done";
@@ -680,7 +680,7 @@ async function renderClips(id, { ids, deps = {}, signal, kit, preset } = {}) {
           emit(id, "render", { id: c.id, preset: usePreset, ...c[field] });
         },
       });
-      c[field] = { status: "done", path: r.path, srt: r.srt, kit: null, progress: 1, reframe: r.reframe?.mode, wallSec: r.wallSec };
+      c[field] = { status: "done", path: r.path, srt: r.srt, kit: null, progress: 1, reframe: r.reframe?.mode, decode: r.decode, blurBoxes: r.blurBoxes, wallSec: r.wallSec };
       if (kitMode) {
         let k;
         const k0 = Date.now();

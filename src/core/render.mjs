@@ -222,6 +222,26 @@ export function hwaccelArgs(src) {
   return ["-hwaccel", "videotoolbox"];
 }
 
+/**
+ * The faster path: keep decoded frames on the GPU, drop to 30 fps and scale there
+ * (scale_vt), then download the small frame and turn it upright. Measured on 20 s of 4K
+ * HEVC at 60 fps: 22.7 s, against 34.2 s with hardware decode and CPU scaling, and 80.4 s
+ * all on the CPU. 8-bit 4:2:0 sources only (10-bit HDR would need tone mapping).
+ */
+export function gpuScaleOk(src) {
+  return hwaccelArgs(src).length > 0 && process.env.SELECTS_GPU_SCALE !== "0" && ["yuv420p", "yuvj420p", "nv12"].includes(src.pixFmt);
+}
+const GPU_INPUT = ["-hwaccel", "videotoolbox", "-hwaccel_output_format", "videotoolbox_vld", "-noautorotate"];
+
+/** Filters that turn a frame stored with a rotation upright (what autorotate would add). */
+export function uprightFilter(rotation) {
+  const r = ((Math.round(rotation || 0) % 360) + 360) % 360;
+  if (r === 270) return "transpose=clock";
+  if (r === 90) return "transpose=cclock";
+  if (r === 180) return "hflip,vflip";
+  return "";
+}
+
 /** Fit an upright w x h inside maxShort x maxLong (by orientation), never upscaling; even sizes. */
 export function workingSize(w, h, { maxShort = 1080, maxLong = 1920 } = {}) {
   const portrait = h > w;
@@ -237,12 +257,21 @@ export function workingSize(w, h, { maxShort = 1080, maxLong = 1920 } = {}) {
  * reframe: "crop" (centre crop), "fit" (whole frame over a blur of itself), "scale" (the
  * source is already about 9:16: just scale, padding any sliver), or "none" (keep aspect).
  */
-export function videoGraph({ src, W, H, reframe, blur = [], fps = 30, vmap = "0:v:0", duration = Infinity }) {
+export function videoGraph({ src, W, H, reframe, blur = [], fps = 30, vmap = "0:v:0", duration = Infinity, gpu = false }) {
   const { w: uw, h: uh } = uprightSize(src);
   const work = reframe === "none" ? { w: W, h: H } : workingSize(uw, uh);
   const rate = src.fps && src.fps > fps + 0.5 ? `fps=${fps},` : "";
-  // autorotate has already turned the frames upright; scale also squares non-square pixels
-  const pre = `[${vmap}]${rate}scale=${work.w}:${work.h},setsar=1[pre]`;
+  let pre;
+  if (gpu) {
+    // frames arrive as stored (no autorotate): scale on the GPU in stored orientation, then turn upright
+    const turned = Math.abs(((src.rotation || 0) % 180)) === 90;
+    const [cw, ch] = turned ? [work.h, work.w] : [work.w, work.h];
+    const up = uprightFilter(src.rotation);
+    pre = `[${vmap}]${rate}scale_vt=w=${cw}:h=${ch},hwdownload,format=nv12${up ? `,${up}` : ""},setsar=1[pre]`;
+  } else {
+    // autorotate has already turned the frames upright; scale also squares non-square pixels
+    pre = `[${vmap}]${rate}scale=${work.w}:${work.h},setsar=1[pre]`;
+  }
   const bf = blurFilter(blur, { W: work.w, H: work.h, inLabel: "pre", outLabel: "bl", duration });
   const inL = bf ? "bl" : "pre";
   let v;
@@ -315,10 +344,11 @@ function loadTracks(dir) {
  * Run one ffmpeg encode with captions laid over a video graph. Retries once without the
  * hardware decoder if it fails (some files and drivers refuse it).
  */
-async function encode({ src, start, dur, graph, capList, capY, P, out, onProgress, signal }) {
+async function encode({ src, start, dur, graph: graphFor, capList, capY, P, out, onProgress, signal }) {
   const vmapAudio = src.audioStreams?.length ? ["-map", `0:${src.audioStreams[0].index}`] : ["-map", "0:a:0"];
-  const filter = capList ? `${graph};[1:v]format=rgba[cap];[v][cap]overlay=0:${capY}:eof_action=pass:format=auto,format=yuv420p[out]` : `${graph};[v]format=yuv420p[out]`;
-  const attempt = (hw) => {
+  const attempt = (hw, gpu = false) => {
+    const graph = graphFor(gpu);
+    const filter = capList ? `${graph};[1:v]format=rgba[cap];[v][cap]overlay=0:${capY}:eof_action=pass:format=auto,format=yuv420p[out]` : `${graph};[v]format=yuv420p[out]`;
     const args = [
       "-v", "error", "-y", "-nostats", "-progress", "pipe:1",
       ...hw,
@@ -348,11 +378,21 @@ async function encode({ src, start, dur, graph, capList, capY, P, out, onProgres
     });
   };
   const hw = hwaccelArgs(src);
+  if (gpuScaleOk(src)) {
+    try {
+      await attempt(GPU_INPUT, true);
+      return "gpu";
+    } catch (e) {
+      if (e.name === "AbortError") throw e;
+    }
+  }
   try {
     await attempt(hw);
+    return hw.length ? "hw" : "sw";
   } catch (e) {
     if (!hw.length || e.name === "AbortError") throw e;
     await attempt([]);
+    return "sw";
   }
 }
 
@@ -400,12 +440,12 @@ export async function render(job, candidate, { preset = "shorts", onProgress, jo
     const rf = reframe === "auto" ? await chooseReframe(src, start, dur) : { mode: reframe };
     const spec = blur ?? candidate.blur ?? job.settings?.blur ?? null;
     const boxes = blurBoxes(spec, { tracks: tracks || loadTracks(dir), offset: start, duration: dur });
-    const graph = videoGraph({ src, W: P.width, H: P.height, reframe: rf.mode, blur: boxes, fps: P.fps, vmap: src.videoStream != null ? `0:${src.videoStream}` : "0:v:0", duration: dur });
+    const graph = (gpu) => videoGraph({ src, W: P.width, H: P.height, reframe: rf.mode, blur: boxes, fps: P.fps, vmap: src.videoStream != null ? `0:${src.videoStream}` : "0:v:0", duration: dur, gpu });
     const capY = Math.round(P.height * P.caption.bottomLimit - P.caption.boxHeight);
-    await encode({ src, start, dur, graph, capList: track?.list, capY, P, out: partAbs, onProgress, signal });
+    const decode = await encode({ src, start, dur, graph, capList: track?.list, capY, P, out: partAbs, onProgress, signal });
     fs.renameSync(partAbs, outAbs);
     onProgress?.({ progress: 1 });
-    return { path: outRel, srt: srtRel, absPath: outAbs, absSrt: path.join(dir, srtRel), reframe: rf, captions: track ? clipped.length : 0, blurBoxes: boxes.length, wallSec: +((Date.now() - t0) / 1000).toFixed(1) };
+    return { path: outRel, srt: srtRel, absPath: outAbs, absSrt: path.join(dir, srtRel), reframe: rf, captions: track ? clipped.length : 0, blurBoxes: boxes.length, decode, wallSec: +((Date.now() - t0) / 1000).toFixed(1) };
   } catch (e) {
     fs.rmSync(partAbs, { force: true });
     if (!e.hint) e.hint = "Check free disk space, then render again. Approved clips stay approved.";
@@ -447,12 +487,12 @@ export async function renderFull(job, { onProgress, jobDir, signal, style, blur,
     const track = captions ? buildCaptionTrack(cues, dur, tmp, capOpts) : null;
     const spec = blur ?? job.settings?.blur ?? null;
     const boxes = blurBoxes(spec, { tracks: tracks || loadTracks(dir), offset: 0, duration: dur });
-    const graph = videoGraph({ src, W, H, reframe: "none", blur: boxes, fps: P.fps, vmap: src.videoStream != null ? `0:${src.videoStream}` : "0:v:0", duration: dur });
+    const graph = (gpu) => videoGraph({ src, W, H, reframe: "none", blur: boxes, fps: P.fps, vmap: src.videoStream != null ? `0:${src.videoStream}` : "0:v:0", duration: dur, gpu });
     const capY = Math.round(H * capOpts.caption.bottomLimit - capOpts.caption.boxHeight);
-    await encode({ src, start: 0, dur, graph, capList: track?.list, capY, P, out: partAbs, onProgress, signal });
+    const decode = await encode({ src, start: 0, dur, graph, capList: track?.list, capY, P, out: partAbs, onProgress, signal });
     fs.renameSync(partAbs, path.join(dir, outRel));
     onProgress?.({ progress: 1 });
-    return { path: outRel, srt: "output/captions.srt", vtt: "output/captions.vtt", width: W, height: H, style: st, cues: cues.length, blurBoxes: boxes.length, wallSec: +((Date.now() - t0) / 1000).toFixed(1) };
+    return { path: outRel, srt: "output/captions.srt", vtt: "output/captions.vtt", width: W, height: H, style: st, cues: cues.length, blurBoxes: boxes.length, decode, wallSec: +((Date.now() - t0) / 1000).toFixed(1) };
   } catch (e) {
     fs.rmSync(partAbs, { force: true });
     if (!e.hint) e.hint = "Check free disk space, then render again. Your caption edits are saved.";

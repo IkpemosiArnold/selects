@@ -23,7 +23,7 @@ export async function probe(file) {
   }
   let out;
   try {
-    out = await run("ffprobe", ["-v", "error", "-show_entries", "stream=index,codec_type,codec_name,width,height,sample_aspect_ratio,avg_frame_rate,r_frame_rate,channels,sample_rate:stream_side_data=rotation:stream_tags=rotate:format=duration", "-of", "json", abs]);
+    out = await run("ffprobe", ["-v", "error", "-show_entries", "stream=index,codec_type,codec_name,pix_fmt,width,height,sample_aspect_ratio,avg_frame_rate,r_frame_rate,channels,sample_rate:stream_side_data=rotation:stream_tags=rotate:format=duration", "-of", "json", abs]);
   } catch (e) {
     const err = new Error(`ffprobe could not read ${path.basename(abs)}: ${e.message}`);
     err.hint = "Make sure the file is a video ffmpeg can open, and that ffprobe is installed (brew install ffmpeg).";
@@ -57,6 +57,7 @@ export async function probe(file) {
     hasVideo: !!v,
     videoStream: v ? v.index : null,
     vcodec: v?.codec_name ?? null,
+    pixFmt: v?.pix_fmt ?? null,
     // phones store portrait video as landscape pixels plus a rotation; ffmpeg turns frames
     // upright when it decodes, so every size decision uses the upright size
     rotation,
