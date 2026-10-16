@@ -53,3 +53,26 @@ test("caption layout keeps one line when it fits, else balances two lines", asyn
   );
   assert.deepEqual(two.lines.flat().map((x) => x.i), [0, 1, 2, 3]);
 });
+
+test("portrait phone video: upright working size, 30 fps, plain scale into 9:16", async () => {
+  const { videoGraph, workingSize, chooseReframe, captionOptions } = await import("./render.mjs");
+  const src = { path: "/x.mov", width: 3840, height: 2160, rotation: 270, uprightWidth: 2160, uprightHeight: 3840, fps: 59.94, hasVideo: true };
+  assert.deepEqual(workingSize(2160, 3840), { w: 1080, h: 1920 });
+  assert.deepEqual(workingSize(720, 576), { w: 720, h: 576 }, "never upscales");
+  assert.equal((await chooseReframe(src, 0, 10)).mode, "scale");
+  const g = videoGraph({ src, W: 1080, H: 1920, reframe: "scale" });
+  assert.match(g, /^\[0:v:0\]fps=30,scale=1080:1920,setsar=1\[pre\]/);
+  assert.match(g, /pad=1080:1920/);
+  assert.ok(!/crop=/.test(g));
+  const full = videoGraph({ src: { ...src, fps: 25 }, W: 1080, H: 1920, reframe: "none" });
+  assert.ok(!/fps=/.test(full), "25 fps stays 25 fps");
+  assert.ok(captionOptions(1920, 1080, "subtitle").fontSize < captionOptions(1080, 1920, "bold").fontSize);
+});
+
+test("blur boxes slot in between the early scale and the reframe", async () => {
+  const { videoGraph } = await import("./render.mjs");
+  const src = { width: 1920, height: 1080, fps: 25 };
+  const g = videoGraph({ src, W: 1080, H: 1920, reframe: "crop", blur: [{ x: 0.1, y: 0.1, w: 0.1, h: 0.1, start: 0, end: 5 }], duration: 10 });
+  assert.match(g, /\[pre\]split=2\[bb0\]\[bk0\]/);
+  assert.match(g, /\[bl\]crop=trunc\(ih\*9\/16/);
+});
