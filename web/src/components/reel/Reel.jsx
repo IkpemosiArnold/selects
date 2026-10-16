@@ -178,7 +178,9 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
     const rect = { left: d.left, top: d.top, width: d.width, height: d.height };
     const key = c.id + ":" + performance.now();
     if (status === "approved") setFlying((f) => [...f, c.id]);
-    setGhosts((g) => [...g, { key, id: c.id, status, url: shot.url, rect, from, vx }]);
+    // the burned-in caption on screen goes with it, so the take keeps its words
+    const caption = [...frame.querySelectorAll(".burn p span")].map((el) => ({ t: el.textContent, on: el.classList.contains("is-on") }));
+    setGhosts((g) => [...g, { key, id: c.id, status, url: shot.url, rect, from, vx, caption }]);
   };
 
   const launch = useCallback(
@@ -633,6 +635,17 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
           aria-hidden="true"
         >
           <img src={g.url} alt="" />
+          {g.caption?.length > 0 && (
+            <div className="burn">
+              <p>
+                {g.caption.map((w, i) => (
+                  <span key={i} className={w.on ? "is-on" : undefined}>
+                    {w.t}
+                  </span>
+                ))}
+              </p>
+            </div>
+          )}
           {g.status === "approved" && <span className="ghost-stamp">Approved</span>}
         </div>
       ))}
@@ -652,7 +665,7 @@ function Controls({ cur, mode, waiting, total, onDecide, onNudge, onTrim, onBlur
   return (
     <section className="controls" aria-label="Decide">
       <p className="controls-left">
-        {decided ? (cur.status === "approved" ? "Approved. Approve again to keep it, or skip it now." : "Skipped. Approve it to bring it back.") : `${plural(waiting, "clip")} of ${total} to decide`}
+        {decided ? (cur.status === "approved" ? "Approved. Approve again to keep it, or skip it now." : "Skipped. Approve it to bring it back.") : waiting === total ? `${plural(total, "clip")} to decide` : `${waiting} of ${total} still to decide`}
       </p>
       <button type="button" className={"decide is-approve" + (cur.status === "approved" ? " is-on" : "")} onClick={() => onDecide("approved")} disabled={mode === "trim"}>
         <span className="keycap" aria-hidden="true">A</span>
@@ -700,7 +713,7 @@ function Controls({ cur, mode, waiting, total, onDecide, onNudge, onTrim, onBlur
         <button type="button" className="tool" onClick={onBlur}>
           <kbd>B</kbd> {blurText || "Blur a face or an area"}
         </button>
-        <a className="tool" href={`#/job/${jobId}/captions`}>
+        <a className="tool is-link" href={`#/job/${jobId}/captions`}>
           {captionsOn ? "Fix the captions" : "Captions are off. Turn them on"}
         </a>
       </div>
