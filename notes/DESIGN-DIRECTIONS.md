@@ -1,5 +1,7 @@
 # Selects: three design directions
 
+**Built, Fri 16 Oct.** Arnold chose the reel, with the lined script as its trim view. It is now the review screen of the app (`web/src/components/reel/`), wired to the real API, and the other screens use the same slate, script page and strip. The prototype code under `web/src/directions/` was removed, so the `?direction=` links below no longer work; the screenshots in `notes/screens/directions/` stay as the record of the three options. The built screens are in `notes/screens/v2/`.
+
 Draft, Fri 16 Oct 2026. For Arnold to pick one before the current UI is replaced. Nothing in the current app changed except a four-line switch in `web/src/main.jsx` that loads a direction when the URL asks for one.
 
 ## How to open them

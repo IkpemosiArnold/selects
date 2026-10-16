@@ -2,7 +2,7 @@
 
 Selects finds the best short clips in a long video and renders them as captioned 9:16 videos, using whisper.cpp and a Gemma model on your own computer, with nothing uploaded.
 
-![The Selects review screen. A filmstrip of a 6-minute talk runs across the top with the model's interest curve under it and three numbered clip brackets. Below, clip 2 of 3 shows its opening line, its four rubric scores, its blended score and the model's one-line reason.](notes/screens/real-review-07m4-ranking.png)
+![The Selects review screen. Clip 1 of 3 from a 6-minute talk plays at 9:16 in the middle with the captions the render will burn in. On the left, a clapperboard slate shows the clip number, in point, out point and length, with the opening line written large, the model's reason in blue and its four rubric scores. On the right are the Approve and Skip keys and the sentence trims. The next clip peeks out from behind the card, and a strip along the bottom shows the interest curve and where the three clips sit.](notes/screens/v2/reel-review-dark.png)
 
 ## Why it exists
 
@@ -120,7 +120,7 @@ cd web && npm install && npm run build && cd ..
 selects serve
 ```
 
-Open http://127.0.0.1:4317. The review page shows the filmstrip, the model's interest curve and each clip's scores. You can drag a clip's edges to trim it (trims snap to sentence boundaries), approve or skip it, and render the approved clips. The server listens only on 127.0.0.1.
+Open http://127.0.0.1:4317. Review shows one clip at a time, at 9:16 with the captions the render will burn in, beside a slate with its times, its opening line, the model's reason and its scores. Press A or the right arrow to approve, S or the left arrow to skip, or swipe on a phone. The comma and full stop move the start by a sentence, and the square brackets move the end. Press T to open the clip's words as a script: drag the line in the margin or select words to trim (trims snap to sentence boundaries), and double-click a word to fix its caption. Press B to blur a face or an area. Then render the approved clips. The server listens only on 127.0.0.1.
 
 ### 7. Caption a whole video
 
