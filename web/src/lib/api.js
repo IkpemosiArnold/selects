@@ -13,10 +13,18 @@ async function j(res) {
     err.status = res.status;
     throw err;
   }
-  return res.status === 204 || res.status === 202 ? null : res.json();
+  if (res.status === 204) return null;
+  // 202s may carry a body ({ queued, ... }); an empty one is fine too.
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
-const EVENTS = ["job", "stage", "progress", "words", "candidates", "render", "error"];
+const EVENTS = ["job", "stage", "progress", "words", "candidates", "render", "output", "faces", "captions", "quality", "error"];
 
 function createHttpApi() {
   const get = (p) => fetch(p).then(j);
@@ -35,7 +43,18 @@ function createHttpApi() {
     getKit: (id, cid) => get(`/api/jobs/${id}/candidates/${cid}/kit`),
     queue: () => get("/api/queue"),
     render: (id, ids) => send("POST", `/api/jobs/${id}/render`, ids ? { ids } : {}),
-    resume: (id) => send("POST", `/api/jobs/${id}/resume`),
+    resume: (id, body) => send("POST", `/api/jobs/${id}/resume`, body || {}),
+    // Captions, languages and blur (CONTRACTS.md, "Languages, captions, transcript quality and blur").
+    asrModels: () => get("/api/asr-models"),
+    getCaptions: (id) => get(`/api/jobs/${id}/captions`),
+    putCaptions: (id, cues) => send("PUT", `/api/jobs/${id}/captions`, { cues }),
+    resetCaptions: (id) => send("POST", `/api/jobs/${id}/captions/reset`),
+    setLanguage: (id, body) => send("POST", `/api/jobs/${id}/language`, body),
+    detectFaces: (id) => send("POST", `/api/jobs/${id}/faces`),
+    getFaces: (id) => get(`/api/jobs/${id}/faces`),
+    captionsFileUrl: (id, ext) => `/api/jobs/${id}/captions.${ext}`,
+    outputUrl: (id) => `/media/${id}/output`,
+    frameUrl: (id, t) => `/media/${id}/frame?t=${(+t || 0).toFixed(2)}`,
     // Optional: lets drag-and-drop work in browsers that hide a file's folder.
     // Falls back to asking for the full path if the server does not have it.
     locate: (name, size) =>
