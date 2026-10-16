@@ -1,12 +1,16 @@
-// Render one approved candidate as a 9:16 clip with burned-in captions.
-// This ffmpeg has no libass or drawtext, so captions are drawn as PNGs with @napi-rs/canvas
-// and played back as a second video stream (ffconcat) laid over the picture.
+// Render video with burned-in captions: a 9:16 clip of one approved candidate, or the whole
+// video at its own aspect (caption mode). This ffmpeg has no libass or drawtext, so captions
+// are drawn as PNGs with @napi-rs/canvas and played back as a second video stream (ffconcat)
+// laid over the picture. Privacy blur is cropped, blurred and laid back the same way.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { createCanvas, GlobalFonts } from "@napi-rs/canvas";
-import { FONT_PATH, jobsDir } from "./config.mjs";
-import { readJson, run, srtTime } from "./util.mjs";
+import { blurBoxes, blurFilter } from "./blur.mjs";
+import { chunkWords, clipCues, cuesFromWords, loadCaptions, STYLES, toSrt, toVtt } from "./captions.mjs";
+import { FONT_PATH, FONT_FALLBACK_PATH, jobsDir } from "./config.mjs";
+import { uprightSize } from "./probe.mjs";
+import { readJson, run } from "./util.mjs";
 
 export const PRESETS = {
   shorts: {
@@ -16,6 +20,7 @@ export const PRESETS = {
     x264: "veryfast",
     audioBitrate: "160k",
     lufs: -14,
+    fps: 30, // 50 and 60 fps sources are halved: half the frames to decode, scale and encode
     padStart: 0.08, // seconds of air before the first word
     padEnd: 0.35, // and after the last, so the last word is not clipped
     caption: {
@@ -34,7 +39,7 @@ export const PRESETS = {
   },
 };
 
-/** Scale a 1080-wide preset's caption sizes to another width. */
+/** Scale a 1080-wide preset's caption sizes by f. */
 function scaledCaption(c, f) {
   return { ...c, fontSize: Math.round(c.fontSize * f), maxWidth: Math.round(c.maxWidth * f), boxHeight: Math.round(c.boxHeight * f), strokeWidth: Math.max(4, Math.round(c.strokeWidth * f)) };
 }
@@ -50,11 +55,32 @@ PRESETS.preview = {
   caption: scaledCaption(PRESETS.shorts.caption, 720 / 1080),
 };
 
+// Caption mode: the whole video at its own aspect, never larger than 1080 on the short side.
+PRESETS.full = { ...PRESETS.shorts, maxShort: 1080, maxLong: 1920, crf: 21 };
+
+/**
+ * Caption drawing options for an output of W x H in a style ("bold" or "subtitle").
+ * Bold is the short-form look; subtitle is two smaller lines low in the frame.
+ */
+export function captionOptions(W, H, style = "bold") {
+  const base = PRESETS.shorts.caption;
+  const portrait = H > W;
+  if (style === "subtitle") {
+    const fontSize = Math.round(Math.min(W, H) * 0.05);
+    return { ...base, fontSize, maxWidth: Math.round(W * 0.86), boxHeight: Math.round(fontSize * 3.3), bottomLimit: portrait ? 0.8 : 0.95, strokeWidth: Math.max(4, Math.round(fontSize * 0.16)), highlight: base.fill, maxWords: STYLES.subtitle.maxWords, maxChars: STYLES.subtitle.maxChars, style };
+  }
+  const f = Math.min(W / 1080, (H / 1080) * 0.75);
+  return { ...scaledCaption(base, f), maxWidth: Math.round(Math.min(base.maxWidth * f, W * 0.86)), bottomLimit: portrait ? 0.82 : 0.92, style: "bold" };
+}
+
 let fontReady = false;
 const FONT_FAMILY = "Selects Caption";
+const FALLBACK_FAMILY = "Selects Caption Fallback";
 function ensureFont() {
   if (!fontReady) {
     GlobalFonts.registerFromPath(FONT_PATH, FONT_FAMILY);
+    // Noto Sans covers the letters Atkinson lacks (Yoruba's dot-below vowels, for example)
+    if (FONT_FALLBACK_PATH && fs.existsSync(FONT_FALLBACK_PATH)) GlobalFonts.registerFromPath(FONT_FALLBACK_PATH, FALLBACK_FAMILY);
     fontReady = true;
   }
 }
@@ -66,41 +92,9 @@ export function clipWords(words, start, end, offset = start) {
     .map((w) => ({ ...w, s: +Math.max(0, w.s - offset).toFixed(3), e: +Math.max(0, w.e - offset).toFixed(3) }));
 }
 
-/**
- * Group words into on-screen captions of 2 to 4 words. Breaks after sentence ends, after
- * commas once two words are up, at pauses, and before the line gets too long.
- */
+/** Group words into on-screen captions of 2 to 4 words (the bold style). */
 export function captionChunks(words, { maxWords = 4, maxChars = 22, pause = 0.5 } = {}) {
-  const chunks = [];
-  let cur = [];
-  const chars = (arr) => arr.reduce((a, w) => a + w.w.length + 1, -1);
-  for (const w of words) {
-    const prev = cur[cur.length - 1];
-    const brk =
-      cur.length &&
-      (cur.length >= maxWords ||
-        chars([...cur, w]) > maxChars ||
-        /[.!?]["')\]]*$/.test(prev.w) ||
-        (cur.length >= 2 && /[,;:]$/.test(prev.w)) ||
-        w.s - prev.e > pause);
-    if (brk) {
-      chunks.push(cur);
-      cur = [];
-    }
-    cur.push(w);
-  }
-  if (cur.length) chunks.push(cur);
-  // fold a lone trailing word into the previous caption when it fits
-  for (let i = 1; i < chunks.length; i++) {
-    const c = chunks[i];
-    const p = chunks[i - 1];
-    if (c.length === 1 && p.length < maxWords && chars([...p, ...c]) <= maxChars + 4 && c[0].s - p[p.length - 1].e < pause && !/[.!?]$/.test(p[p.length - 1].w)) {
-      p.push(c[0]);
-      chunks.splice(i, 1);
-      i--;
-    }
-  }
-  return chunks.map((ws) => ({ words: ws, s: ws[0].s, e: ws[ws.length - 1].e, text: ws.map((x) => x.w).join(" ") }));
+  return chunkWords(words, { maxWords, maxChars, pause, commaMin: 2 });
 }
 
 /** Caption display text: drop trailing commas and full stops (keep ? and !). */
@@ -119,7 +113,8 @@ export function layoutCaption(texts, c, measure) {
     const ws = widths(s);
     if (lineW(ws, s) <= c.maxWidth) return { size: s, lines: asLines(ws, texts.length) };
   }
-  for (let s = c.fontSize; s >= 40; s -= 4) {
+  const floor = Math.min(40, Math.round(c.fontSize * 0.6));
+  for (let s = c.fontSize; s >= floor; s -= Math.max(2, Math.round(c.fontSize / 20))) {
     const ws = widths(s);
     let best = null;
     for (let cut = 1; cut < texts.length; cut++) {
@@ -129,19 +124,18 @@ export function layoutCaption(texts, c, measure) {
     if (best && best.w <= c.maxWidth) return { size: s, lines: asLines(ws, best.cut) };
     if (!best && lineW(ws, s) <= c.maxWidth) return { size: s, lines: asLines(ws, texts.length) };
   }
-  const s = 40;
-  return { size: s, lines: asLines(widths(s), texts.length) };
+  return { size: floor, lines: asLines(widths(floor), texts.length) };
 }
 
-/** Draw one caption frame. highlightIdx = -1 draws a transparent frame. */
+/** Draw one caption frame. highlightIdx = -1 draws a transparent frame; null draws no highlight. */
 export function drawCaption(chunkWords, highlightIdx, opts) {
   ensureFont();
   const { width, caption: c } = opts;
   const canvas = createCanvas(width, c.boxHeight);
   const ctx = canvas.getContext("2d");
-  if (highlightIdx < 0 || !chunkWords?.length) return canvas.toBuffer("image/png");
-  const font = (s) => `bold ${s}px "${FONT_FAMILY}"`;
-  const texts = chunkWords.map((w) => display(w.w));
+  if (highlightIdx === -1 || !chunkWords?.length) return canvas.toBuffer("image/png");
+  const font = (s) => `bold ${s}px "${FONT_FAMILY}", "${FALLBACK_FAMILY}"`;
+  const texts = chunkWords.map((w) => (c.style === "subtitle" ? w.w : display(w.w)));
   const { size, lines } = layoutCaption(texts, c, (t, s) => {
     ctx.font = font(s);
     return ctx.measureText(t).width;
@@ -150,7 +144,7 @@ export function drawCaption(chunkWords, highlightIdx, opts) {
   const space = ctx.measureText(" ").width;
   const lineH = size * 1.18;
   const totalH = lineH * lines.length;
-  let y = (c.boxHeight - totalH) / 2 + lineH / 2;
+  let y = c.style === "subtitle" ? c.boxHeight - totalH + lineH / 2 - size * 0.25 : (c.boxHeight - totalH) / 2 + lineH / 2;
   ctx.textBaseline = "middle";
   ctx.lineJoin = "round";
   ctx.miterLimit = 2;
@@ -171,12 +165,13 @@ export function drawCaption(chunkWords, highlightIdx, opts) {
 }
 
 /**
- * Build the caption track: one PNG per spoken word (its caption, that word highlighted),
- * plus a transparent frame for gaps, listed in an ffconcat file with durations.
+ * Build the caption track from cues ({ s, e, words }[], render time). The bold style makes
+ * one PNG per spoken word (its cue, that word highlighted); the subtitle style one per cue.
+ * Gaps get a transparent frame. Listed in an ffconcat file with durations.
  */
-export function buildCaptionTrack(words, clipDur, dir, opts) {
+export function buildCaptionTrack(cues, clipDur, dir, opts) {
   fs.mkdirSync(dir, { recursive: true });
-  const chunks = captionChunks(words, opts.caption);
+  const perWord = opts.caption.style !== "subtitle";
   const blank = path.join(dir, "blank.png");
   fs.writeFileSync(blank, drawCaption([], -1, opts));
   const entries = []; // { file, dur }
@@ -188,10 +183,17 @@ export function buildCaptionTrack(words, clipDur, dir, opts) {
     entries.push({ file, dur: d });
     t = until;
   };
-  chunks.forEach((ch, ci) => {
-    const nextStart = chunks[ci + 1]?.s ?? clipDur;
+  cues.forEach((ch, ci) => {
+    if (!ch.words?.length) return;
+    const nextStart = cues[ci + 1]?.s ?? clipDur;
     const holdUntil = Math.min(nextStart, ch.e + 0.4, clipDur);
     if (ch.s > t) push(blank, Math.min(ch.s, clipDur));
+    if (!perWord) {
+      const file = path.join(dir, `cap-${String(n++).padStart(4, "0")}.png`);
+      fs.writeFileSync(file, drawCaption(ch.words, null, opts));
+      push(file, Math.max(t, holdUntil));
+      return;
+    }
     ch.words.forEach((w, wi) => {
       const file = path.join(dir, `cap-${String(n++).padStart(4, "0")}.png`);
       fs.writeFileSync(file, drawCaption(ch.words, wi, opts));
@@ -206,29 +208,71 @@ export function buildCaptionTrack(words, clipDur, dir, opts) {
   lines.push(`file '${last.replace(/'/g, "'\\''")}'`); // the concat demuxer drops the last duration without this
   const list = path.join(dir, "captions.ffconcat");
   fs.writeFileSync(list, lines.join("\n") + "\n");
-  return { list, chunks, frames: n };
+  return { list, chunks: cues, frames: n };
 }
 
-export function chunksToSrt(chunks) {
-  return chunks
-    .map((c, i) => `${i + 1}\n${srtTime(c.s)} --> ${srtTime(c.e + 0.2 < (chunks[i + 1]?.s ?? Infinity) ? c.e + 0.2 : chunks[i + 1].s)}\n${c.words.map((w) => w.w).join(" ")}\n`)
-    .join("\n");
+/** Kept for older callers: SRT from caption chunks. */
+export const chunksToSrt = (chunks) => toSrt(chunks);
+
+/** Decode flags: Apple's hardware decoder when it can help (HEVC and H.264 on macOS). */
+export function hwaccelArgs(src) {
+  if (process.env.SELECTS_HWACCEL === "0") return [];
+  if (process.platform !== "darwin") return [];
+  if (!["hevc", "h264", "prores"].includes(src.vcodec)) return [];
+  return ["-hwaccel", "videotoolbox"];
+}
+
+/** Fit an upright w x h inside maxShort x maxLong (by orientation), never upscaling; even sizes. */
+export function workingSize(w, h, { maxShort = 1080, maxLong = 1920 } = {}) {
+  const portrait = h > w;
+  const [bw, bh] = portrait ? [maxShort, maxLong] : [maxLong, maxShort];
+  const f = Math.min(1, bw / w, bh / h);
+  const ev = (n) => Math.max(2, Math.round((n * f) / 2) * 2);
+  return { w: ev(w), h: ev(h) };
 }
 
 /**
- * Decide how to make 9:16 from the source: "crop" (centre crop) when the motion in the
- * clip sits in the centre band a 9:16 crop would keep, otherwise "fit" (the whole frame
- * over a blurred copy of itself), which keeps slides and off-centre speakers in shot.
+ * The video half of the filter graph, from [0:v] to [v]: early frame-rate cut and
+ * downscale, privacy blur, then reframing into W x H.
+ * reframe: "crop" (centre crop), "fit" (whole frame over a blur of itself), "scale" (the
+ * source is already about 9:16: just scale, padding any sliver), or "none" (keep aspect).
+ */
+export function videoGraph({ src, W, H, reframe, blur = [], fps = 30, vmap = "0:v:0", duration = Infinity }) {
+  const { w: uw, h: uh } = uprightSize(src);
+  const work = reframe === "none" ? { w: W, h: H } : workingSize(uw, uh);
+  const rate = src.fps && src.fps > fps + 0.5 ? `fps=${fps},` : "";
+  // autorotate has already turned the frames upright; scale also squares non-square pixels
+  const pre = `[${vmap}]${rate}scale=${work.w}:${work.h},setsar=1[pre]`;
+  const bf = blurFilter(blur, { W: work.w, H: work.h, inLabel: "pre", outLabel: "bl", duration });
+  const inL = bf ? "bl" : "pre";
+  let v;
+  if (reframe === "none") v = `[${inL}]null[v]`;
+  else if (reframe === "crop") v = `[${inL}]crop=trunc(ih*9/16/2)*2:ih:(iw-ow)/2:0,scale=${W}:${H},setsar=1[v]`;
+  else if (reframe === "scale") v = `[${inL}]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,setsar=1[v]`;
+  else
+    v =
+      `[${inL}]split[a][b];` +
+      `[a]scale=${W / 4}:${H / 4}:force_original_aspect_ratio=increase,crop=${W / 4}:${H / 4},boxblur=12:2,eq=brightness=-0.12,scale=${W}:${H}[bg];` +
+      `[b]scale=${W}:-2[fg];` +
+      `[bg][fg]overlay=(W-w)/2:(H-h)/2-${Math.round(H * 0.04)},setsar=1[v]`;
+  return [pre, bf, v].filter(Boolean).join(";");
+}
+
+/**
+ * Decide how to make 9:16 from the source: "scale" when it is already portrait and close to
+ * 9:16, "crop" (centre crop) when the motion in the clip sits in the centre band a 9:16 crop
+ * would keep, otherwise "fit" (the whole frame over a blurred copy of itself).
  */
 export async function chooseReframe(source, start, dur, { samples = 16 } = {}) {
   if (!source.hasVideo && source.hasVideo !== undefined) return { mode: "fit", centreShare: 0 };
-  const dispW = source.displayWidth || source.width;
-  if (!dispW || !source.height || dispW / source.height < 1.2) return { mode: "fit", centreShare: null, why: "source is not landscape" };
+  const { w: dispW, h: dispH } = uprightSize(source);
+  if (dispW && dispH && dispW / dispH <= 0.6) return { mode: "scale", centreShare: null, why: "source is already portrait" };
+  if (!dispW || !dispH || dispW / dispH < 1.2) return { mode: "fit", centreShare: null, why: "source is not landscape" };
   const W = 64;
-  const H = Math.max(8, Math.round((W * source.height) / dispW / 2) * 2);
+  const H = Math.max(8, Math.round((W * dispH) / dispW / 2) * 2);
   const fps = Math.max(0.2, samples / Math.max(1, dur));
   const map = source.videoStream != null ? `0:${source.videoStream}` : "0:v:0";
-  const raw = await rawFrames(source.path, map, start, dur, fps, W, H);
+  const raw = await rawFrames(source, map, start, dur, fps, W, H);
   const frameSize = W * H;
   const n = Math.floor(raw.length / frameSize);
   if (n < 3) return { mode: "fit", centreShare: null, why: "too few frames" };
@@ -239,7 +283,7 @@ export async function chooseReframe(source, start, dur, { samples = 16 } = {}) {
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) col[x] += Math.abs(raw[b + y * W + x] - raw[a + y * W + x]);
   }
   const total = col.reduce((p, v) => p + v, 0);
-  const band = (source.height * 9) / 16 / dispW; // fraction of width a centre crop keeps
+  const band = (dispH * 9) / 16 / dispW; // fraction of width a centre crop keeps
   const x0 = Math.floor(((1 - band) / 2) * W);
   const x1 = Math.ceil(((1 + band) / 2) * W);
   let centre = 0;
@@ -252,9 +296,9 @@ export async function chooseReframe(source, start, dur, { samples = 16 } = {}) {
 }
 
 /** Decode a few tiny grayscale frames as raw bytes (binary stdout, so not via run()). */
-function rawFrames(file, map, start, dur, fps, W, H) {
+function rawFrames(src, map, start, dur, fps, W, H) {
   return new Promise((resolve) => {
-    const p = spawn("ffmpeg", ["-v", "error", "-ss", String(start), "-t", String(dur), "-i", file, "-map", map, "-vf", `fps=${fps.toFixed(3)},scale=${W}:${H},format=gray`, "-f", "rawvideo", "pipe:1"]);
+    const p = spawn("ffmpeg", ["-v", "error", ...hwaccelArgs(src), "-ss", String(start), "-t", String(dur), "-i", src.path, "-map", map, "-vf", `fps=${fps.toFixed(3)},scale=${W}:${H},format=gray`, "-f", "rawvideo", "pipe:1"]);
     const bufs = [];
     p.stdout.on("data", (d) => bufs.push(d));
     p.on("close", () => resolve(Buffer.concat(bufs)));
@@ -262,72 +306,34 @@ function rawFrames(file, map, start, dur, fps, W, H) {
   });
 }
 
+/** Face tracks for blur, if the job has run detection. */
+function loadTracks(dir) {
+  return readJson(path.join(dir, "faces.json"), null)?.tracks || [];
+}
+
 /**
- * Render a candidate.
- * @param {object} job the Job (needs id and source)
- * @param {object} candidate
- * @param {{preset?:string, onProgress?:Function, jobDir?:string, words?:object[], reframe?:"auto"|"crop"|"fit", signal?:AbortSignal}} opts
- * @returns {Promise<{path:string, srt:string, absPath:string, absSrt:string, reframe:object, wallSec:number}>}
- *   path and srt are relative to the job folder, as stored in candidate.render.
+ * Run one ffmpeg encode with captions laid over a video graph. Retries once without the
+ * hardware decoder if it fails (some files and drivers refuse it).
  */
-export async function render(job, candidate, { preset = "shorts", onProgress, jobDir, words, reframe = "auto", signal } = {}) {
-  const P = PRESETS[preset];
-  if (!P) throw new Error(`Unknown preset "${preset}". Known: ${Object.keys(PRESETS).join(", ")}`);
-  const dir = jobDir || path.join(jobsDir(), job.id);
-  const allWords = words || readJson(path.join(dir, "words.json"));
-  const src = job.source;
-  const t0 = Date.now();
-  const start = Math.max(0, candidate.start - P.padStart);
-  const end = Math.min(src.duration || candidate.end + P.padEnd, candidate.end + P.padEnd);
-  const dur = +(end - start).toFixed(3);
-
-  const clipsDir = path.join(dir, "clips");
-  const tmp = path.join(dir, "tmp", candidate.id);
-  fs.mkdirSync(clipsDir, { recursive: true });
-  fs.rmSync(tmp, { recursive: true, force: true });
-  const suffix = preset === "shorts" ? "" : `.${preset}`;
-  const outRel = `clips/${candidate.id}${suffix}.mp4`;
-  const srtRel = `clips/${candidate.id}.srt`; // the same for every preset
-  const outAbs = path.join(dir, outRel);
-  const partAbs = path.join(clipsDir, `${candidate.id}${suffix}.part.mp4`);
-
-  try {
-    const cw = clipWords(allWords, candidate.start, candidate.end, start);
-    const track = buildCaptionTrack(cw, dur, tmp, P);
-    fs.writeFileSync(path.join(dir, srtRel), chunksToSrt(track.chunks));
-
-    const rf = reframe === "auto" ? await chooseReframe(src, start, dur) : { mode: reframe };
-    const W = P.width;
-    const H = P.height;
-    const vmap = src.videoStream != null ? `0:${src.videoStream}` : "0:v:0";
-    const square = `[${vmap}]scale=trunc(iw*sar/2)*2:ih,setsar=1`;
-    let v;
-    if (rf.mode === "crop") {
-      v = `${square},crop=trunc(ih*9/16/2)*2:ih:(iw-ow)/2:0,scale=${W}:${H},setsar=1[v]`;
-    } else {
-      // whole frame on a darkened blur of itself; nudged up so captions sit below the picture
-      v =
-        `${square},split[a][b];` +
-        `[a]scale=${W / 4}:${H / 4}:force_original_aspect_ratio=increase,crop=${W / 4}:${H / 4},boxblur=12:2,eq=brightness=-0.12,scale=${W}:${H}[bg];` +
-        `[b]scale=${W}:-2[fg];` +
-        `[bg][fg]overlay=(W-w)/2:(H-h)/2-${Math.round(H * 0.04)},setsar=1[v]`;
-    }
-    const capY = Math.round(H * P.caption.bottomLimit - P.caption.boxHeight);
-    const filter = `${v};[1:v]format=rgba[cap];[v][cap]overlay=0:${capY}:eof_action=pass:format=auto,format=yuv420p[out]`;
+async function encode({ src, start, dur, graph, capList, capY, P, out, onProgress, signal }) {
+  const vmapAudio = src.audioStreams?.length ? ["-map", `0:${src.audioStreams[0].index}`] : ["-map", "0:a:0"];
+  const filter = capList ? `${graph};[1:v]format=rgba[cap];[v][cap]overlay=0:${capY}:eof_action=pass:format=auto,format=yuv420p[out]` : `${graph};[v]format=yuv420p[out]`;
+  const attempt = (hw) => {
     const args = [
       "-v", "error", "-y", "-nostats", "-progress", "pipe:1",
-      "-ss", String(start), "-t", String(dur), "-i", src.path,
-      "-f", "concat", "-safe", "0", "-i", track.list,
+      ...hw,
+      ...(start > 0 ? ["-ss", String(start)] : []), "-t", String(dur), "-i", src.path,
+      ...(capList ? ["-f", "concat", "-safe", "0", "-i", capList] : []),
       "-filter_complex", filter,
-      "-map", "[out]", "-map", "0:a:0",
+      "-map", "[out]", ...vmapAudio,
       "-af", `loudnorm=I=${P.lufs}:TP=-1.5:LRA=11,aresample=48000`,
       "-c:v", "libx264", "-preset", P.x264, "-crf", String(P.crf), "-pix_fmt", "yuv420p",
       "-c:a", "aac", "-b:a", P.audioBitrate,
       "-movflags", "+faststart", "-t", String(dur),
-      partAbs,
+      out,
     ];
     let buf = "";
-    await run("ffmpeg", args, {
+    return run("ffmpeg", args, {
       signal,
       keepOutput: false,
       onStdout: (chunk) => {
@@ -340,12 +346,116 @@ export async function render(job, candidate, { preset = "shorts", onProgress, jo
         }
       },
     });
+  };
+  const hw = hwaccelArgs(src);
+  try {
+    await attempt(hw);
+  } catch (e) {
+    if (!hw.length || e.name === "AbortError") throw e;
+    await attempt([]);
+  }
+}
+
+/**
+ * Render a candidate.
+ * @param {object} job the Job (needs id and source)
+ * @param {object} candidate
+ * @param {{preset?:string, onProgress?:Function, jobDir?:string, words?:object[], reframe?:"auto"|"crop"|"fit"|"scale", signal?:AbortSignal, captions?:boolean, cues?:object[], blur?:object, tracks?:object[]}} opts
+ * @returns {Promise<{path:string, srt:string, absPath:string, absSrt:string, reframe:object, wallSec:number}>}
+ *   path and srt are relative to the job folder, as stored in candidate.render.
+ */
+export async function render(job, candidate, { preset = "shorts", onProgress, jobDir, words, reframe = "auto", signal, captions, cues, blur, tracks } = {}) {
+  const P = PRESETS[preset];
+  if (!P) throw new Error(`Unknown preset "${preset}". Known: ${Object.keys(PRESETS).join(", ")}`);
+  const dir = jobDir || path.join(jobsDir(), job.id);
+  const src = job.source;
+  const t0 = Date.now();
+  const start = Math.max(0, candidate.start - P.padStart);
+  const end = Math.min(src.duration || candidate.end + P.padEnd, candidate.end + P.padEnd);
+  const dur = +(end - start).toFixed(3);
+  const withCaptions = captions ?? job.settings?.captions ?? true;
+
+  const clipsDir = path.join(dir, "clips");
+  const tmp = path.join(dir, "tmp", candidate.id);
+  fs.mkdirSync(clipsDir, { recursive: true });
+  fs.rmSync(tmp, { recursive: true, force: true });
+  const suffix = preset === "shorts" ? "" : `.${preset}`;
+  const outRel = `clips/${candidate.id}${suffix}.mp4`;
+  const srtRel = `clips/${candidate.id}.srt`; // the same for every preset
+  const outAbs = path.join(dir, outRel);
+  const partAbs = path.join(clipsDir, `${candidate.id}${suffix}.part.mp4`);
+
+  try {
+    // cues: the reviewed captions.json when there is one, else built from the words
+    let all = cues;
+    if (!all) {
+      const capFile = path.join(dir, "captions.json");
+      if (fs.existsSync(capFile)) all = loadCaptions(dir).cues;
+    }
+    const clipped = all ? clipCues(all, candidate.start, candidate.end, start) : cuesFromWords(clipWords(words || readJson(path.join(dir, "words.json")), candidate.start, candidate.end, start), "bold");
+    fs.writeFileSync(path.join(dir, srtRel), toSrt(clipped));
+    const capOpts = { width: P.width, caption: { ...P.caption, style: "bold" } };
+    const track = withCaptions ? buildCaptionTrack(clipped, dur, tmp, capOpts) : null;
+
+    const rf = reframe === "auto" ? await chooseReframe(src, start, dur) : { mode: reframe };
+    const spec = blur ?? candidate.blur ?? job.settings?.blur ?? null;
+    const boxes = blurBoxes(spec, { tracks: tracks || loadTracks(dir), offset: start, duration: dur });
+    const graph = videoGraph({ src, W: P.width, H: P.height, reframe: rf.mode, blur: boxes, fps: P.fps, vmap: src.videoStream != null ? `0:${src.videoStream}` : "0:v:0", duration: dur });
+    const capY = Math.round(P.height * P.caption.bottomLimit - P.caption.boxHeight);
+    await encode({ src, start, dur, graph, capList: track?.list, capY, P, out: partAbs, onProgress, signal });
     fs.renameSync(partAbs, outAbs);
     onProgress?.({ progress: 1 });
-    return { path: outRel, srt: srtRel, absPath: outAbs, absSrt: path.join(dir, srtRel), reframe: rf, captions: track.chunks.length, wallSec: +((Date.now() - t0) / 1000).toFixed(1) };
+    return { path: outRel, srt: srtRel, absPath: outAbs, absSrt: path.join(dir, srtRel), reframe: rf, captions: track ? clipped.length : 0, blurBoxes: boxes.length, wallSec: +((Date.now() - t0) / 1000).toFixed(1) };
   } catch (e) {
     fs.rmSync(partAbs, { force: true });
     if (!e.hint) e.hint = "Check free disk space, then render again. Approved clips stay approved.";
+    throw e;
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+    try {
+      fs.rmdirSync(path.join(dir, "tmp"));
+    } catch {}
+  }
+}
+
+/**
+ * Caption mode: the whole video, its own aspect ratio, captions burned in, plus SRT and VTT.
+ * Writes output/captioned.mp4, output/captions.srt, output/captions.vtt in the job folder.
+ */
+export async function renderFull(job, { onProgress, jobDir, signal, style, blur, tracks, captions = true } = {}) {
+  const P = PRESETS.full;
+  const dir = jobDir || path.join(jobsDir(), job.id);
+  const src = job.source;
+  const t0 = Date.now();
+  const { w: uw, h: uh } = uprightSize(src);
+  const { w: W, h: H } = workingSize(uw, uh, P);
+  const dur = src.duration;
+  const st = style && style !== "auto" ? style : H > W ? "bold" : "subtitle";
+  const outDir = path.join(dir, "output");
+  const tmp = path.join(dir, "tmp", "full");
+  fs.mkdirSync(outDir, { recursive: true });
+  fs.rmSync(tmp, { recursive: true, force: true });
+  const outRel = "output/captioned.mp4";
+  const partAbs = path.join(outDir, "captioned.part.mp4");
+  try {
+    const caps = loadCaptions(dir, { style: st });
+    // a style other than the one the cues were grouped for: regroup unless a person edited them
+    const cues = !caps.edited && caps.style !== st ? cuesFromWords(caps.cues.flatMap((c) => c.words), st) : caps.cues;
+    fs.writeFileSync(path.join(outDir, "captions.srt"), toSrt(cues));
+    fs.writeFileSync(path.join(outDir, "captions.vtt"), toVtt(cues));
+    const capOpts = { width: W, caption: captionOptions(W, H, st) };
+    const track = captions ? buildCaptionTrack(cues, dur, tmp, capOpts) : null;
+    const spec = blur ?? job.settings?.blur ?? null;
+    const boxes = blurBoxes(spec, { tracks: tracks || loadTracks(dir), offset: 0, duration: dur });
+    const graph = videoGraph({ src, W, H, reframe: "none", blur: boxes, fps: P.fps, vmap: src.videoStream != null ? `0:${src.videoStream}` : "0:v:0", duration: dur });
+    const capY = Math.round(H * capOpts.caption.bottomLimit - capOpts.caption.boxHeight);
+    await encode({ src, start: 0, dur, graph, capList: track?.list, capY, P, out: partAbs, onProgress, signal });
+    fs.renameSync(partAbs, path.join(dir, outRel));
+    onProgress?.({ progress: 1 });
+    return { path: outRel, srt: "output/captions.srt", vtt: "output/captions.vtt", width: W, height: H, style: st, cues: cues.length, blurBoxes: boxes.length, wallSec: +((Date.now() - t0) / 1000).toFixed(1) };
+  } catch (e) {
+    fs.rmSync(partAbs, { force: true });
+    if (!e.hint) e.hint = "Check free disk space, then render again. Your caption edits are saved.";
     throw e;
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
