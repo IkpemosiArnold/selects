@@ -41,11 +41,12 @@ function req(method, p, { body, headers = {} } = {}) {
 
 before(async () => {
   fs.writeFileSync(video, Buffer.from("0123456789".repeat(100)));
-  job = createJob(video, { model: "mock", k: 3 });
+  job = createJob(video, { model: "mock", qualityGate: false, k: 3 });
   job = await runJob(job.id, {
     deps: {
       probe: async (p) => ({ path: p, name: "talk.mp4", duration: WORDS[WORDS.length - 1].e + 1, width: 1920, height: 1080, fps: 25 }),
       thumbs: async () => null,
+      decideLanguage: async (_p, { setting }) => ({ setting, used: setting === "auto" ? "en" : setting, detected: null, compared: [], margin: null, decided: "setting", warning: null, sec: 0 }),
       transcribe: async () => WORDS,
       listwise: async (cs) => ({ candidates: cs, order: [], reasons: {} }),
       judge: async (cs) => cs.map((c, i) => ({ ...c, scores: { hook: 4, standalone: 4, payoff: 3, clarity: 3 }, total: 0.7 - i * 0.01, reason: "Fine." })),

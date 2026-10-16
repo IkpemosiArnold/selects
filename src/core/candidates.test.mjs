@@ -88,3 +88,20 @@ test("pre-score rewards hook phrases and loud moments, penalises soft openers", 
   const w = win("Nobody tells you how slow strength really is.");
   assert.ok(preScore(w, loud) > preScore(w, quiet));
 });
+
+test("low-confidence windows score lower and are left out of the shortlist", async () => {
+  const { toSentences } = await import("./sentences.mjs");
+  const { talk } = await import("./test/fixtures.mjs");
+  const ws = talk(40);
+  // whisper was unsure of everything in the first half
+  const half = ws[Math.floor(ws.length / 2)].s;
+  ws.forEach((w) => (w.p = w.s < half ? 0.3 : 0.92));
+  const cands = makeCandidates(toSentences(ws), { minLen: 10, maxLen: 30, words: ws });
+  const early = cands.filter((c) => c.end < half);
+  const late = cands.filter((c) => c.start > half);
+  assert.ok(early.length && late.length);
+  assert.ok(early.every((c) => c.meanP < 0.45 && c.preParts.confidence < 0));
+  assert.ok(Math.max(...early.map((c) => c.pre)) < Math.min(...late.map((c) => c.pre)));
+  const short = shortlist(cands, { n: 4, duration: ws[ws.length - 1].e });
+  assert.ok(short.every((c) => c.meanP >= 0.45));
+});

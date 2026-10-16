@@ -79,7 +79,9 @@ export function transcriptQuality(words, { duration = null, thresholds = THRESHO
       ? null
       : verdict === "shaky"
         ? `Whisper was unsure of ${pct(lowShare)} of the words (mean confidence ${meanP.toFixed(2)}). Check the captions before posting; a bigger model (--asr-model small.en) usually helps with accents.`
-        : `Whisper was unsure of ${pct(lowShare)} of the words (mean confidence ${meanP.toFixed(2)}${rep > 0.05 ? `, ${pct(rep)} repeated` : ""}), so clips picked from this transcript would be guesses. Try --asr-model small.en, or set --language to the language spoken.`;
+        : rep > 0.15 && lowShare < 0.2
+          ? `Whisper repeated itself (${pct(rep)} of the text is a loop), which happens when it loses track of the audio, so clips picked from it would be guesses. Try --asr-model small.en, or set --language to the language spoken.`
+          : `Whisper was unsure of ${pct(lowShare)} of the words (mean confidence ${meanP.toFixed(2)}), so clips picked from this transcript would be guesses. Try --asr-model small.en, or set --language to the language spoken.`;
   return {
     score: +score.toFixed(3),
     meanP: +meanP.toFixed(3),

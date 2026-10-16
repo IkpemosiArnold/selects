@@ -19,6 +19,7 @@ const order = [];
 const deps = {
   probe: async (p) => ({ path: p, name: path.basename(p), duration: WORDS[WORDS.length - 1].e + 1, width: 1920, height: 1080, fps: 25 }),
   thumbs: async () => null,
+  decideLanguage: async (_p, { setting }) => ({ setting, used: setting === "auto" ? "en" : setting, detected: null, compared: [], margin: null, decided: "setting", warning: null, sec: 0 }),
   transcribe: async (p) => {
     active++;
     maxActive = Math.max(maxActive, active);
@@ -35,7 +36,7 @@ test("queued jobs run sequentially in order and the queue empties", async () => 
   const ids = ["a.mp4", "b.mp4", "c.mp4"].map((n) => {
     const f = path.join(home, n);
     fs.writeFileSync(f, "x");
-    return createJob(f, { model: "mock", k: 2 }).id;
+    return createJob(f, { model: "mock", qualityGate: false, k: 2 }).id;
   });
   for (const id of ids) enqueue({ jobId: id });
   enqueue({ jobId: ids[0] }); // duplicate is ignored

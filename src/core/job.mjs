@@ -4,14 +4,18 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { DEFAULT_SETTINGS, jobsDir, resolveModel } from "./config.mjs";
+import { DEFAULT_SETTINGS, jobsDir, resolveAsrModel, resolveModel } from "./config.mjs";
+import { loadCaptions } from "./captions.mjs";
+import { detectFaces as realDetectFaces } from "./faces.mjs";
+import { decideLanguage as realDecideLanguage } from "./language.mjs";
+import { transcriptQuality } from "./quality.mjs";
 import { attributionLine, captionWithCredit, MEDIA_REMINDER, normaliseLicense } from "./attribution.mjs";
 import { makeCandidates, shortlist } from "./candidates.mjs";
 import { judge as realJudge, listwise as realListwise } from "./judge.mjs";
 import { plainKit, postingKit as realKit } from "./kit.mjs";
 import { probe as realProbe } from "./probe.mjs";
 import { curve, rank } from "./rank.mjs";
-import { render as realRender } from "./render.mjs";
+import { render as realRender, renderFull as realRenderFull } from "./render.mjs";
 import { snapTrim, toSentences } from "./sentences.mjs";
 import { transcribe as realTranscribe } from "./transcribe.mjs";
 import { readJson, run, writeJsonAtomic } from "./util.mjs";
@@ -24,8 +28,8 @@ import { readJson, run, writeJsonAtomic } from "./util.mjs";
 export const jobEvents = new EventEmitter();
 jobEvents.setMaxListeners(100);
 
-const STAGES = ["probe", "transcribe", "candidates", "judge", "render"];
-const STAGE_LABEL = { probe: "probing", transcribe: "transcribing", candidates: "candidates", judge: "judging", render: "rendering" };
+const STAGES = ["probe", "language", "transcribe", "candidates", "judge", "render"];
+const STAGE_LABEL = { probe: "probing", language: "transcribing", transcribe: "transcribing", candidates: "candidates", judge: "judging", render: "rendering" };
 const running = new Map(); // jobId -> Promise
 
 function emit(jobId, type, data) {
@@ -92,7 +96,9 @@ export function loadJob(id) {
     err.status = 404;
     throw err;
   }
-  return readJson(f);
+  const job = readJson(f);
+  for (const s of STAGES) if (!job.stages?.[s]) (job.stages ||= {})[s] = freshStage();
+  return job;
 }
 
 export function saveJob(job) {
@@ -119,6 +125,9 @@ export function listJobs() {
           error: j.error,
           candidateCount: j.candidates?.length ?? 0,
           approvedCount: (j.candidates || []).filter((c) => c.status === "approved").length,
+          language: j.language ?? null,
+          transcriptQuality: j.transcriptQuality ?? null,
+          output: j.output ?? null,
           createdAt: j.createdAt,
           updatedAt: j.updatedAt,
         };
@@ -175,11 +184,74 @@ export function resumeJob(id, opts = {}) {
     if (job.stages[s].status === "running" || job.stages[s].status === "error") job.stages[s] = freshStage();
   }
   job.error = null;
-  const renderPending = (job.candidates || []).some((c) => c.status === "approved" && c.render && c.render.status !== "done");
+  if (opts.force) job.settings.qualityGate = false; // judge an unreliable transcript anyway
+  const renderPending = (job.candidates || []).some((c) => c.status === "approved" && c.render && c.render.status !== "done") || (job.output && job.output.status !== "done");
   job.stage = "queued";
   saveJob(job);
-  if (job.stages.judge.status === "done" && renderPending) return renderJob(id, opts);
+  const analysed = job.settings.mode === "caption" ? job.stages.transcribe.status === "done" : job.stages.judge.status === "done";
+  if (analysed && renderPending) return renderJob(id, opts);
   return runJob(id, opts);
+}
+
+/**
+ * Transcribe again with another language or model (the one-click override). Clears the
+ * language decision, the transcript, the captions and everything picked from them.
+ */
+export function retranscribe(id, { language, asrModel, asrPrompt, asrPreprocess } = {}, opts = {}) {
+  if (running.has(id)) {
+    const err = new Error("This job is still running. Wait for it to finish, then change the language.");
+    err.status = 409;
+    throw err;
+  }
+  const job = loadJob(id);
+  if (language) job.settings.language = language;
+  if (asrModel) job.settings.asrModel = asrModel;
+  if (asrPrompt !== undefined) job.settings.asrPrompt = asrPrompt || null;
+  if (asrPreprocess) job.settings.asrPreprocess = asrPreprocess;
+  const dir = jobDir(id);
+  for (const f of ["whisper.json", "whisper.meta.json", "words.json", "captions.json", "candidates.json", "judged.json", "loudness.json"]) fs.rmSync(path.join(dir, f), { force: true });
+  for (const s of ["language", "transcribe", "candidates", "judge"]) job.stages[s] = freshStage();
+  job.language = null;
+  job.transcriptQuality = null;
+  job.candidates = [];
+  job.curve = [];
+  job.output = null;
+  job.error = null;
+  job.stage = "queued";
+  saveJob(job);
+  emit(id, "job", job);
+  return runJob(id, opts);
+}
+
+/** Run face detection for a job (macOS) and keep the tracks in faces.json. */
+export async function detectJobFaces(id, { deps = {}, signal, force = false } = {}) {
+  const job = loadJob(id);
+  const detect = deps.detectFaces || realDetectFaces;
+  emit(id, "faces", { status: "running" });
+  try {
+    const res = await detect(job.source.path, jobDir(id), { signal, force, onProgress: (p) => emit(id, "faces", { status: "running", progress: +p.progress.toFixed(3) }) });
+    emit(id, "faces", { status: "done", ...res });
+    return res;
+  } catch (e) {
+    emit(id, "faces", { status: "error", message: e.message, hint: e.hint });
+    throw e;
+  }
+}
+
+/** Check a blur spec from the UI or CLI. Returns a clean copy, or throws a 400. */
+export function cleanBlur(blur) {
+  if (blur == null) return null;
+  const bad = (m) => Object.assign(new Error(m), { status: 400, hint: "blur is { faces: { mode, tracks }, regions: [{ x, y, w, h, start, end }] } with x, y, w, h between 0 and 1." });
+  if (typeof blur !== "object") throw bad("blur must be an object.");
+  const mode = blur.faces?.mode ?? "off";
+  if (!["off", "all", "others", "chosen"].includes(mode)) throw bad(`Unknown face blur mode "${mode}".`);
+  const regions = (blur.regions || []).map((r) => {
+    const n = ["x", "y", "w", "h"].map((k) => Number(r[k]));
+    if (n.some((v) => !Number.isFinite(v) || v < 0 || v > 1) || n[2] <= 0 || n[3] <= 0) throw bad("A blur region is outside the frame.");
+    const t = (v) => (v == null || v === "" ? null : Number(v));
+    return { x: n[0], y: n[1], w: Math.min(n[2], 1 - n[0]), h: Math.min(n[3], 1 - n[1]), start: t(r.start), end: t(r.end) };
+  });
+  return { faces: { mode, tracks: Array.isArray(blur.faces?.tracks) ? blur.faces.tracks.map(String) : [] }, regions };
 }
 
 async function runStages(id, { deps = {}, signal } = {}) {
@@ -189,6 +261,7 @@ async function runStages(id, { deps = {}, signal } = {}) {
     judge: realJudge,
     listwise: realListwise,
     thumbs: makeThumbs,
+    decideLanguage: realDecideLanguage,
     ...deps,
   };
   let job = loadJob(id);
@@ -226,7 +299,8 @@ async function runStages(id, { deps = {}, signal } = {}) {
 
   let current = null;
   try {
-    if (!job.settings.model) {
+    const mode = job.settings.mode || "clips";
+    if (!job.settings.model && mode === "clips") {
       job.settings.model = await resolveModel();
       save();
     }
@@ -245,29 +319,80 @@ async function runStages(id, { deps = {}, signal } = {}) {
       finish("probe", `${Math.round(job.source.duration)} s of video`);
     }
 
-    // 2. transcribe
+    const audioStream = job.source.audioStreams?.[0]?.index ?? null;
+
+    // 2. language: decode-and-compare, because whisper's own guess is biased against accents
+    if (job.stages.language.status !== "done" || !job.language) {
+      current = "language";
+      begin("language");
+      job.language = await d.decideLanguage(job.source.path, {
+        duration: job.source.duration,
+        setting: job.settings.language || "en",
+        remembered: job.settings.rememberedLanguage ?? null,
+        cacheDir: dir,
+        audioStream,
+        signal,
+        onProgress: (p) => progress("language", p),
+      });
+      finish("language", job.language.warning ? job.language.warning : `${job.language.used}${job.language.detected ? `, whisper guessed ${job.language.detected.code} (p = ${job.language.detected.p})` : ""}`);
+      emit(id, "job", job);
+    }
+    const lang = job.language?.used || job.settings.language || "en";
+
+    // 3. transcribe
     const wordsFile = path.join(dir, "words.json");
     let words;
     if (job.stages.transcribe.status !== "done" || !fs.existsSync(wordsFile)) {
       current = "transcribe";
       begin("transcribe");
+      const model = resolveAsrModel(job.settings.asrModel || "auto", lang);
+      const t0 = Date.now();
       words = await d.transcribe(job.source.path, {
         cacheDir: dir,
         duration: job.source.duration,
         signal,
+        language: lang,
+        model,
+        prompt: job.settings.asrPrompt || null,
+        preprocess: job.settings.asrPreprocess || "none",
+        audioStream,
         onProgress: (p) => progress("transcribe", p),
         onWords: (chunk) => emit(id, "words", chunk),
       });
       writeJsonAtomic(wordsFile, words);
+      fs.rmSync(path.join(dir, "captions.json"), { force: true }); // new words, new cues
+      const sec = (Date.now() - t0) / 1000;
+      job.asr = { provider: "whisper.cpp", model: path.basename(model), language: lang, prompt: job.settings.asrPrompt || null, preprocess: job.settings.asrPreprocess || "none", sec: +sec.toFixed(1), speed: +(job.source.duration / Math.max(0.1, sec)).toFixed(2) };
+      job.transcriptQuality = transcriptQuality(words, { duration: job.source.duration });
       const speed = job.source.duration / ((Date.now() - Date.parse(job.stages.transcribe.startedAt)) / 1000);
-      finish("transcribe", `${words.length} words, ${speed.toFixed(2)}x real time`);
+      finish("transcribe", `${words.length} words, ${speed.toFixed(2)}x real time, transcript ${job.transcriptQuality.verdict}`);
     } else {
       words = readJson(wordsFile);
+      if (!job.transcriptQuality) job.transcriptQuality = transcriptQuality(words, { duration: job.source.duration });
     }
     if (!words.length) {
       const err = new Error("Whisper found no speech in this video.");
-      err.hint = "Selects needs spoken English. Check that the video has a voice track.";
+      err.hint = "Check that the video has a voice track, and that the language is right (--language).";
       throw Object.assign(err, { stage: "transcribe" });
+    }
+    emit(id, "quality", job.transcriptQuality);
+
+    // Caption mode: no clips to find. Build the cues and wait for the caption review.
+    if (mode === "caption") {
+      for (const s of ["candidates", "judge"]) if (job.stages[s].status === "pending") job.stages[s] = { ...freshStage(), status: "skipped" };
+      const caps = loadCaptions(dir, { style: job.settings.captionStyle && job.settings.captionStyle !== "auto" ? job.settings.captionStyle : (job.source.uprightHeight || job.source.height) > (job.source.uprightWidth || job.source.width) ? "bold" : "subtitle" });
+      job.stage = "ready";
+      save();
+      emit(id, "captions", { cues: caps.cues.length, edited: caps.edited });
+      emit(id, "stage", { stage: "ready" });
+      return job;
+    }
+
+    // The quality gate: clips picked from words whisper did not really hear are guesses.
+    if (job.transcriptQuality.verdict === "unreliable" && job.settings.qualityGate !== false) {
+      const err = new Error(`The transcript looks unreliable (mean word confidence ${job.transcriptQuality.meanP}, ${Math.round(job.transcriptQuality.lowShare * 100)}% of words unsure), so Selects stopped before judging.`);
+      err.hint = `${job.transcriptQuality.hint} To judge it anyway, resume with --force.`;
+      throw Object.assign(err, { stage: "transcribe", keepStage: true });
     }
 
     // 3. candidates (deterministic windows, prefilter, shortlist for the judge)
@@ -278,7 +403,7 @@ async function runStages(id, { deps = {}, signal } = {}) {
       begin("candidates");
       const sentences = toSentences(words);
       const loudness = readJson(path.join(dir, "loudness.json"), null);
-      const all = makeCandidates(sentences, { minLen: job.settings.minLen, maxLen: job.settings.maxLen, stride: job.settings.stride ?? 6, loudness });
+      const all = makeCandidates(sentences, { minLen: job.settings.minLen, maxLen: job.settings.maxLen, stride: job.settings.stride ?? 6, loudness, words });
       short = shortlist(all, { n: job.settings.judgeN ?? 8, duration: job.source.duration });
       writeJsonAtomic(candFile, { sentences: sentences.length, windows: all.length, shortlist: short });
       job.candidates = short;
@@ -327,7 +452,7 @@ async function runStages(id, { deps = {}, signal } = {}) {
 function fail(job, stage, e) {
   const aborted = e?.name === "AbortError";
   job.stage = "error";
-  if (stage && job.stages[stage]) Object.assign(job.stages[stage], { status: "error", endedAt: now() });
+  if (stage && job.stages[stage] && !e?.keepStage) Object.assign(job.stages[stage], { status: "error", endedAt: now() });
   job.error = {
     stage: stage || null,
     message: aborted ? "Stopped before it finished." : e.message || String(e),
@@ -357,6 +482,10 @@ export function updateCandidate(id, cid, patch = {}) {
       throw err;
     }
     c.status = patch.status;
+  }
+  if (patch.blur !== undefined) {
+    c.blur = cleanBlur(patch.blur);
+    if (c.render?.status === "done") c.render = { ...c.render, stale: true }; // re-render to apply
   }
   if (patch.start != null || patch.end != null) {
     const words = loadWords(id);
@@ -396,7 +525,7 @@ function writeKit(job, c, k) {
   return kitRel;
 }
 
-const SETTABLE = ["credit", "license", "sourceUrl"];
+const SETTABLE = ["credit", "license", "sourceUrl", "blur", "captions", "captionStyle", "captionLang"];
 
 /**
  * Change a job's attribution settings (credit, license, sourceUrl). Kits already written
@@ -416,10 +545,12 @@ export function updateJobSettings(id, patch = {}) {
     err.status = 400;
     throw err;
   }
+  if (patch.captionStyle != null && !["auto", "bold", "subtitle"].includes(patch.captionStyle)) throw Object.assign(new Error("captionStyle must be auto, bold or subtitle."), { status: 400 });
+  if (patch.captionLang != null && !["source", "en", "both"].includes(patch.captionLang)) throw Object.assign(new Error("captionLang must be source, en or both."), { status: 400 });
   for (const key of SETTABLE) {
     if (patch[key] === undefined) continue;
     const v = patch[key] === "" ? null : patch[key];
-    job.settings[key] = key === "license" && v ? normaliseLicense(v) : v;
+    job.settings[key] = key === "license" && v ? normaliseLicense(v) : key === "blur" ? cleanBlur(v) : key === "captions" ? v !== false : v;
   }
   for (const c of job.candidates) {
     const rel = c.render?.kit;
@@ -447,7 +578,57 @@ export function renderJob(id, opts = {}) {
   return p;
 }
 
-async function renderStage(id, { ids, deps = {}, signal, kit, preset } = {}) {
+async function renderStage(id, opts = {}) {
+  const job0 = loadJob(id);
+  if (job0.settings.mode === "caption") return renderCaptioned(id, opts);
+  return renderClips(id, opts);
+}
+
+/** Caption mode: render the whole video with burned-in captions into job.output. */
+async function renderCaptioned(id, { deps = {}, signal } = {}) {
+  const d = { renderFull: realRenderFull, ...deps };
+  const job = loadJob(id);
+  if (job.stages.transcribe.status !== "done") {
+    const err = new Error("This video has not been transcribed yet.");
+    return fail(job, "render", Object.assign(err, { hint: "Resume the job first." }));
+  }
+  job.stage = "rendering";
+  job.stages.render = { ...freshStage(), status: "running", startedAt: now(), note: "whole video" };
+  job.output = { status: "running", path: null, srt: null, vtt: null, progress: 0 };
+  saveJob(job);
+  emit(id, "stage", { stage: "rendering", name: "render", state: job.stages.render });
+  let lastSave = 0;
+  try {
+    const r = await d.renderFull(job, {
+      jobDir: jobDir(id),
+      signal,
+      style: job.settings.captionStyle,
+      captions: job.settings.captions !== false,
+      onProgress: (p) => {
+        job.output.progress = +p.progress.toFixed(3);
+        job.stages.render.progress = job.output.progress;
+        if (Date.now() - lastSave > 2000) {
+          saveJob(job);
+          lastSave = Date.now();
+        }
+        emit(id, "output", job.output);
+      },
+    });
+    job.output = { status: "done", path: r.path, srt: r.srt, vtt: r.vtt, progress: 1, width: r.width, height: r.height, style: r.style, blurBoxes: r.blurBoxes, wallSec: r.wallSec };
+    job.timings = { ...(job.timings || {}), renderFull: r.wallSec };
+    Object.assign(job.stages.render, { status: "done", endedAt: now(), progress: 1, etaSec: 0, note: `captioned the whole video (${r.width}x${r.height})` });
+    job.stage = "done";
+    saveJob(job);
+    emit(id, "output", job.output);
+    emit(id, "stage", { stage: "done", name: "render", state: job.stages.render });
+    return job;
+  } catch (e) {
+    job.output.status = "error";
+    return fail(job, "render", e);
+  }
+}
+
+async function renderClips(id, { ids, deps = {}, signal, kit, preset } = {}) {
   const d = { render: realRender, postingKit: realKit, ...deps };
   const job = loadJob(id);
   const dir = jobDir(id);
@@ -456,14 +637,14 @@ async function renderStage(id, { ids, deps = {}, signal, kit, preset } = {}) {
   const kitMode = field === "preview" ? false : (kit ?? job.settings.kit ?? "model");
   const targets = job.candidates.filter((c) => (ids ? ids.includes(c.id) : c.status === "approved"));
   if (!targets.length) return job;
-  const isDone = (c) => c[field]?.status === "done" && c[field].path && fs.existsSync(path.join(dir, c[field].path));
+  const isDone = (c) => c[field]?.status === "done" && !c[field].stale && c[field].path && fs.existsSync(path.join(dir, c[field].path));
   if (targets.every(isDone)) return job; // nothing to do: keep the stage's real timings
   const words = readJson(path.join(dir, "words.json"));
   const prevStage = job.stage;
   job.stage = "rendering";
   job.stages.render = { ...freshStage(), status: "running", startedAt: now(), note: `${usePreset} preset` };
   const blank = () => ({ status: "pending", path: null, srt: null, kit: null, progress: 0 });
-  for (const c of targets) if (c[field]?.status !== "done") c[field] = blank();
+  for (const c of targets) if (!isDone(c)) c[field] = blank();
   saveJob(job);
   emit(id, "stage", { stage: "rendering", name: "render", state: job.stages.render });
   let lastSave = 0;
@@ -471,7 +652,7 @@ async function renderStage(id, { ids, deps = {}, signal, kit, preset } = {}) {
     let i = 0;
     for (const c of targets) {
       i++;
-      if (c[field]?.status === "done" && c[field].path && fs.existsSync(path.join(dir, c[field].path))) continue;
+      if (isDone(c)) continue;
       c[field] = { ...blank(), status: "running" };
       saveJob(job);
       emit(id, "render", { id: c.id, preset: usePreset, ...c[field] });

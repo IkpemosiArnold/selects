@@ -20,6 +20,7 @@ function mocks(counter, { failJudgeAt = -1 } = {}) {
       return { path: p, name: "talk.mp4", duration: WORDS[WORDS.length - 1].e + 1, width: 1920, height: 1080, fps: 25 };
     },
     thumbs: async () => ({ count: 0, interval: 1, pattern: "thumbs/strip-%04d.jpg" }),
+    decideLanguage: async (_p, { setting }) => ({ setting, used: setting === "auto" ? "en" : setting, detected: { code: "en", p: 0.9 }, compared: [], margin: null, decided: "setting", warning: null, sec: 0 }),
     transcribe: async (_p, { onProgress, onWords }) => {
       counter.transcribe++;
       onWords(WORDS.slice(0, 10));
@@ -46,11 +47,11 @@ before(() => fs.writeFileSync(video, "not really a video"));
 after(() => fs.rmSync(home, { recursive: true, force: true }));
 
 test("createJob writes job.json with all stages pending", () => {
-  const job = createJob(video, { k: 3, model: "mock" });
+  const job = createJob(video, { k: 3, model: "mock", qualityGate: false });
   assert.match(job.id, /^j_\d{8}_[0-9a-z]{4}$/);
   const onDisk = loadJob(job.id);
   assert.equal(onDisk.stage, "queued");
-  assert.deepEqual(Object.keys(onDisk.stages), ["probe", "transcribe", "candidates", "judge", "render"]);
+  assert.deepEqual(Object.keys(onDisk.stages), ["probe", "language", "transcribe", "candidates", "judge", "render"]);
   assert.equal(onDisk.settings.k, 3);
   assert.ok(listJobs().some((j) => j.id === job.id));
 });
@@ -60,7 +61,7 @@ test("createJob rejects a missing file with a hint", () => {
 });
 
 test("a crash in judging resumes without redoing earlier stages", async () => {
-  const job = createJob(video, { k: 3, model: "mock" });
+  const job = createJob(video, { k: 3, model: "mock", qualityGate: false });
   const counter = { probe: 0, transcribe: 0, judge: 0 };
   const events = [];
   const listen = (e) => events.push(e.type);
@@ -90,7 +91,7 @@ test("a crash in judging resumes without redoing earlier stages", async () => {
 });
 
 test("a stage left 'running' by a killed process is redone on resume", async () => {
-  const job = createJob(video, { k: 2, model: "mock" });
+  const job = createJob(video, { k: 2, model: "mock", qualityGate: false });
   const counter = { probe: 0, transcribe: 0, judge: 0 };
   await runJob(job.id, { deps: mocks(counter) });
   // simulate a power cut during judging
@@ -106,7 +107,7 @@ test("a stage left 'running' by a killed process is redone on resume", async () 
 });
 
 test("job.json is never left half-written (atomic writes leave no temp files)", async () => {
-  const job = createJob(video, { k: 2, model: "mock" });
+  const job = createJob(video, { k: 2, model: "mock", qualityGate: false });
   await runJob(job.id, { deps: mocks({ probe: 0, transcribe: 0, judge: 0 }) });
   const files = fs.readdirSync(jobDir(job.id));
   assert.ok(!files.some((f) => f.endsWith(".tmp")), files.join(","));
@@ -114,7 +115,7 @@ test("job.json is never left half-written (atomic writes leave no temp files)", 
 });
 
 test("approve, trim with snapping, and render only approved clips", async () => {
-  const job = createJob(video, { k: 3, model: "mock" });
+  const job = createJob(video, { k: 3, model: "mock", qualityGate: false });
   const ready = await runJob(job.id, { deps: mocks({ probe: 0, transcribe: 0, judge: 0 }) });
   const [a, b] = ready.candidates;
   updateCandidate(job.id, a.id, { status: "approved" });
@@ -150,7 +151,7 @@ test("approve, trim with snapping, and render only approved clips", async () => 
 });
 
 test("credit and licence go into the posting kit and can be changed later", async () => {
-  const job = createJob(video, { k: 2, model: "mock", credit: "Jenni, EMF 2026", license: "cc by-sa 4.0" });
+  const job = createJob(video, { k: 2, model: "mock", qualityGate: false, credit: "Jenni, EMF 2026", license: "cc by-sa 4.0" });
   assert.equal(loadJob(job.id).settings.license, "CC-BY-SA-4.0");
   const ready = await runJob(job.id, { deps: mocks({ probe: 0, transcribe: 0, judge: 0 }) });
   updateCandidate(job.id, ready.candidates[0].id, { status: "approved" });
@@ -174,4 +175,33 @@ test("credit and licence go into the posting kit and can be changed later", asyn
   assert.equal(kit.captionText, "Watch this.");
   assert.throws(() => updateJobSettings(job.id, { model: "x" }), /Only credit/);
   assert.throws(() => updateJobSettings(job.id, { license: "all rights reserved" }), /Unknown licence/);
+});
+
+test("an unreliable transcript stops before judging; --force judges it anyway", async () => {
+  const job = createJob(video, { k: 2, model: "mock" });
+  const counter = { probe: 0, transcribe: 0, judge: 0 };
+  const deps = mocks(counter);
+  deps.transcribe = async () => WORDS.map((w, i) => ({ ...w, p: i % 2 ? 0.2 : 0.45 }));
+  let res = await runJob(job.id, { deps });
+  assert.equal(res.stage, "error");
+  assert.equal(res.error.stage, "transcribe");
+  assert.match(res.error.hint, /small\.en/);
+  assert.equal(res.stages.transcribe.status, "done", "the transcript is kept");
+  assert.equal(res.transcriptQuality.verdict, "unreliable");
+  assert.equal(counter.judge, 0);
+  res = await resumeJob(job.id, { deps, force: true });
+  assert.equal(res.stage, "ready");
+  assert.ok(counter.judge > 0);
+});
+
+test("caption mode skips clip finding and waits for the caption review", async () => {
+  const job = createJob(video, { mode: "caption", qualityGate: false });
+  const counter = { probe: 0, transcribe: 0, judge: 0 };
+  const res = await runJob(job.id, { deps: mocks(counter) });
+  assert.equal(res.stage, "ready");
+  assert.equal(res.stages.candidates.status, "skipped");
+  assert.equal(counter.judge, 0);
+  assert.ok(fs.existsSync(path.join(jobDir(job.id), "captions.json")));
+  assert.equal(res.language.used, "en");
+  assert.ok(res.transcriptQuality);
 });

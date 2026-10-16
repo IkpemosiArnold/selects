@@ -99,6 +99,8 @@ export function preScore(win, ctx = null) {
   add("pauses", -Math.min(0.12, pauses * 0.03));
   const fillers = (win.text.match(FILLERS) || []).length / Math.max(1, words.length);
   add("filler", -Math.min(0.2, fillers * 4));
+  // whisper's own confidence: never let the judge spend a call on words it did not really hear
+  if (win.meanP != null) add("confidence", win.meanP < 0.8 ? -Math.min(0.35, (0.8 - win.meanP) * 1.2) : 0);
   if (ctx?.db?.length) {
     const i0 = Math.floor(win.start / ctx.step);
     const i1 = Math.min(ctx.db.length, Math.ceil(win.end / ctx.step));
@@ -124,7 +126,7 @@ export function preScore(win, ctx = null) {
  * that open on a dangling reference or end mid-thought.
  * @returns Candidate[] (unranked, with a `pre` score; time-ordered ids c_0001...)
  */
-export function makeCandidates(sentences, { minLen = 20, maxLen = 60, stride = 6, keepRejected = false, loudness = null } = {}) {
+export function makeCandidates(sentences, { minLen = 20, maxLen = 60, stride = 6, keepRejected = false, loudness = null, words = null } = {}) {
   const ctx = loudnessContext(loudness);
   const wins = [];
   let lastStart = -Infinity;
@@ -148,7 +150,7 @@ export function makeCandidates(sentences, { minLen = 20, maxLen = 60, stride = 6
     }
     for (const j of [...picked].sort((a, b) => a - b)) {
       const sents = sentences.slice(i, j + 1);
-      wins.push({ start: s0.s, end: sentences[j].e, sentences: sents, text: sents.map((x) => x.text).join(" ") });
+      wins.push({ start: s0.s, end: sentences[j].e, sentences: sents, text: sents.map((x) => x.text).join(" "), meanP: words ? windowMeanP(words, sents) : null });
     }
   }
   const out = [];
@@ -175,11 +177,22 @@ export function makeCandidates(sentences, { minLen = 20, maxLen = 60, stride = 6
       render: null,
       pre: preScore(w, ctx),
       preParts: w.preParts,
+      ...(w.meanP != null ? { meanP: w.meanP } : {}),
       ...(reject ? { rejected: reject } : {}),
     });
   }
   out.forEach((c, i) => (c.id = `c_${String(i + 1).padStart(4, "0")}`));
   return out;
+}
+
+/** Mean word probability over a run of sentences (by their word indexes). */
+function windowMeanP(words, sents) {
+  const [i0] = sents[0].wordIdx || [];
+  const i1 = sents[sents.length - 1].wordIdx?.[1];
+  if (i0 == null || i1 == null) return null;
+  let sum = 0;
+  for (let i = i0; i <= i1; i++) sum += Number.isFinite(words[i]?.p) ? words[i].p : 1;
+  return +(sum / (i1 - i0 + 1)).toFixed(3);
 }
 
 /** Temporal intersection over union of two {start, end} spans. */
@@ -195,7 +208,10 @@ export function iou(a, b) {
  * strong stretch cannot crowd out the rest of the video), then the best remaining by
  * pre-score, never keeping two windows that overlap by more than `maxIou`.
  */
-export function shortlist(cands, { n = 8, maxIou = 0.4, duration } = {}) {
+export function shortlist(cands, { n = 8, maxIou = 0.4, duration, minP = 0.45 } = {}) {
+  // drop windows whisper barely heard, as long as enough others are left to choose from
+  const heard = cands.filter((c) => c.meanP == null || c.meanP >= minP);
+  if (heard.length >= Math.min(n, cands.length) / 2 && heard.length >= 1) cands = heard;
   if (cands.length <= n) return cands.slice();
   const dur = duration ?? Math.max(...cands.map((c) => c.end));
   const byScore = cands.slice().sort((a, b) => b.pre - a.pre || a.start - b.start);
