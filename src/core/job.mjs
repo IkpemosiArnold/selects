@@ -622,7 +622,8 @@ async function renderCaptioned(id, { deps = {}, signal } = {}) {
         emit(id, "output", job.output);
       },
     });
-    job.output = { status: "done", path: r.path, srt: r.srt, vtt: r.vtt, progress: 1, width: r.width, height: r.height, style: r.style, blurBoxes: r.blurBoxes, wallSec: r.wallSec };
+    const abs = (rel) => path.join(jobDir(id), rel);
+    job.output = { status: "done", path: r.path, srt: r.srt, vtt: r.vtt, file: abs(r.path), srtFile: abs(r.srt), vttFile: abs(r.vtt), progress: 1, width: r.width, height: r.height, style: r.style, blurBoxes: r.blurBoxes, wallSec: r.wallSec };
     job.timings = { ...(job.timings || {}), renderFull: r.wallSec };
     Object.assign(job.stages.render, { status: "done", endedAt: now(), progress: 1, etaSec: 0, note: `captioned the whole video (${r.width}x${r.height})` });
     job.stage = "done";
