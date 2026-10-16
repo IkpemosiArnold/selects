@@ -1,1 +1,263 @@
-[]
+[
+  {
+    "id": "G9NabGlnDCs",
+    "title": "\"I'm a Machine\" An interview with Fabiano Caruana | GibChess",
+    "channel": "GibChess",
+    "url": "https://www.youtube.com/watch?v=G9NabGlnDCs",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-16)",
+    "localPath": "eval/media/G9NabGlnDCs.webm",
+    "duration": 617,
+    "heatmapPath": "eval/datasets/info/G9NabGlnDCs.json",
+    "labels": [
+      {
+        "start": 314.45,
+        "end": 334.45,
+        "source": "heatmap",
+        "weight": 1
+      },
+      {
+        "start": 462.77,
+        "end": 482.77,
+        "source": "heatmap",
+        "weight": 0.292
+      },
+      {
+        "start": 494.4,
+        "end": 519.12,
+        "source": "heatmap",
+        "weight": 0.483
+      },
+      {
+        "start": 561.65,
+        "end": 581.65,
+        "source": "heatmap",
+        "weight": 0.14
+      }
+    ]
+  },
+  {
+    "id": "B8vSLgaW9WQ",
+    "title": "Lecture Two: The Chemical History of a Candle - Brightness of the Flame (3/6)",
+    "channel": "engineerguy",
+    "url": "https://www.youtube.com/watch?v=B8vSLgaW9WQ",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-16)",
+    "localPath": "eval/media/B8vSLgaW9WQ.webm",
+    "duration": 825,
+    "heatmapPath": "eval/datasets/info/B8vSLgaW9WQ.json",
+    "labels": [
+      {
+        "start": 74.25,
+        "end": 99,
+        "source": "heatmap",
+        "weight": 0.802
+      },
+      {
+        "start": 115.5,
+        "end": 140.25,
+        "source": "heatmap",
+        "weight": 1
+      },
+      {
+        "start": 179.25,
+        "end": 239.25,
+        "source": "heatmap",
+        "weight": 0.712
+      },
+      {
+        "start": 660,
+        "end": 684.75,
+        "source": "heatmap",
+        "weight": 0.996
+      },
+      {
+        "start": 709.5,
+        "end": 734.25,
+        "source": "heatmap",
+        "weight": 0.768
+      }
+    ]
+  },
+  {
+    "id": "CBYhVcO4WgI",
+    "title": "Lecture 1 - How to Start a Startup (Sam Altman, Dustin Moskovitz)",
+    "channel": "YC Root Access",
+    "url": "https://www.youtube.com/watch?v=CBYhVcO4WgI",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-16)",
+    "localPath": "eval/media/CBYhVcO4WgI.webm",
+    "duration": 900,
+    "evalRange": [
+      0,
+      900
+    ],
+    "fullDuration": 2633,
+    "heatmapPath": "eval/datasets/info/CBYhVcO4WgI.json",
+    "labels": [
+      {
+        "start": 255.96,
+        "end": 315.96,
+        "source": "heatmap",
+        "weight": 0.34
+      },
+      {
+        "start": 447.61,
+        "end": 473.94,
+        "source": "heatmap",
+        "weight": 0.322
+      },
+      {
+        "start": 500.27,
+        "end": 552.93,
+        "source": "heatmap",
+        "weight": 0.338
+      },
+      {
+        "start": 782.56,
+        "end": 842.56,
+        "source": "heatmap",
+        "weight": 0.44
+      }
+    ]
+  },
+  {
+    "id": "Efi9wa4Fwds",
+    "title": "Keynote: A Conversation with Linus Torvalds",
+    "channel": "The Linux Foundation",
+    "url": "https://www.youtube.com/watch?v=Efi9wa4Fwds",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-16)",
+    "localPath": "eval/media/Efi9wa4Fwds.webm",
+    "duration": 900,
+    "evalRange": [
+      0,
+      900
+    ],
+    "fullDuration": 1508,
+    "heatmapPath": "eval/datasets/info/Efi9wa4Fwds.json",
+    "labels": [
+      {
+        "start": 105.99,
+        "end": 165.99,
+        "source": "heatmap",
+        "weight": 0.321
+      },
+      {
+        "start": 196.17,
+        "end": 226.35,
+        "source": "heatmap",
+        "weight": 0.135
+      },
+      {
+        "start": 407.43,
+        "end": 452.7,
+        "source": "heatmap",
+        "weight": 0.118
+      },
+      {
+        "start": 784.68,
+        "end": 829.95,
+        "source": "heatmap",
+        "weight": 0.172
+      }
+    ]
+  },
+  {
+    "id": "uFyk5UOyNqI",
+    "title": "DEF CON 32 - Inside the FBI’s Secret Encrypted Phone Company ‘Anom’ - Joseph Cox",
+    "channel": "DEFCONConference",
+    "url": "https://www.youtube.com/watch?v=uFyk5UOyNqI",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-16)",
+    "localPath": "eval/media/uFyk5UOyNqI.webm",
+    "duration": 900,
+    "evalRange": [
+      0,
+      900
+    ],
+    "fullDuration": 2363,
+    "heatmapPath": "eval/datasets/info/uFyk5UOyNqI.json",
+    "labels": [
+      {
+        "start": 94.56,
+        "end": 118.2,
+        "source": "heatmap",
+        "weight": 0.621
+      },
+      {
+        "start": 189.12,
+        "end": 212.76,
+        "source": "heatmap",
+        "weight": 0.384
+      },
+      {
+        "start": 307.32,
+        "end": 354.6,
+        "source": "heatmap",
+        "weight": 0.626
+      },
+      {
+        "start": 591,
+        "end": 614.64,
+        "source": "heatmap",
+        "weight": 0.545
+      },
+      {
+        "start": 709.2,
+        "end": 732.84,
+        "source": "heatmap",
+        "weight": 0.445
+      }
+    ]
+  },
+  {
+    "id": "k4715CJ0Ii8",
+    "title": "IELTS Speaking Test- Perfect Band 9 [+ Free Speaking PDF]",
+    "channel": "IELTS Advantage",
+    "url": "https://www.youtube.com/watch?v=k4715CJ0Ii8",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-16)",
+    "localPath": "eval/media/k4715CJ0Ii8.webm",
+    "duration": 1045,
+    "heatmapPath": "eval/datasets/info/k4715CJ0Ii8.json",
+    "labels": [
+      {
+        "start": 125.4,
+        "end": 156.75,
+        "source": "heatmap",
+        "weight": 0.508
+      },
+      {
+        "start": 198.55,
+        "end": 229.9,
+        "source": "heatmap",
+        "weight": 0.763
+      },
+      {
+        "start": 329.63,
+        "end": 349.63,
+        "source": "heatmap",
+        "weight": 0.856
+      },
+      {
+        "start": 360.98,
+        "end": 380.98,
+        "source": "heatmap",
+        "weight": 0.754
+      },
+      {
+        "start": 992.75,
+        "end": 1013.65,
+        "source": "heatmap",
+        "weight": 0.936
+      }
+    ]
+  }
+]

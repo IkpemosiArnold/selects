@@ -34,7 +34,7 @@ const LONG = 20 * 60, CLIP_TO = 15 * 60;
 const YT_CC = { name: "CC BY 3.0", url: "https://creativecommons.org/licenses/by/3.0/" };
 
 function ytdlp(args) {
-  const r = spawnSync("yt-dlp", ["--no-update", "--js-runtimes", "node", "--cookies-from-browser", BROWSER, ...args], { encoding: "utf8", maxBuffer: 1 << 30 });
+  const r = spawnSync("yt-dlp", ["--no-update", "--js-runtimes", "node", "--remote-components", "ejs:github", "--cookies-from-browser", BROWSER, ...args], { encoding: "utf8", maxBuffer: 1 << 30 });
   if (r.error) throw r.error;
   return r;
 }
@@ -57,18 +57,19 @@ function trimInfo(j) {
 function fetchAll(ids) {
   mkdirSync(INFO, { recursive: true });
   mkdirSync(MEDIA, { recursive: true });
-  const todo = ids.filter((id) => !existsSync(join(INFO, `${id}.json`)));
+  // ids, or full URLs (for example a YouTube search filtered to Creative Commons)
+  const todo = ids.filter((id) => /^https?:/.test(id) || !existsSync(join(INFO, `${id}.json`)));
   if (todo.length) {
     // Pass 1 output: --print writes the info for every id (even ones the filter rejects), as JSON lines.
     // Audio is downloaded only for ids that pass the match filter.
     const r = ytdlp([
-      "--ignore-errors", "--no-playlist",
+      "--ignore-errors", "--no-playlist", "--playlist-end", "15", "--sleep-requests", "0.5",
       "--print", "pre_process:%()j",
       "--match-filters", `license~='(?i)creative commons' & heatmap & duration>=${MIN_DUR} & duration<=${MAX_DUR}`,
       "--no-simulate",
       "-f", "ba[abr<=80]/wa",
       "-o", join(MEDIA, "%(id)s.%(ext)s"),
-      ...todo.map((id) => `https://www.youtube.com/watch?v=${id}`),
+      ...todo.map((id) => (/^https?:/.test(id) ? id : `https://www.youtube.com/watch?v=${id}`)),
     ]);
     for (const line of r.stdout.split("\n")) {
       if (!line.startsWith("{")) continue;
