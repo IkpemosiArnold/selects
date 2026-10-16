@@ -59,6 +59,10 @@ Privacy blur
   --blur-faces <m>  all, or others (everyone except the main speaker); macOS only
   --blur-region <r> x,y,w,h as fractions of the frame, optionally @start-end in seconds;
                     repeat for more regions, for example --blur-region 0.6,0.05,0.35,0.1@12-30
+
+Profiles (remember what worked for a speaker or channel)
+  --profile <name>       start from a saved profile (language, model, prompt, style)
+  --save-profile <name>  save this run's speech settings as a profile
   -h, --help        show this help
 `;
 
@@ -303,6 +307,7 @@ function speechSettings(values) {
     captionLang: values.captions,
     qualityGate: values.force ? false : undefined,
     blur: blur ?? undefined,
+    profile: values.profile,
   };
 }
 
@@ -587,11 +592,19 @@ async function main() {
       srt: { type: "string" },
       "blur-faces": { type: "string" },
       "blur-region": { type: "string", multiple: true },
+      profile: { type: "string" },
+      "save-profile": { type: "string" },
       help: { type: "boolean", short: "h" },
     },
   });
   const [cmd, ...rest] = positionals;
   if (values.help || !cmd) return say(HELP);
+  if (values["save-profile"]) {
+    const { saveProfile } = await import("../src/core/profiles.mjs");
+    const sp = speechSettings(values);
+    saveProfile(values["save-profile"], sp);
+    say(dim(`Saved profile "${values["save-profile"]}". Use it with --profile "${values["save-profile"]}".`));
+  }
   if (cmd === "doctor") return cmdDoctor();
   if (cmd === "serve") {
     const { startServer } = await import("../src/server/server.mjs");

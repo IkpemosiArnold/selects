@@ -8,6 +8,7 @@ import { DEFAULT_SETTINGS, jobsDir, resolveAsrModel, resolveModel } from "./conf
 import { loadCaptions } from "./captions.mjs";
 import { detectFaces as realDetectFaces } from "./faces.mjs";
 import { decideLanguage as realDecideLanguage } from "./language.mjs";
+import { applyProfile } from "./profiles.mjs";
 import { transcriptQuality } from "./quality.mjs";
 import { attributionLine, captionWithCredit, MEDIA_REMINDER, normaliseLicense } from "./attribution.mjs";
 import { makeCandidates, shortlist } from "./candidates.mjs";
@@ -57,6 +58,7 @@ const freshStage = () => ({ status: "pending", startedAt: null, endedAt: null, p
 
 /** Create a job folder for a local video. Does not start it; call runJob. */
 export function createJob(videoPath, settings = {}) {
+  settings = applyProfile(settings);
   const expanded = String(videoPath).trim().replace(/^~(?=$|\/)/, os.homedir());
   const abs = path.resolve(expanded);
   if (!fs.existsSync(abs)) {

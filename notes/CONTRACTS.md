@@ -198,6 +198,8 @@ blur: {
 | POST | `/api/jobs/:id/render` | caption mode renders the whole video into `job.output` |
 | GET | `/media/:id/output` | the captioned video (Range support) |
 | GET | `/media/:id/frame?t=12.5` | one upright JPEG frame (for drawing blur regions) |
+| GET | `/api/asr-models` | installed whisper models `[{ name, sizeMb, english }]` (for the model choice) |
+| GET | `/api/profiles` | saved speaker profiles `{ name: { language, asrModel, asrPrompt, ... } }`; pass `settings.profile: name` when creating a job |
 
 New SSE events: `faces`, `output` (caption-mode render progress, same shape as `render`), `captions`.
 

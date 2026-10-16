@@ -5,11 +5,12 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { REPO, ollamaModels, ollamaUrl, selectsHome, whisperBin, whisperModel } from "../core/config.mjs";
+import { REPO, asrModels, ollamaModels, ollamaUrl, selectsHome, whisperBin, whisperModel } from "../core/config.mjs";
 import { measuredSpeeds } from "../core/judge.mjs";
 import { editCaptions, loadCaptions, resetCaptions, toSrt, toVtt } from "../core/captions.mjs";
 import { createJob, detectJobFaces, isRunning, jobDir, jobEvents, listJobs, loadJob, loadWords, resetTranscript, saveJob, updateCandidate, updateJobSettings } from "../core/job.mjs";
 import { LOW_P } from "../core/quality.mjs";
+import { loadProfiles } from "../core/profiles.mjs";
 import { hwaccelArgs } from "../core/render.mjs";
 import { drainQueue, enqueue, queueState } from "../core/queue.mjs";
 import { diskFreeGb } from "../core/util.mjs";
@@ -252,6 +253,8 @@ async function route(req, res) {
   if (p === "/api/health" && method === "GET") return sendJson(res, 200, await health());
   if (p === "/api/models" && method === "GET") return sendJson(res, 200, await models());
   if (p === "/api/queue" && method === "GET") return sendJson(res, 200, queueState());
+  if (p === "/api/profiles" && method === "GET") return sendJson(res, 200, loadProfiles());
+  if (p === "/api/asr-models" && method === "GET") return sendJson(res, 200, asrModels().map(({ path: _p, ...m }) => m));
   if (p === "/api/locate" && method === "GET") {
     const name = url.searchParams.get("name");
     const size = Number(url.searchParams.get("size"));
