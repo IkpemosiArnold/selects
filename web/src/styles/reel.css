@@ -353,6 +353,11 @@
 .reel-blur-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
 /* ---------- the language question ---------- */
+.reel.is-ask .reel-stage { grid-template-areas: "q deck right" "more deck right"; grid-template-rows: auto auto; align-content: center; row-gap: 20px; }
+.reel.is-ask .ask { grid-area: q; align-self: end; }
+.reel.is-ask .ask-more { grid-area: more; align-self: start; justify-self: end; width: min(100%, 460px); display: grid; gap: 10px; }
+.reel.is-ask .deck { grid-area: deck; }
+.reel.is-ask .reel-right { grid-area: right; }
 .ask { justify-self: end; width: min(100%, 460px); display: grid; gap: 16px; align-content: center; }
 .ask-q { font: 500 clamp(2.5rem, 4.6vw, 4.25rem)/0.98 var(--mono); letter-spacing: -0.05em; text-wrap: balance; }
 .ask-why { font-size: var(--t-18); line-height: 1.45; max-width: 34ch; }
@@ -384,7 +389,8 @@
   .reel-left, .ask { grid-area: left; justify-self: stretch; width: auto; max-width: 720px; }
   .reel .controls, .reel-right { width: 100%; max-width: 360px; }
   .is-ask .controls { grid-area: right; align-self: center; }
-  .is-ask .deck { grid-area: deck; }
+  .reel.is-ask .reel-stage { grid-template-areas: "q q" "deck right" "more more"; }
+  .reel.is-ask .ask, .reel.is-ask .ask-more { justify-self: stretch; width: auto; max-width: 720px; }
   .reel.is-trim .reel-stage { grid-template-columns: minmax(0, 1fr); grid-template-areas: "deck" "left"; }
   .reel.is-trim .deck { justify-self: center; }
   .reel.is-trim .reel-left { height: 70vh; margin: 0; max-width: none; }
@@ -393,7 +399,13 @@
   .reel { --card-h: auto; }
   .reel-stage { grid-template-columns: minmax(0, 1fr); grid-template-areas: "deck" "right" "left"; gap: 20px; padding-top: 14px; }
   .deck { height: auto; width: calc(100% - 40px); max-width: 420px; justify-self: start; }
-  .is-ask .deck { justify-self: center; width: min(78%, 360px); }
+  .is-ask .deck { justify-self: center; width: min(72%, 300px); }
+  .reel.is-ask .reel-stage { grid-template-areas: "q" "deck" "right" "more"; }
+  .reel.is-ask .ask { gap: 8px; }
+  .reel.is-ask .ask-why { font-size: var(--t-15); }
+  .reel.is-ask .masthead .mast-note { display: none; }
+  .reel.is-ask .ask-more { padding-top: 8px; border-top: 1px solid var(--line); }
+  .reel.is-ask .ask-anyway { grid-column: 1 / -1; order: 3; }
   .reel-right, .reel .controls { max-width: none; }
   .controls { grid-template-columns: 1fr 1fr; }
   .controls > :not(.decide) { grid-column: 1 / -1; }
@@ -408,7 +420,7 @@
   .hint { display: none; }
   .slate-fields dd { font-size: 1.125rem; }
   .slate-line { font-size: 1.6rem; padding: 14px 14px 18px; }
-  .ask-q { font-size: 2.6rem; }
+  .ask-q { font-size: 2.2rem; }
   .script-body { padding-left: 70px; font-size: 0.875rem; }
   .script-tc { left: 6px; font-size: 0.6875rem; }
   .script-margin { left: 40px; }
@@ -448,6 +460,7 @@
 
 /* ---------- phone review: the clip fills the screen, the slate is a bottom sheet ---------- */
 .sheet, .decide-bar, .sheet-scrim { display: none; }
+.why-h { font-size: var(--t-13); font-weight: 650; color: var(--ink-2); }
 @media (max-width: 680px) {
   .reel.is-phone { --bar-h: 76px; --peek-h: 86px; --mast-h: 57px; }
   .reel.is-phone .masthead-file { display: none; }
@@ -494,7 +507,6 @@
     padding: 20px 16px 28px; display: grid; gap: 24px; align-content: start;
   }
   .sheet-body .slate-why { gap: 10px; padding: 0; }
-  .why-h { font-size: var(--t-13); font-weight: 650; color: var(--ink-2); }
   .sheet-body .slate-why h3.why-h { margin-top: 8px; }
   .sheet-body .slate-reason { font-size: 1.0625rem; max-width: none; }
   .sheet-body .nudge { margin: 0; padding-top: 18px; }

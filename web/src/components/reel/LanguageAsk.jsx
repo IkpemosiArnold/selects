@@ -26,13 +26,13 @@ function signalSentence(s, used) {
   const ruled = s.refuted ? " It was ruled out." : "";
   switch (s.id) {
     case "whisper-detect":
-      return name ? `Whisper's first listen heard ${name}${sure}.${ruled}` : null;
+      return name ? `The first quick listen heard ${name}${sure}.${ruled}` : null;
     case "whisper-decode":
-      return name ? `Decoding short samples in each likely language, ${name} came out clearest${s.p < 1 ? ", but only just" : ""}.${ruled}` : null;
+      return name ? `Short samples written out in each likely language made the most sense in ${name}${s.p < 1 ? ", but only just" : ""}.${ruled}` : null;
     case "text-608":
-      return name ? `A text model read the decoded words as ${name}.` : `A text model found nothing to change the answer.`;
+      return name ? `Reading those words, a language checker said ${name}.` : `A language checker found nothing to change the answer.`;
     case "text-ng5":
-      return name ? `A model for Nigerian languages read them as ${name}.` : null;
+      return name ? `A checker for Nigerian languages said ${name}.` : null;
     default:
       return name ? `${s.id} says ${name}.` : null;
   }
@@ -93,14 +93,14 @@ export default function LanguageAsk({ job, words, manual, onRetranscribed, onClo
       const l = signalSentence(s, used);
       if (l) out.push(l);
     }
-    if (!out.length && lang.detected && lang.detected.code !== used) out.push(`Whisper's first listen heard ${languageName(lang.detected.code)}.`);
+    if (!out.length && lang.detected && lang.detected.code !== used) out.push(`The first quick listen heard ${languageName(lang.detected.code)}.`);
     return out;
   }, [ens, lang.detected, used]);
   const unsureInTen = tq?.lowShare != null ? Math.min(9, Math.max(0, Math.round(tq.lowShare * 10))) : null;
   const lede = stopped
-    ? `Selects stopped before finding clips: it could not make out about ${unsureInTen ?? "half"} in every 10 words.`
+    ? `Selects stopped before finding clips, because it could not make out about ${unsureInTen ?? "half"} in every 10 words.`
     : ens?.confidence != null
-    ? `${languageName(ens.language)} won ${Math.round(ens.confidence * 100)}% of the vote between the language checks, and they did not all agree.`
+    ? `Selects is ${Math.round(ens.confidence * 100)}% sure it's ${languageName(ens.language)}, but its checks did not all agree.`
     : `Selects listened in ${usedName}.`;
 
   // Other languages to offer: the ensemble's runner-ups first, then the most common here.
@@ -192,27 +192,33 @@ export default function LanguageAsk({ job, words, manual, onRetranscribed, onClo
   });
 
   const yesAfter = q && !stopped
-    ? "Keep this transcript. Nothing is transcribed again."
+    ? "Keep the transcript as it is."
     : manual && !stopped
-    ? "Keep this transcript."
-    : `Listen again in ${usedName}${used === "en" ? " with the model that copes better with accents" : ""}. ${dur ? `${aboutMinutes(dur / SMALL_EN_SPEED).replace(/^./, (c) => c.toUpperCase())} on this laptop.` : ""}`;
+    ? "Keep the transcript as it is."
+    : `Listen again in ${usedName}${used === "en" ? ", with the model that copes better with accents" : ""}. ${dur ? `${aboutMinutes(dur / SMALL_EN_SPEED).replace(/^./, (c) => c.toUpperCase())} on this laptop.` : ""}`;
 
   return (
     <div className="reel is-ask">
       <Masthead job={job}>
-        <span className="mast-note">{stopped ? "Stopped before finding clips" : job.stage === "ready" || job.stage === "done" ? "One question before you review" : "Transcribed. One question"}</span>
+        <span className="mast-note">{stopped ? "Stopped before finding clips" : "One question first"}</span>
       </Masthead>
       <main className="reel-stage">
         <section className="ask" aria-labelledby="ask-q">
           {step === "sent" ? (
             <div role="status">
               <h1 id="ask-q" className="ask-q">Listening again in {sent}.</h1>
-              <p className="ask-why">The transcript, the captions and the clips are made again from it. Progress shows here; you can close this tab.</p>
+              <p className="ask-why">Selects makes the transcript, the captions and the clips again. You can close this tab, and the progress shows here when you come back.</p>
             </div>
           ) : (
             <>
               <h1 id="ask-q" className="ask-q">Is this video in {usedName}?</h1>
-              <p className="ask-why">Watch ten seconds with whisper's captions. If the words match what you hear, the answer is yes.</p>
+              <p className="ask-why">Play these ten seconds. If the captions match what you hear, the answer is yes.</p>
+            </>
+          )}
+        </section>
+        {step !== "sent" && (
+          <section className="ask-more" aria-label="Why Selects is asking">
+              <h2 className="why-h">Why Selects is asking</h2>
               <p className="ask-lede">{lede}</p>
               {lines.length > 0 && (
                 <ul className="ask-evidence">
@@ -222,7 +228,7 @@ export default function LanguageAsk({ job, words, manual, onRetranscribed, onClo
                 </ul>
               )}
               <button type="button" className="linkish" aria-expanded={numbers} onClick={() => setNumbers((v) => !v)}>
-                {numbers ? "Hide the numbers" : "The numbers"}
+                {numbers ? "Hide the numbers" : "Show the numbers"}
               </button>
               {numbers && (
                 <dl className="ask-numbers mono">
@@ -255,15 +261,14 @@ export default function LanguageAsk({ job, words, manual, onRetranscribed, onClo
                   )}
                 </dl>
               )}
-            </>
-          )}
-        </section>
+          </section>
+        )}
 
         <div className={"deck is-ask" + (step === "sent" ? " is-dim" : "")}>
           <div className="card">
-            <Card job={job} clip={clip} player={player} cues={caps.cues} lowP={caps.lowP} label="Ten seconds with whisper's captions">
+            <Card job={job} clip={clip} player={player} cues={caps.cues} lowP={caps.lowP} label="Ten seconds with the captions Selects wrote">
               <span className="card-tag mono">
-                {tc(clip.start)} to {tc(clip.end)}, what whisper heard
+                {tc(clip.start)} to {tc(clip.end)}
               </span>
             </Card>
           </div>
@@ -284,14 +289,14 @@ export default function LanguageAsk({ job, words, manual, onRetranscribed, onClo
                 <span className="keycap" aria-hidden="true">N</span>
                 <span className="decide-text">
                   <b>No</b>
-                  <small>Choose the language</small>
+                  <small>Pick the right language</small>
                 </span>
               </button>
               <p className="ask-anyway">
                 <button type="button" className="linkish" onClick={anyway} disabled={busy}>
                   {stopped ? "Use this transcript anyway" : manual ? "Back" : "Decide later"}
                 </button>{" "}
-                {stopped ? "The clips will be guesses." : manual ? "" : "Selects keeps " + usedName + " until you answer."}
+                {stopped ? "Gemma's picks will be guesses." : manual ? "" : "Selects uses " + usedName + " until you answer."}
               </p>
             </>
           )}
@@ -303,7 +308,7 @@ export default function LanguageAsk({ job, words, manual, onRetranscribed, onClo
                   <span className="keycap" aria-hidden="true">{i + 1}</span>
                   <span className="decide-text">
                     <b>{l.name}</b>
-                    {l.evidence && <small>The checks heard some {l.name}</small>}
+                    {l.evidence && <small>Selects heard some {l.name}</small>}
                   </span>
                 </button>
               ))}
