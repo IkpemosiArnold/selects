@@ -134,3 +134,76 @@ A caution for the eval: the listwise judgment depends on which clips share the r
 ## Earlier measurements (from review-tech-feasibility.md, not re-run here)
 
 whisper base.en default beam search ran at 14.8x real time; greedy (`-bs 1 -bo 1`) at 1.57x. Selects uses greedy.
+
+## Accented English, captions and blur (16 Oct, feature engineer)
+
+Test video: a private phone recording (an elderly Nigerian woman speaking English to camera, lav mic), 165 s, HEVC 3840x2160 at 59.94 fps stored with rotation -90 (portrait), mono AAC 44.1 kHz at 39 kb/s. Integrated loudness -18.3 LUFS, peaks at 0 dBFS, many 1 to 4 s pauses. Only speeds and confidence numbers are recorded here, never content. The transcripts are in `.selects/private/asr-compare.md` (gitignored) for a person to rate.
+
+### Speech recognition on 60 s of her audio (20 s to 80 s), greedy decoding, 2 threads
+
+Other jobs (the eval builder's Ollama calls) ran on the machine at the same time. "Unsure" is the share of words with probability under 0.5. Confidence is not accuracy: a fine-tune can be confidently wrong.
+
+| Run | Model size | Time | Speed | Words | Mean word p | Unsure words |
+|---|---|---|---|---|---|---|
+| base.en | 148 MB | 10.1 s | 5.95x | 88 | 0.748 | 20.5% |
+| base.en, audio cleaned | 148 MB | 9.4 s | 6.36x | 90 | 0.753 | 20.0% |
+| base.en, with a neutral `--prompt` | 148 MB | 10.4 s | 5.77x | 85 | 0.776 | 14.1% |
+| small.en | 488 MB | 32.2 s | 1.86x | 90 | 0.797 | 12.2% |
+| small.en, audio cleaned | 488 MB | 37.2 s | 1.61x | 90 | 0.797 | 8.9% |
+| small, fine-tuned for Nigerian-accented English (rishabbahal/whisper-small-nigerian-accent, Apache 2.0, converted with `tools/hf-whisper-to-ggml.mjs`) | 488 MB | 36.7 s | 1.64x | 90 | 0.927 | 2.2% |
+| medium.en, 5-bit quantised (`medium.en-q5_0`) | 539 MB | 92.3 s | 0.65x | 91 | 0.873 | 4.4% |
+
+"Audio cleaned" is highpass 80 Hz, lowpass 7.6 kHz and loudness normalisation to -18 LUFS. Downloads for this: small.en 196 s, the fine-tune (967 MB of float32 safetensors) 393 s, medium.en-q5_0 218 s, about 2.5 MB/s. Converting the fine-tune to ggml in Node took 11.2 s. Not tried: intronhealth/afrispeech-whisper-medium-all (Apache 2.0, the AfriSpeech-200 authors' model) is 3.06 GB of float32 weights, over the 2 GB download budget; the converter handles it the same way. ElevenLabs Scribe (cloud, opt-in) is a possible later provider behind `src/core/asr/`.
+
+### Transcript quality gate: calibration
+
+Score = mean word p minus the share of unsure words above 5%, minus penalties for repeated 3-word loops and per-80-word compression above 2.4. Good at 0.8 or more, unreliable under 0.65.
+
+| Transcript | Words | Mean p | Unsure | Repeats | Worst chunk compression | Score | Verdict |
+|---|---|---|---|---|---|---|---|
+| EMF talk, base.en (clean conference audio) | 1232 | 0.942 | 0.5% | 0.011 | 1.86 | 0.942 | good |
+| Eval video ASvx-QG6o04, base.en | 2316 | 0.936 | 2.2% | 0.015 | 2.08 | 0.936 | good |
+| Eval video Aj0nf3rKG_E, base.en | 2973 | 0.892 | 4.2% | 0.015 | 1.97 | 0.892 | good |
+| Eval video CBYhVcO4WgI, base.en | 3142 | 0.948 | 1.2% | 0.011 | 1.93 | 0.948 | good |
+| Eval video G9NabGlnDCs, base.en | 1931 | 0.903 | 3.3% | 0.010 | 1.88 | 0.903 | good |
+| Eval video iqm-XEqpayc, base.en | 1817 | 0.952 | 0.4% | 0.012 | 1.84 | 0.952 | good |
+| Eval video k4715CJ0Ii8, base.en | 2899 | 0.937 | 1.3% | 0.013 | 1.96 | 0.937 | good |
+| Eval video uFyk5UOyNqI, base.en | 2512 | 0.904 | 3.1% | 0.002 | 1.75 | 0.904 | good |
+| Elderly speaker, whole video, base.en | 246 | 0.767 | 17.9% | 0.004 | 1.77 | 0.638 | unreliable: the run stopped before judging (exit 1 after 127.6 s: probe 36.0 s, language 39.8 s, transcribe 50.3 s at 3.29x real time) |
+
+The share of unsure words separates the two groups much better than the mean: 0.4% to 4.2% for clean talks against 18% to 20% for the elderly speaker with base.en. The margin is thin on the unreliable side (0.638 against the 0.65 line), so these thresholds come from one bad recording and eight good ones and should move as more recordings are rated.
+
+### Language check
+
+Whisper's own detector (multilingual base, first 30 s of three 20 s samples) said Yoruba, p = 0.906 (0.88 in Arnold's earlier run on the start of the video). The first version of decode-and-compare ranked languages by mean word probability and also picked Yoruba: decoding the samples "as Yoruba" scored 0.798 (18% unsure) against 0.650 for English (31% unsure). But every word of the "Yoruba" decode was plain ASCII and 93% were English dictionary words: told to write Yoruba, whisper wrote English. So mean probability is not comparable across languages, and the check now treats a non-English decode that comes out as English text (a share of common English function words of 0.2 or more) as evidence for English. With that rule (run B2 below, `--language auto`), the samples decoded as Yoruba had an English function-word share of 0.519 and as English 0.513, so Yoruba was ruled out and English chosen, with this warning: "Whisper's quick guess was Yoruba (p = 0.90), but when asked to write Yoruba it wrote English, so this is English."
+
+The language check costs one 60 s WAV of samples, a detector pass and one multilingual base decode per candidate language: 27.2 s to 49.6 s in four runs (2 candidates each).
+
+### Decoding 4K HEVC at 60 fps on the dual-core
+
+20 s of the source, decoded and scaled to 1080x1920 (no encode):
+
+| Path | Time for 20 s |
+|---|---|
+| CPU decode, CPU scale, all 60 fps (the old render path) | 80.4 s |
+| CPU decode, drop to 30 fps, CPU scale | 72.1 s |
+| VideoToolbox decode, drop to 30 fps, CPU scale | 34.2 s |
+| VideoToolbox decode, drop to 30 fps, scale on the GPU (`scale_vt`), download, turn upright | 22.7 s |
+
+Selects now uses the last path for 8-bit H.264 and HEVC on macOS (with a fallback to the others if ffmpeg refuses), so the decode is 3.5 times faster than before. The upright frame from that path matched ffmpeg's own autorotate output (PSNR 50.2 dB). Probing plus 60 keyframe thumbnails of this file took 26.7 s to 36.0 s with CPU decoding.
+
+### Face detection (tools/faces, Apple Vision)
+
+661 frames (4 per second over 165 s), downscaled to 960 px on the long side: 70.6 s, two frames at a time (about 140 ms of Vision per frame on this Intel CPU). Every frame had exactly one face; the tracker made one track covering 0 to 165 s, marked it as the main speaker, and turned it into a single blur box (the face barely moved). Linking the 661 frames took 10 ms. The 30 s test on the EMF talk took 9 to 10 s for 120 frames.
+
+### The real runs (16 Oct, 04:24 to 04:52 WAT, SELECTS_HOME in `.selects/private/home`)
+
+| Run | Command | Result | Wall time |
+|---|---|---|---|
+| A | `selects IMG_1922.MOV --k 2 --yes --blur-faces others` (defaults: language en, base.en) | stopped by the quality gate before judging (score 0.638, unreliable), exit 1 | 127.6 s: probe 36.0, language 39.8, transcribe 50.3 (3.29x real time) |
+| B | `selects caption IMG_1922.MOV --language auto --asr-model small.en` (first language rule) | the language check chose Yoruba, then stopped safely: "ggml-small.en.bin only knows English, but the language is set to yo" | 78.1 s |
+| C | `selects IMG_1922.MOV --k 2 --yes --asr-model small.en --judge-n 6 --blur-faces others` | 2 clips, 1080x1920 at 30 fps; transcript shaky (score 0.787, mean p 0.834, 9.7% unsure); 22 windows passed the filter, 5 judged; one face track, the main speaker, so nothing blurred. The clips came out sideways (see below) | 717.6 s: probe 28.3, language 34.0, transcribe 89.1 (1.85x), judge 316.9 (5 calls, 45.8 s each, plus the listwise call), faces 72.7, renders 36.7 and 39.1 for clips of 20.5 and 24.2 s, kits 60.2 and 37.8 |
+| C2 | re-render C's clips after the rotation fix (`selects review <job> --yes`) | upright 1080x1920 clips, her face unblurred, captions in the lower third | 158.4 s: renders 32.7 and 39.2 s, kits 43.2 and 42.3 s |
+| B2 | B again with the English-text rule | language English (decided by compare), transcript shaky (0.787), whole video captioned at 1080x1920, 30 fps, bold style, GPU decode | 386.0 s: probe 8.0 (thumbnails now hardware-decoded), language 27.2, transcribe 101.9 (1.62x), render 247.0 (1.5x the video's length) |
+
+Bug found and fixed by run C: on the GPU path, `-noautorotate` made ffmpeg copy the source's -90 rotation into the output, so players turned the already-upright frames sideways. The input now uses `-display_rotation:v 0`. A second bug came from the web builder's test with blur on the public EMF clip: crop, boxblur and overlay on nv12 frames left the blurred boxes green; the GPU path now converts to planar yuv420p after the download.

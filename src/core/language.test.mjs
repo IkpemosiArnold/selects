@@ -30,8 +30,8 @@ test("a non-English decode that comes out as English text cannot win (the accent
   // measured on 16 Oct: elderly Nigerian speaker, English speech, multilingual base
   const res = chooseLanguage(
     [
-      { code: "en", meanP: 0.65, words: 74, englishShare: 0.38 },
-      { code: "yo", meanP: 0.8, words: 82, englishShare: 0.36 },
+      { code: "en", meanP: 0.65, words: 76, englishShare: 0.513 },
+      { code: "yo", meanP: 0.798, words: 79, englishShare: 0.519 },
     ],
     { setting: "auto", detected: { code: "yo", p: 0.9 } },
   );

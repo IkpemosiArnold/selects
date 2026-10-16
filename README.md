@@ -122,6 +122,42 @@ selects serve
 
 Open http://127.0.0.1:4317. The review page shows the filmstrip, the model's interest curve and each clip's scores. You can drag a clip's edges to trim it (trims snap to sentence boundaries), approve or skip it, and render the approved clips. The server listens only on 127.0.0.1.
 
+### 7. Caption a whole video
+
+```sh
+selects caption ~/Movies/interview.mov
+```
+
+Caption mode keeps the whole video and its own shape: a portrait phone video stays portrait and a landscape talk stays landscape. Nothing is clipped and no model judges anything. It writes `<name>-captioned.mp4` with the captions burned in, plus `<name>.srt` and `<name>.vtt`, into `./selects-out/<video-name>/`. Portrait video gets the big short-form captions; landscape video gets two-line subtitles (`--style bold` or `--style subtitle` to choose).
+
+Speech recognition makes mistakes, especially with accents, so check the words before you burn them in. Either fix them in the browser (the caption review step in `selects serve`), or in any text editor:
+
+```sh
+selects caption interview.mov --edit          # writes interview.edit.srt and waits while you fix it
+selects caption j_20261016_ab12 --srt fixed.srt   # or hand back a corrected SRT later
+```
+
+Change the words, and join or split lines if you like. Every word keeps its time from the audio: a line with the same number of words keeps each word's exact time, and a line with more or fewer words spreads them over the same stretch. The same corrected captions are used for clips rendered from that job.
+
+Rendered clips get captions by default too. Add `--no-captions` to turn them off.
+
+### 8. Blur faces or parts of the frame
+
+```sh
+selects caption party.mov --blur-faces others        # blur everyone except the main speaker
+selects talk.mp4 --blur-region 0.6,0.05,0.35,0.12@12-30   # blur a box from 0:12 to 0:30
+```
+
+`--blur-faces all` blurs every face; `--blur-faces others` keeps the main speaker (the largest face that is on screen longest) and blurs the rest. Faces are found with Apple's Vision framework by a small Swift tool, so face blur works on macOS only; build it once with `sh tools/faces/build.sh`. On other systems, use `--blur-region`, which works everywhere. A region is `x,y,w,h` as fractions of the upright frame (0,0 is the top left), optionally followed by `@start-end` in seconds, and you can repeat the flag. Typical uses: a phone number on screen, a third-party logo, or a figure under a licence that does not allow adaptations. In the browser you can draw the boxes on the preview and choose which faces to blur.
+
+## How it fails safely
+
+A clipper that trusts a bad transcript picks bad clips: the windows, the judge, the cuts and the captions all sit on the words. So Selects checks the transcript before it spends any model time on it.
+
+- **Transcript quality gate.** After whisper finishes, Selects scores the transcript from whisper's own word probabilities: the mean, the share of words below 0.5, and a check for the loops whisper falls into when it loses the audio (repeated phrases, and text that compresses too well). Eight clean English recordings scored between 0.89 and 0.95. If the transcript is unreliable, Selects stops before judging and says what to try (a bigger model, or the right language); `--force` judges it anyway. If it is shaky, Selects carries on and warns you to check the captions.
+- **Language check by decoding, not guessing.** Whisper's built-in language detector listens to the first 30 seconds and guesses. On an elderly Nigerian woman speaking English, it said "Yoruba" with 88% confidence. So Selects defaults to English, takes three 20-second samples spread over the video, and decodes them in each candidate language (the detector's guess, English, and whatever you set). Picking the language whisper is most confident in is not enough: on that recording, decoding "as Yoruba" was more confident (0.80 mean word probability) than decoding as English (0.65), yet every word it wrote was English. So a decode that comes out as English text, whatever language it was asked for, counts as evidence for English, and the most confident of the rest wins. The detector's guess only ever shows up as a warning, and the review app changes the language in one click.
+- **Clips only from words whisper heard.** The first stage marks down windows with low word confidence and keeps them out of the shortlist, so the judge never reads words whisper did not really hear. In the caption review, unsure words are underlined so you can fix those first.
+
 ## How it picks clips
 
 Selects asks the model to judge a few short passages instead of reading the whole transcript. On a dual-core CPU, Gemma 3 4B could not finish picking 3 clips from a 2,957-word transcript within 30 minutes, while scoring one 100-word window takes about a minute. So the work is split into a cheap first stage with no model and a slow second stage that only sees a shortlist.
@@ -215,10 +251,16 @@ Some findings that shaped the defaults:
 - `--judge-n` is the main speed control. Each extra window costs about one more model call.
 - For long videos, use the overnight queue: `selects queue add <videos...>`, then `selects queue run`. Each job saves its progress after every stage, so after a crash, sleep or power cut, `selects review <job-id>` resumes from the last finished stage.
 
+### Phone video: 4K HEVC at 60 fps, portrait
+
+A 165-second iPhone clip (3840x2160 HEVC at 59.94 fps, stored sideways with a rotation flag) is the hard case for this CPU. Decoding and scaling 20 seconds of it took 80.4 s on the CPU alone. Selects now decodes with Apple's VideoToolbox, drops to 30 fps and scales on the GPU before copying frames back, which took 22.7 s for the same 20 seconds, and it turns the frame upright itself. Portrait sources skip the crop and are scaled straight into 1080x1920. Clips of 20.5 s and 24.2 s from that video rendered in 32.7 s and 39.2 s, and captioning the whole 165 seconds took 247 s. Full numbers are in [`notes/timings.md`](notes/timings.md).
+
 ## CLI reference
 
 ```
 selects <video> [options]      find clips, ask before cutting, render the approved ones
+selects caption <video>        caption the whole video at its own aspect: MP4, SRT and VTT
+selects caption <job-id>       render a caption job again (for example with --srt fixed.srt)
 selects review <job-id>        review and render a job that already ran (for example overnight)
 selects queue add <video...>   queue videos for overnight mode
 selects queue run              work through the queue, one video at a time
@@ -242,10 +284,22 @@ selects doctor                 check whisper, Ollama, the judge model and disk
 | `--license <id>` | none | the source's licence, for example `CC-BY-SA-4.0` (adds the licence link) |
 | `--source-url <url>` | none | where the source video lives (added to the credit) |
 | `--yes`, `-y` | off | approve every proposed clip without asking |
+| `--force` | off | judge clips even when the transcript looks unreliable |
+| `--language <code>` | `en` | the spoken language: an ISO code such as `en` or `yo`, or `auto` (decode and compare) |
+| `--asr-model <name>` | `auto` | the whisper model: a name in the models folder (`base.en`, `small.en`, `medium.en-q5_0`, `small`) or a path. Auto is `base.en` for English and the best installed multilingual model otherwise |
+| `--prompt <text>` | none | a short neutral context sentence passed to whisper |
+| `--clean-audio` | off | cut rumble below 80 Hz and hiss above 7.6 kHz and even out loudness before whisper |
+| `--no-captions` | off | render clips without burned-in captions |
+| `--style <s>` | auto | `bold` (2 to 4 big words, current word in yellow) or `subtitle` (up to two lines); auto is bold for portrait and clips, subtitle for landscape caption mode |
+| `--captions <lang>` | `source` | `source` captions in the spoken language. `en` (translated) and `both` (bilingual) are planned, not built |
+| `--edit` | off | caption mode: write an editable SRT, wait while you fix it, then render |
+| `--srt <file>` | none | caption mode: use your corrected SRT (words keep their timings) |
+| `--blur-faces <mode>` | off | `all`, or `others` (everyone except the main speaker). macOS only |
+| `--blur-region <r>` | none | `x,y,w,h` as fractions of the frame, optionally `@start-end` in seconds. Repeat for more regions |
 | `--port <n>` | 4317 | port for `selects serve` |
 | `--help`, `-h` | | show the help |
 
-`selects review <job-id>` accepts `--credit`, `--license`, `--source-url`, `--yes`, `--preview`, `--plain-kit` and `--out`. Changing the credit on a finished job rewrites the posting kits without rendering again. `selects queue add` accepts `--model`, `--k` and `--judge-n`.
+`selects review <job-id>` accepts `--credit`, `--license`, `--source-url`, `--yes`, `--preview`, `--plain-kit`, `--force` and `--out`. Changing the credit on a finished job rewrites the posting kits without rendering again. `selects queue add` accepts `--model`, `--k` and `--judge-n`.
 
 Without a terminal to ask in (for example in a script), `selects <video>` stops with exit code 2 after finding the clips, unless you pass `--yes`. The job is saved, and `selects review <job-id>` picks it up. Any other failure exits with code 1 and prints what happened, what to do, and the job id to resume.
 
@@ -261,6 +315,9 @@ Without a terminal to ask in (for example in a script), `selects <video>` stops 
 | `SELECTS_MODEL` | see step 3 | the judge model, if `--model` is not given |
 | `SELECTS_THREADS` | Ollama's default | Ollama's `num_thread` for judge calls |
 | `SELECTS_HOME` | `<repo>/.selects` | where jobs, caches and the queue are kept |
+| `SELECTS_MODELS_DIR` | the folder of `SELECTS_WHISPER_MODEL` | where `--asr-model` names are looked up (`ggml-<name>.bin`) |
+| `SELECTS_HWACCEL` | on (macOS) | set to `0` to stop using Apple's hardware video decoder |
+| `SELECTS_FACES_BIN` | `tools/faces/faces` | the face detector used for face blur |
 | `PORT` | 4317 | port for `selects serve`, if `--port` is not given |
 
 ## Rights and attribution
@@ -284,8 +341,10 @@ The talk's licence may not cover everything on screen. The test talk above is CC
 
 ## Limitations
 
-- English only. Selects uses whisper's `base.en` model and passes `-l en`, so speech in other languages, including Nigerian Pidgin and Yoruba, transcribes badly or not at all. A multilingual whisper model would be the fix, and Selects does not support one yet.
-- Slide talks usually fall back to "fit". Centre crop is used only when the motion stays in the middle of the frame. In the test talk, the slides fill the frame and the speaker is a small inset in the corner, so all 3 clips were rendered as the full frame over a blurred background, with small slide text. There is no face tracking.
+- Accented English is the weak spot, and how weak is not rated yet. On a test recording of an elderly Nigerian woman speaking English, whisper `base.en` was unsure of about a fifth of the words. `small.en`, `medium.en` and a community fine-tune for Nigerian-accented English were compared on the same minute (speeds under "Performance"), and their transcripts are waiting for a person who knows the speaker to rate them. [PENDING: accuracy ratings.] Until then, review the captions before you post, and expect to fix words.
+- Whisper's language detector is biased against accented English (it called that speaker's English "Yoruba" with p = 0.88), which is why Selects defaults to English and checks by decoding. Other languages work through the multilingual models (`--language yo --asr-model small`), but Yoruba transcription with the local models was poor in a quick test, and nothing beyond that has been measured. Translated (`--captions en`) and bilingual captions are planned, not built.
+- Face blur needs macOS (Apple's Vision framework). Elsewhere, blur regions by hand. Faces are sampled 4 times a second and boxes are interpolated in between, so a face that moves fast or turns away can slip out of the box for a fraction of a second; check the result before you post.
+- Slide talks usually fall back to "fit". Centre crop is used only when the motion stays in the middle of the frame. In the test talk, the slides fill the frame and the speaker is a small inset in the corner, so all 3 clips were rendered as the full frame over a blurred background, with small slide text. Face tracking is used only for privacy blur, not for reframing.
 - Hook scores cluster. In every run so far, Gemma 3 4B gave every shortlisted window a hook score of 3, so the hook (the highest weight) separates nothing. The blend with the pre-score and the listwise round are there to break the ties.
 - The shortlist limits what the model can find. The judge only reads 8 windows. In the eval below, the best possible picks from the shortlist matched a Most Replayed peak in 67% of videos, against 100% for the best possible picks from all windows.
 - Audio and text only. The model never sees the video, so it cannot tell when a moment depends on a slide or a demo.
@@ -338,4 +397,4 @@ The tests use `node:test` and cover the core modules, the server and the eval co
 
 ## Licence
 
-MIT. The bundled Atkinson Hyperlegible Next font is under the SIL Open Font License; see `src/core/assets/OFL.txt`.
+MIT. The bundled Atkinson Hyperlegible Next and Noto Sans fonts are under the SIL Open Font License; see `src/core/assets/OFL.txt` and `src/core/assets/OFL-NotoSans.txt`. Atkinson Hyperlegible Next has no dot-below vowels (the Yoruba letters ẹ, ọ and ṣ), so captions fall back to Noto Sans for those letters.
