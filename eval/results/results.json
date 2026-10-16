@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-16T02:26:29.239Z",
+  "generatedAt": "2026-10-16T03:52:37.542Z",
   "k": 5,
   "iouThreshold": 0.5,
   "settings": {
@@ -795,37 +795,455 @@
           "n": 6
         }
       },
-      "paired": {}
+      "judge:qwen2.5:0.5b@8": {
+        "n": 6,
+        "videos": [
+          "G9NabGlnDCs",
+          "CBYhVcO4WgI",
+          "iqm-XEqpayc",
+          "uFyk5UOyNqI",
+          "Aj0nf3rKG_E",
+          "k4715CJ0Ii8"
+        ],
+        "hit3": {
+          "mean": 0.3333333333333333,
+          "lo": 0,
+          "hi": 0.6666666666666666,
+          "n": 6
+        },
+        "p3": {
+          "mean": 0.16666666666666666,
+          "lo": 0,
+          "hi": 0.3888888888888889,
+          "n": 6
+        },
+        "hit5": {
+          "mean": 0.3333333333333333,
+          "lo": 0,
+          "hi": 0.6666666666666666,
+          "n": 6
+        },
+        "p5": {
+          "mean": 0.10000000000000002,
+          "lo": 0,
+          "hi": 0.23333333333333336,
+          "n": 6
+        },
+        "r5": {
+          "mean": 0.11666666666666665,
+          "lo": 0,
+          "hi": 0.2833333333333333,
+          "n": 6
+        },
+        "miou5": {
+          "mean": 0.10635831867815003,
+          "lo": 0.035059389259774615,
+          "hi": 0.19876695944810077,
+          "n": 6
+        }
+      },
+      "shipped:qwen2.5:0.5b@8": {
+        "n": 6,
+        "videos": [
+          "G9NabGlnDCs",
+          "CBYhVcO4WgI",
+          "iqm-XEqpayc",
+          "uFyk5UOyNqI",
+          "Aj0nf3rKG_E",
+          "k4715CJ0Ii8"
+        ],
+        "hit3": {
+          "mean": 0.3333333333333333,
+          "lo": 0,
+          "hi": 0.6666666666666666,
+          "n": 6
+        },
+        "p3": {
+          "mean": 0.16666666666666666,
+          "lo": 0,
+          "hi": 0.3888888888888889,
+          "n": 6
+        },
+        "hit5": {
+          "mean": 0.3333333333333333,
+          "lo": 0,
+          "hi": 0.6666666666666666,
+          "n": 6
+        },
+        "p5": {
+          "mean": 0.10000000000000002,
+          "lo": 0,
+          "hi": 0.23333333333333336,
+          "n": 6
+        },
+        "r5": {
+          "mean": 0.11666666666666665,
+          "lo": 0,
+          "hi": 0.2833333333333333,
+          "n": 6
+        },
+        "miou5": {
+          "mean": 0.10635831867815003,
+          "lo": 0.035059389259774615,
+          "hi": 0.19876695944810077,
+          "n": 6
+        }
+      },
+      "judge:qwen2.5:0.5b@16": {
+        "n": 6,
+        "videos": [
+          "G9NabGlnDCs",
+          "CBYhVcO4WgI",
+          "iqm-XEqpayc",
+          "uFyk5UOyNqI",
+          "Aj0nf3rKG_E",
+          "k4715CJ0Ii8"
+        ],
+        "hit3": {
+          "mean": 0.3333333333333333,
+          "lo": 0,
+          "hi": 0.6666666666666666,
+          "n": 6
+        },
+        "p3": {
+          "mean": 0.1111111111111111,
+          "lo": 0,
+          "hi": 0.2222222222222222,
+          "n": 6
+        },
+        "hit5": {
+          "mean": 0.5,
+          "lo": 0.16666666666666666,
+          "hi": 0.8333333333333334,
+          "n": 6
+        },
+        "p5": {
+          "mean": 0.10000000000000002,
+          "lo": 0.03333333333333333,
+          "hi": 0.16666666666666666,
+          "n": 6
+        },
+        "r5": {
+          "mean": 0.11666666666666665,
+          "lo": 0.03333333333333333,
+          "hi": 0.20833333333333334,
+          "n": 6
+        },
+        "miou5": {
+          "mean": 0.12576370897660358,
+          "lo": 0.06384158825875376,
+          "hi": 0.19034398938143715,
+          "n": 6
+        }
+      },
+      "shipped:qwen2.5:0.5b@16": {
+        "n": 6,
+        "videos": [
+          "G9NabGlnDCs",
+          "CBYhVcO4WgI",
+          "iqm-XEqpayc",
+          "uFyk5UOyNqI",
+          "Aj0nf3rKG_E",
+          "k4715CJ0Ii8"
+        ],
+        "hit3": {
+          "mean": 0.3333333333333333,
+          "lo": 0,
+          "hi": 0.6666666666666666,
+          "n": 6
+        },
+        "p3": {
+          "mean": 0.1111111111111111,
+          "lo": 0,
+          "hi": 0.2222222222222222,
+          "n": 6
+        },
+        "hit5": {
+          "mean": 0.5,
+          "lo": 0.16666666666666666,
+          "hi": 0.8333333333333334,
+          "n": 6
+        },
+        "p5": {
+          "mean": 0.10000000000000002,
+          "lo": 0.03333333333333333,
+          "hi": 0.16666666666666666,
+          "n": 6
+        },
+        "r5": {
+          "mean": 0.11666666666666665,
+          "lo": 0.03333333333333333,
+          "hi": 0.20833333333333334,
+          "n": 6
+        },
+        "miou5": {
+          "mean": 0.12576370897660358,
+          "lo": 0.06384158825875376,
+          "hi": 0.19034398938143715,
+          "n": 6
+        }
+      },
+      "judge:qwen2.5:0.5b@24": {
+        "n": 6,
+        "videos": [
+          "G9NabGlnDCs",
+          "CBYhVcO4WgI",
+          "iqm-XEqpayc",
+          "uFyk5UOyNqI",
+          "Aj0nf3rKG_E",
+          "k4715CJ0Ii8"
+        ],
+        "hit3": {
+          "mean": 0.16666666666666666,
+          "lo": 0,
+          "hi": 0.5,
+          "n": 6
+        },
+        "p3": {
+          "mean": 0.05555555555555555,
+          "lo": 0,
+          "hi": 0.16666666666666666,
+          "n": 6
+        },
+        "hit5": {
+          "mean": 0.16666666666666666,
+          "lo": 0,
+          "hi": 0.5,
+          "n": 6
+        },
+        "p5": {
+          "mean": 0.03333333333333333,
+          "lo": 0,
+          "hi": 0.10000000000000002,
+          "n": 6
+        },
+        "r5": {
+          "mean": 0.03333333333333333,
+          "lo": 0,
+          "hi": 0.10000000000000002,
+          "n": 6
+        },
+        "miou5": {
+          "mean": 0.09996868053962664,
+          "lo": 0.057390997418788836,
+          "hi": 0.15536505687405033,
+          "n": 6
+        }
+      },
+      "shipped:qwen2.5:0.5b@24": {
+        "n": 6,
+        "videos": [
+          "G9NabGlnDCs",
+          "CBYhVcO4WgI",
+          "iqm-XEqpayc",
+          "uFyk5UOyNqI",
+          "Aj0nf3rKG_E",
+          "k4715CJ0Ii8"
+        ],
+        "hit3": {
+          "mean": 0.16666666666666666,
+          "lo": 0,
+          "hi": 0.5,
+          "n": 6
+        },
+        "p3": {
+          "mean": 0.05555555555555555,
+          "lo": 0,
+          "hi": 0.16666666666666666,
+          "n": 6
+        },
+        "hit5": {
+          "mean": 0.16666666666666666,
+          "lo": 0,
+          "hi": 0.5,
+          "n": 6
+        },
+        "p5": {
+          "mean": 0.03333333333333333,
+          "lo": 0,
+          "hi": 0.10000000000000002,
+          "n": 6
+        },
+        "r5": {
+          "mean": 0.03333333333333333,
+          "lo": 0,
+          "hi": 0.10000000000000002,
+          "n": 6
+        },
+        "miou5": {
+          "mean": 0.09996868053962664,
+          "lo": 0.057390997418788836,
+          "hi": 0.15536505687405033,
+          "n": 6
+        }
+      },
+      "paired": {
+        "judge:qwen2.5:0.5b@8 vs prefilter@8": {
+          "miou5": {
+            "diff": 0.01364275668073138,
+            "lo": 0,
+            "hi": 0.04092827004219414,
+            "n": 6
+          },
+          "hit3": {
+            "diff": 0,
+            "lo": 0,
+            "hi": 0,
+            "n": 6
+          },
+          "n": 6
+        },
+        "judge:qwen2.5:0.5b@8 vs random": {
+          "miou5": {
+            "diff": -0.024345969012238455,
+            "lo": -0.10346005782452161,
+            "hi": 0.06833123597030158,
+            "n": 6
+          },
+          "hit3": {
+            "diff": 0.06999999999999999,
+            "lo": -0.2925,
+            "hi": 0.4516666666666666,
+            "n": 6
+          },
+          "n": 6
+        },
+        "judge:qwen2.5:0.5b@16 vs prefilter@16": {
+          "miou5": {
+            "diff": 0.03304814697918494,
+            "lo": -0.0359219276367982,
+            "hi": 0.10201822159516809,
+            "n": 6
+          },
+          "hit3": {
+            "diff": 0,
+            "lo": -0.5,
+            "hi": 0.5,
+            "n": 6
+          },
+          "n": 6
+        },
+        "judge:qwen2.5:0.5b@16 vs random": {
+          "miou5": {
+            "diff": -0.004940578713784898,
+            "lo": -0.07738211482280867,
+            "hi": 0.06642596388419647,
+            "n": 6
+          },
+          "hit3": {
+            "diff": 0.07,
+            "lo": -0.2791666666666667,
+            "hi": 0.4191666666666667,
+            "n": 6
+          },
+          "n": 6
+        },
+        "judge:qwen2.5:0.5b@24 vs prefilter@24": {
+          "miou5": {
+            "diff": 0.007253118542207994,
+            "lo": -0.09704071060570975,
+            "hi": 0.07976177614839824,
+            "n": 6
+          },
+          "hit3": {
+            "diff": -0.16666666666666666,
+            "lo": -0.5,
+            "hi": 0,
+            "n": 6
+          },
+          "n": 6
+        },
+        "judge:qwen2.5:0.5b@24 vs random": {
+          "miou5": {
+            "diff": -0.030735607150761846,
+            "lo": -0.08354806384661217,
+            "hi": 0.030305680695447337,
+            "n": 6
+          },
+          "hit3": {
+            "diff": -0.09666666666666664,
+            "lo": -0.2983333333333333,
+            "hi": 0.22916666666666666,
+            "n": 6
+          },
+          "n": 6
+        },
+        "shipped:qwen2.5:0.5b@8 vs judge:qwen2.5:0.5b@8": {
+          "miou5": {
+            "diff": 0,
+            "lo": 0,
+            "hi": 0,
+            "n": 6
+          },
+          "hit3": {
+            "diff": 0,
+            "lo": 0,
+            "hi": 0,
+            "n": 6
+          },
+          "n": 6
+        },
+        "shipped:qwen2.5:0.5b@16 vs judge:qwen2.5:0.5b@16": {
+          "miou5": {
+            "diff": 0,
+            "lo": 0,
+            "hi": 0,
+            "n": 6
+          },
+          "hit3": {
+            "diff": 0,
+            "lo": 0,
+            "hi": 0,
+            "n": 6
+          },
+          "n": 6
+        },
+        "shipped:qwen2.5:0.5b@24 vs judge:qwen2.5:0.5b@24": {
+          "miou5": {
+            "diff": 0,
+            "lo": 0,
+            "hi": 0,
+            "n": 6
+          },
+          "hit3": {
+            "diff": 0,
+            "lo": 0,
+            "hi": 0,
+            "n": 6
+          },
+          "n": 6
+        }
+      }
     },
     "human": {
       "paired": {}
     },
     "cost": {
       "qwen2.5:0.5b|window": {
-        "n": 48,
+        "n": 198,
         "sums": {
-          "wallSec": 729.14,
-          "wallSecN": 48,
-          "loadSec": 21.950000000000003,
-          "loadSecN": 48,
-          "words": 5534,
-          "wordsN": 48,
-          "promptTokens": 19471,
-          "promptTokensN": 48,
-          "promptTokPerSec": 3273.93,
-          "promptTokPerSecN": 48,
-          "outTokens": 2894,
-          "outTokensN": 48,
-          "outTokPerSec": 536.59,
-          "outTokPerSecN": 48
+          "wallSec": 2506.4700000000003,
+          "wallSecN": 198,
+          "loadSec": 66.07000000000001,
+          "loadSecN": 198,
+          "words": 22590,
+          "wordsN": 198,
+          "promptTokens": 80053,
+          "promptTokensN": 198,
+          "promptTokPerSec": 17325.76,
+          "promptTokPerSecN": 198,
+          "outTokens": 11917,
+          "outTokensN": 198,
+          "outTokPerSec": 2630.27,
+          "outTokPerSecN": 198
         },
-        "wallSec": 15.190416666666666,
-        "loadSec": 0.4572916666666667,
-        "words": 115.29166666666667,
-        "promptTokens": 405.6458333333333,
-        "promptTokPerSec": 68.206875,
-        "outTokens": 60.291666666666664,
-        "outTokPerSec": 11.178958333333334
+        "wallSec": 12.658939393939395,
+        "loadSec": 0.3336868686868687,
+        "words": 114.0909090909091,
+        "promptTokens": 404.30808080808083,
+        "promptTokPerSec": 87.50383838383837,
+        "outTokens": 60.186868686868685,
+        "outTokPerSec": 13.284191919191919
       }
     }
   },
@@ -1443,14 +1861,609 @@
             }
           },
           "n": 142
+        },
+        "judge:qwen2.5:0.5b@8": {
+          "preds": [
+            {
+              "id": "c_0064",
+              "start": 218.76,
+              "end": 273.92,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.631,
+              "hook": "How would you advise them that they should use the machine?",
+              "reason": "The clip provides a clear topic but no tension, focusing on the practicality of analyzing positions rather than just relying on computer-ass.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0134",
+              "start": 552.88,
+              "end": 580.6,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.658,
+              "hook": "We saw some surprising results from Iran.",
+              "reason": "The clip starts with surprising results from Iran and their teenage team, which sets up the potential for a strong performance in the future.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0122",
+              "start": 494.8,
+              "end": 520.92,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.647,
+              "hook": ">> Right, so your focus is more just on your- >> Yeah, I mean- >> The comments.",
+              "reason": "The clip starts with the speaker discussing their focus on comments and mentions of the US team in Baku, which leads to a comparison with an.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0007",
+              "start": 25.8,
+              "end": 51.52,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.638,
+              "hook": ">> And you were coming back here Fabi after 2011.",
+              "reason": "The clip starts with a question about why someone would want to come back after a long time and ends with a statement about the differentity.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0131",
+              "start": 533.9,
+              "end": 560.64,
+              "total": 0.55,
+              "judgeTotal": 0.55,
+              "pre": 0.61,
+              "hook": "China, despite their bad results in the last Olympia, are of course very strong and they're still improving.",
+              "reason": "The clip starts with China's recent Olympic performance, highlighting their strong showing despite poor results.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 2,
+                "clarity": 1
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.6666666666666666,
+              "p5": 0.4,
+              "r5": 0.5,
+              "miou5": 0.3151431937176897
+            }
+          },
+          "n": 8
+        },
+        "shipped:qwen2.5:0.5b@8": {
+          "preds": [
+            {
+              "id": "c_0064",
+              "start": 218.76,
+              "end": 273.92,
+              "total": 0.644,
+              "judgeTotal": 0.65,
+              "pre": 0.631,
+              "hook": "How would you advise them that they should use the machine?",
+              "reason": "The clip provides a clear topic but no tension, focusing on the practicality of analyzing positions rather than just relying on computer-ass.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0134",
+              "start": 552.88,
+              "end": 580.6,
+              "total": 0.6,
+              "judgeTotal": 0.575,
+              "pre": 0.658,
+              "hook": "We saw some surprising results from Iran.",
+              "reason": "The clip starts with surprising results from Iran and their teenage team, which sets up the potential for a strong performance in the future.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0122",
+              "start": 494.8,
+              "end": 520.92,
+              "total": 0.597,
+              "judgeTotal": 0.575,
+              "pre": 0.647,
+              "hook": ">> Right, so your focus is more just on your- >> Yeah, I mean- >> The comments.",
+              "reason": "The clip starts with the speaker discussing their focus on comments and mentions of the US team in Baku, which leads to a comparison with an.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0007",
+              "start": 25.8,
+              "end": 51.52,
+              "total": 0.594,
+              "judgeTotal": 0.575,
+              "pre": 0.638,
+              "hook": ">> And you were coming back here Fabi after 2011.",
+              "reason": "The clip starts with a question about why someone would want to come back after a long time and ends with a statement about the differentity.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0131",
+              "start": 533.9,
+              "end": 560.64,
+              "total": 0.568,
+              "judgeTotal": 0.55,
+              "pre": 0.61,
+              "hook": "China, despite their bad results in the last Olympia, are of course very strong and they're still improving.",
+              "reason": "The clip starts with China's recent Olympic performance, highlighting their strong showing despite poor results.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 2,
+                "clarity": 1
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.6666666666666666,
+              "p5": 0.4,
+              "r5": 0.5,
+              "miou5": 0.3151431937176897
+            }
+          },
+          "n": 8
+        },
+        "judge:qwen2.5:0.5b@16": {
+          "preds": [
+            {
+              "id": "c_0001",
+              "start": 11.68,
+              "end": 36.68,
+              "total": 0.7,
+              "judgeTotal": 0.7,
+              "pre": 0.56,
+              "hook": "He's often referred to as the machine due to his superhuman calculation ability.",
+              "reason": "The clip starts with Fabiano Caruana being introduced as US champion and World number two, which immediately sets up the context for his new.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 1
+              }
+            },
+            {
+              "id": "c_0064",
+              "start": 218.76,
+              "end": 273.92,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.631,
+              "hook": "How would you advise them that they should use the machine?",
+              "reason": "The clip provides a clear topic but no tension, focusing on the practicality of analyzing positions rather than just relying on computer-ass.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0078",
+              "start": 296.28,
+              "end": 349.16,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.585,
+              "hook": "The US chest changed very dramatically over the 10 years that I left the federation in 2005.",
+              "reason": "The clip starts with a personal anecdote about the change in US chest over time and the current strength of the country, which immediately p.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0013",
+              "start": 40.44,
+              "end": 66.84,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.549,
+              "hook": "It's sort of, it's not a new experience, but it's something which I don't normally face.",
+              "reason": "The clip starts with a personal preference for an open tournament and ends with the same sentiment, indicating it's a strong choice.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0134",
+              "start": 552.88,
+              "end": 580.6,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.658,
+              "hook": "We saw some surprising results from Iran.",
+              "reason": "The clip starts with surprising results from Iran and their teenage team, which sets up the potential for a strong performance in the future.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 1,
+              "p3": 0,
+              "p5": 0.2,
+              "r5": 0.25,
+              "miou5": 0.20737741080729508
+            }
+          },
+          "n": 16
+        },
+        "shipped:qwen2.5:0.5b@16": {
+          "preds": [
+            {
+              "id": "c_0001",
+              "start": 11.68,
+              "end": 36.68,
+              "total": 0.658,
+              "judgeTotal": 0.7,
+              "pre": 0.56,
+              "hook": "He's often referred to as the machine due to his superhuman calculation ability.",
+              "reason": "The clip starts with Fabiano Caruana being introduced as US champion and World number two, which immediately sets up the context for his new.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 1
+              }
+            },
+            {
+              "id": "c_0064",
+              "start": 218.76,
+              "end": 273.92,
+              "total": 0.644,
+              "judgeTotal": 0.65,
+              "pre": 0.631,
+              "hook": "How would you advise them that they should use the machine?",
+              "reason": "The clip provides a clear topic but no tension, focusing on the practicality of analyzing positions rather than just relying on computer-ass.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0078",
+              "start": 296.28,
+              "end": 349.16,
+              "total": 0.63,
+              "judgeTotal": 0.65,
+              "pre": 0.585,
+              "hook": "The US chest changed very dramatically over the 10 years that I left the federation in 2005.",
+              "reason": "The clip starts with a personal anecdote about the change in US chest over time and the current strength of the country, which immediately p.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0013",
+              "start": 40.44,
+              "end": 66.84,
+              "total": 0.62,
+              "judgeTotal": 0.65,
+              "pre": 0.549,
+              "hook": "It's sort of, it's not a new experience, but it's something which I don't normally face.",
+              "reason": "The clip starts with a personal preference for an open tournament and ends with the same sentiment, indicating it's a strong choice.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0134",
+              "start": 552.88,
+              "end": 580.6,
+              "total": 0.6,
+              "judgeTotal": 0.575,
+              "pre": 0.658,
+              "hook": "We saw some surprising results from Iran.",
+              "reason": "The clip starts with surprising results from Iran and their teenage team, which sets up the potential for a strong performance in the future.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 1,
+              "p3": 0,
+              "p5": 0.2,
+              "r5": 0.25,
+              "miou5": 0.20737741080729508
+            }
+          },
+          "n": 16
+        },
+        "judge:qwen2.5:0.5b@24": {
+          "preds": [
+            {
+              "id": "c_0036",
+              "start": 132.12,
+              "end": 186.88,
+              "total": 0.775,
+              "judgeTotal": 0.775,
+              "pre": 0.542,
+              "hook": "When you were 12, you moved from the US to Madrid.",
+              "reason": "The clip introduces the narrator's background and explains why they moved to Madrid at a young age.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0001",
+              "start": 11.68,
+              "end": 36.68,
+              "total": 0.7,
+              "judgeTotal": 0.7,
+              "pre": 0.56,
+              "hook": "He's often referred to as the machine due to his superhuman calculation ability.",
+              "reason": "The clip starts with Fabiano Caruana being introduced as US champion and World number two, which immediately sets up the context for his new.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 1
+              }
+            },
+            {
+              "id": "c_0064",
+              "start": 218.76,
+              "end": 273.92,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.631,
+              "hook": "How would you advise them that they should use the machine?",
+              "reason": "The clip provides a clear topic but no tension, focusing on the practicality of analyzing positions rather than just relying on computer-ass.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0078",
+              "start": 296.28,
+              "end": 349.16,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.585,
+              "hook": "The US chest changed very dramatically over the 10 years that I left the federation in 2005.",
+              "reason": "The clip starts with a personal anecdote about the change in US chest over time and the current strength of the country, which immediately p.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0013",
+              "start": 40.44,
+              "end": 66.84,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.549,
+              "hook": "It's sort of, it's not a new experience, but it's something which I don't normally face.",
+              "reason": "The clip starts with a personal preference for an open tournament and ends with the same sentiment, indicating it's a strong choice.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.07564296520423594
+            }
+          },
+          "n": 24
+        },
+        "shipped:qwen2.5:0.5b@24": {
+          "preds": [
+            {
+              "id": "c_0036",
+              "start": 132.12,
+              "end": 186.88,
+              "total": 0.705,
+              "judgeTotal": 0.775,
+              "pre": 0.542,
+              "hook": "When you were 12, you moved from the US to Madrid.",
+              "reason": "The clip introduces the narrator's background and explains why they moved to Madrid at a young age.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0001",
+              "start": 11.68,
+              "end": 36.68,
+              "total": 0.658,
+              "judgeTotal": 0.7,
+              "pre": 0.56,
+              "hook": "He's often referred to as the machine due to his superhuman calculation ability.",
+              "reason": "The clip starts with Fabiano Caruana being introduced as US champion and World number two, which immediately sets up the context for his new.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 1
+              }
+            },
+            {
+              "id": "c_0064",
+              "start": 218.76,
+              "end": 273.92,
+              "total": 0.644,
+              "judgeTotal": 0.65,
+              "pre": 0.631,
+              "hook": "How would you advise them that they should use the machine?",
+              "reason": "The clip provides a clear topic but no tension, focusing on the practicality of analyzing positions rather than just relying on computer-ass.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0078",
+              "start": 296.28,
+              "end": 349.16,
+              "total": 0.63,
+              "judgeTotal": 0.65,
+              "pre": 0.585,
+              "hook": "The US chest changed very dramatically over the 10 years that I left the federation in 2005.",
+              "reason": "The clip starts with a personal anecdote about the change in US chest over time and the current strength of the country, which immediately p.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0013",
+              "start": 40.44,
+              "end": 66.84,
+              "total": 0.62,
+              "judgeTotal": 0.65,
+              "pre": 0.549,
+              "hook": "It's sort of, it's not a new experience, but it's something which I don't normally face.",
+              "reason": "The clip starts with a personal preference for an open tournament and ends with the same sentiment, indicating it's a strong choice.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.07564296520423594
+            }
+          },
+          "n": 24
         }
       },
       "timings": {
         "transcribeSec": 201.149,
-        "candidatesSec": 0.066,
+        "candidatesSec": 0.012,
         "nCandidates": 142
       },
-      "judgeRuns": {},
+      "judgeRuns": {
+        "qwen2.5:0.5b@8": {
+          "model": "qwen2.5:0.5b",
+          "n": 8,
+          "size": 8,
+          "wallSec": 112.937,
+          "newCalls": 8,
+          "listwiseSec": null
+        },
+        "qwen2.5:0.5b@16": {
+          "model": "qwen2.5:0.5b",
+          "n": 16,
+          "size": 16,
+          "wallSec": 131.921,
+          "newCalls": 8,
+          "listwiseSec": null
+        },
+        "qwen2.5:0.5b@24": {
+          "model": "qwen2.5:0.5b",
+          "n": 24,
+          "size": 24,
+          "wallSec": 71.328,
+          "newCalls": 8,
+          "listwiseSec": null
+        }
+      },
       "shortlistCeiling": {
         "4": {
           "heatmap": {
@@ -1526,14 +2539,14 @@
       "nShortlist": 8,
       "calls": {
         "qwen2.5:0.5b|window": {
-          "n": 8,
-          "wallSec": 14.885000000000002,
-          "loadSec": 1.21,
-          "words": 106.75,
-          "promptTokens": 394.375,
-          "promptTokPerSec": 60.06999999999999,
-          "outTokens": 58.25,
-          "outTokPerSec": 10.33
+          "n": 32,
+          "wallSec": 13.600000000000001,
+          "loadSec": 0.5103125000000001,
+          "words": 111.46875,
+          "promptTokens": 401.0625,
+          "promptTokPerSec": 70.91125000000001,
+          "outTokens": 60.4375,
+          "outTokPerSec": 12.40875
         }
       }
     },
@@ -2150,14 +3163,609 @@
             }
           },
           "n": 234
+        },
+        "judge:qwen2.5:0.5b@8": {
+          "preds": [
+            {
+              "id": "c_0020",
+              "start": 53.16,
+              "end": 92.6,
+              "total": 0.7,
+              "judgeTotal": 0.7,
+              "pre": 0.72,
+              "hook": "We've taught a lot of this at YC already, but it's all been off the record.",
+              "reason": "The hook introduces the topic of YC speakers' advice and sets up the context for the talk.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 1
+              }
+            },
+            {
+              "id": "c_0113",
+              "start": 376.52,
+              "end": 430.4,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.73,
+              "hook": "The idea should come first and the startup should come second.",
+              "reason": "The hook (the first sentence) provides a clear topic but no tension, making it a filler for the rest of the clip.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0095",
+              "start": 317.4,
+              "end": 371.2,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.71,
+              "hook": "When you're evaluating an idea, you need to think through all these things, not just the product.",
+              "reason": "The clip highlights the importance of thorough planning and long-term thinking in evaluating startup ideas, emphasizing the value of early,.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0006",
+              "start": 6.6,
+              "end": 64.28,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.69,
+              "hook": ">> Can people hear on the back?",
+              "reason": "The hook is a clear topic but no tension, making it an effective introduction to the class.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0185",
+              "start": 654.76,
+              "end": 683.84,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.75,
+              "hook": "You should think about this.",
+              "reason": "The clip provides a clear topic and an interesting claim that resonates with the viewer's interests.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0
+            }
+          },
+          "n": 8
+        },
+        "shipped:qwen2.5:0.5b@8": {
+          "preds": [
+            {
+              "id": "c_0020",
+              "start": 53.16,
+              "end": 92.6,
+              "total": 0.706,
+              "judgeTotal": 0.7,
+              "pre": 0.72,
+              "hook": "We've taught a lot of this at YC already, but it's all been off the record.",
+              "reason": "The hook introduces the topic of YC speakers' advice and sets up the context for the talk.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 1
+              }
+            },
+            {
+              "id": "c_0113",
+              "start": 376.52,
+              "end": 430.4,
+              "total": 0.674,
+              "judgeTotal": 0.65,
+              "pre": 0.73,
+              "hook": "The idea should come first and the startup should come second.",
+              "reason": "The hook (the first sentence) provides a clear topic but no tension, making it a filler for the rest of the clip.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0095",
+              "start": 317.4,
+              "end": 371.2,
+              "total": 0.668,
+              "judgeTotal": 0.65,
+              "pre": 0.71,
+              "hook": "When you're evaluating an idea, you need to think through all these things, not just the product.",
+              "reason": "The clip highlights the importance of thorough planning and long-term thinking in evaluating startup ideas, emphasizing the value of early,.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0006",
+              "start": 6.6,
+              "end": 64.28,
+              "total": 0.662,
+              "judgeTotal": 0.65,
+              "pre": 0.69,
+              "hook": ">> Can people hear on the back?",
+              "reason": "The hook is a clear topic but no tension, making it an effective introduction to the class.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0185",
+              "start": 654.76,
+              "end": 683.84,
+              "total": 0.627,
+              "judgeTotal": 0.575,
+              "pre": 0.75,
+              "hook": "You should think about this.",
+              "reason": "The clip provides a clear topic and an interesting claim that resonates with the viewer's interests.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0
+            }
+          },
+          "n": 8
+        },
+        "judge:qwen2.5:0.5b@16": {
+          "preds": [
+            {
+              "id": "c_0079",
+              "start": 268.6,
+              "end": 326.32,
+              "total": 0.775,
+              "judgeTotal": 0.775,
+              "pre": 0.68,
+              "hook": "A bad idea is still bad, and the pivot happy world that we're in today feels really suboptimal.",
+              "reason": "The clip starts with a clear topic about the current state of the world and how it feels, which is a great idea to set the context for the Q.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0119",
+              "start": 400.41,
+              "end": 456.68,
+              "total": 0.775,
+              "judgeTotal": 0.775,
+              "pre": 0.67,
+              "hook": "Another way of looking at this is that the best companies are almost always mission oriented.",
+              "reason": "The founder's belief in their startup's mission and dedication to it makes them less likely to get up at some point along the way.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0020",
+              "start": 53.16,
+              "end": 92.6,
+              "total": 0.7,
+              "judgeTotal": 0.7,
+              "pre": 0.72,
+              "hook": "We've taught a lot of this at YC already, but it's all been off the record.",
+              "reason": "The hook introduces the topic of YC speakers' advice and sets up the context for the talk.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 1
+              }
+            },
+            {
+              "id": "c_0095",
+              "start": 317.4,
+              "end": 371.2,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.71,
+              "hook": "When you're evaluating an idea, you need to think through all these things, not just the product.",
+              "reason": "The clip highlights the importance of thorough planning and long-term thinking in evaluating startup ideas, emphasizing the value of early,.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0006",
+              "start": 6.6,
+              "end": 64.28,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.69,
+              "hook": ">> Can people hear on the back?",
+              "reason": "The hook is a clear topic but no tension, making it an effective introduction to the class.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.3333333333333333,
+              "p5": 0.2,
+              "r5": 0.25,
+              "miou5": 0.15929214692490523
+            }
+          },
+          "n": 16
+        },
+        "shipped:qwen2.5:0.5b@16": {
+          "preds": [
+            {
+              "id": "c_0079",
+              "start": 268.6,
+              "end": 326.32,
+              "total": 0.746,
+              "judgeTotal": 0.775,
+              "pre": 0.68,
+              "hook": "A bad idea is still bad, and the pivot happy world that we're in today feels really suboptimal.",
+              "reason": "The clip starts with a clear topic about the current state of the world and how it feels, which is a great idea to set the context for the Q.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0119",
+              "start": 400.41,
+              "end": 456.68,
+              "total": 0.744,
+              "judgeTotal": 0.775,
+              "pre": 0.67,
+              "hook": "Another way of looking at this is that the best companies are almost always mission oriented.",
+              "reason": "The founder's belief in their startup's mission and dedication to it makes them less likely to get up at some point along the way.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0020",
+              "start": 53.16,
+              "end": 92.6,
+              "total": 0.706,
+              "judgeTotal": 0.7,
+              "pre": 0.72,
+              "hook": "We've taught a lot of this at YC already, but it's all been off the record.",
+              "reason": "The hook introduces the topic of YC speakers' advice and sets up the context for the talk.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 1
+              }
+            },
+            {
+              "id": "c_0095",
+              "start": 317.4,
+              "end": 371.2,
+              "total": 0.668,
+              "judgeTotal": 0.65,
+              "pre": 0.71,
+              "hook": "When you're evaluating an idea, you need to think through all these things, not just the product.",
+              "reason": "The clip highlights the importance of thorough planning and long-term thinking in evaluating startup ideas, emphasizing the value of early,.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0006",
+              "start": 6.6,
+              "end": 64.28,
+              "total": 0.662,
+              "judgeTotal": 0.65,
+              "pre": 0.69,
+              "hook": ">> Can people hear on the back?",
+              "reason": "The hook is a clear topic but no tension, making it an effective introduction to the class.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.3333333333333333,
+              "p5": 0.2,
+              "r5": 0.25,
+              "miou5": 0.15929214692490523
+            }
+          },
+          "n": 16
+        },
+        "judge:qwen2.5:0.5b@24": {
+          "preds": [
+            {
+              "id": "c_0119",
+              "start": 400.41,
+              "end": 456.68,
+              "total": 0.775,
+              "judgeTotal": 0.775,
+              "pre": 0.67,
+              "hook": "Another way of looking at this is that the best companies are almost always mission oriented.",
+              "reason": "The founder's belief in their startup's mission and dedication to it makes them less likely to get up at some point along the way.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0020",
+              "start": 53.16,
+              "end": 92.6,
+              "total": 0.7,
+              "judgeTotal": 0.7,
+              "pre": 0.72,
+              "hook": "We've taught a lot of this at YC already, but it's all been off the record.",
+              "reason": "The hook introduces the topic of YC speakers' advice and sets up the context for the talk.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 1
+              }
+            },
+            {
+              "id": "c_0089",
+              "start": 301.36,
+              "end": 326.32,
+              "total": 0.7,
+              "judgeTotal": 0.7,
+              "pre": 0.69,
+              "hook": "I myself used to believe ideas didn't matter that much, but I'm very sure that's wrong now.",
+              "reason": "The clip starts with a personal anecdote about the speaker's belief in ideas not being important, which sets up the broader context for the.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 1
+              }
+            },
+            {
+              "id": "c_0095",
+              "start": 317.4,
+              "end": 371.2,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.71,
+              "hook": "When you're evaluating an idea, you need to think through all these things, not just the product.",
+              "reason": "The clip highlights the importance of thorough planning and long-term thinking in evaluating startup ideas, emphasizing the value of early,.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0006",
+              "start": 6.6,
+              "end": 64.28,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.69,
+              "hook": ">> Can people hear on the back?",
+              "reason": "The hook is a clear topic but no tension, making it an effective introduction to the class.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.06617105539562723
+            }
+          },
+          "n": 24
+        },
+        "shipped:qwen2.5:0.5b@24": {
+          "preds": [
+            {
+              "id": "c_0119",
+              "start": 400.41,
+              "end": 456.68,
+              "total": 0.744,
+              "judgeTotal": 0.775,
+              "pre": 0.67,
+              "hook": "Another way of looking at this is that the best companies are almost always mission oriented.",
+              "reason": "The founder's belief in their startup's mission and dedication to it makes them less likely to get up at some point along the way.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0020",
+              "start": 53.16,
+              "end": 92.6,
+              "total": 0.706,
+              "judgeTotal": 0.7,
+              "pre": 0.72,
+              "hook": "We've taught a lot of this at YC already, but it's all been off the record.",
+              "reason": "The hook introduces the topic of YC speakers' advice and sets up the context for the talk.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 1
+              }
+            },
+            {
+              "id": "c_0089",
+              "start": 301.36,
+              "end": 326.32,
+              "total": 0.697,
+              "judgeTotal": 0.7,
+              "pre": 0.69,
+              "hook": "I myself used to believe ideas didn't matter that much, but I'm very sure that's wrong now.",
+              "reason": "The clip starts with a personal anecdote about the speaker's belief in ideas not being important, which sets up the broader context for the.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 1
+              }
+            },
+            {
+              "id": "c_0095",
+              "start": 317.4,
+              "end": 371.2,
+              "total": 0.668,
+              "judgeTotal": 0.65,
+              "pre": 0.71,
+              "hook": "When you're evaluating an idea, you need to think through all these things, not just the product.",
+              "reason": "The clip highlights the importance of thorough planning and long-term thinking in evaluating startup ideas, emphasizing the value of early,.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0006",
+              "start": 6.6,
+              "end": 64.28,
+              "total": 0.662,
+              "judgeTotal": 0.65,
+              "pre": 0.69,
+              "hook": ">> Can people hear on the back?",
+              "reason": "The hook is a clear topic but no tension, making it an effective introduction to the class.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.06617105539562723
+            }
+          },
+          "n": 24
         }
       },
       "timings": {
         "transcribeSec": 214.167,
-        "candidatesSec": 0.034,
+        "candidatesSec": 0.014,
         "nCandidates": 234
       },
-      "judgeRuns": {},
+      "judgeRuns": {
+        "qwen2.5:0.5b@8": {
+          "model": "qwen2.5:0.5b",
+          "n": 8,
+          "size": 8,
+          "wallSec": 160.485,
+          "newCalls": 8,
+          "listwiseSec": null
+        },
+        "qwen2.5:0.5b@16": {
+          "model": "qwen2.5:0.5b",
+          "n": 16,
+          "size": 16,
+          "wallSec": 91.274,
+          "newCalls": 8,
+          "listwiseSec": null
+        },
+        "qwen2.5:0.5b@24": {
+          "model": "qwen2.5:0.5b",
+          "n": 24,
+          "size": 24,
+          "wallSec": 93.814,
+          "newCalls": 10,
+          "listwiseSec": null
+        }
+      },
       "shortlistCeiling": {
         "4": {
           "heatmap": {
@@ -2233,14 +3841,14 @@
       "nShortlist": 8,
       "calls": {
         "qwen2.5:0.5b|window": {
-          "n": 8,
-          "wallSec": 12.423750000000002,
-          "loadSec": 0.29000000000000004,
-          "words": 153.125,
-          "promptTokens": 447,
-          "promptTokPerSec": 78.33125,
-          "outTokens": 62.75,
-          "outTokPerSec": 14.495
+          "n": 34,
+          "wallSec": 13.084705882352944,
+          "loadSec": 0.29029411764705887,
+          "words": 150.64705882352942,
+          "promptTokens": 445.3235294117647,
+          "promptTokPerSec": 78.25147058823529,
+          "outTokens": 61.529411764705884,
+          "outTokPerSec": 14.705882352941174
         }
       }
     },
@@ -2863,14 +4471,609 @@
             }
           },
           "n": 230
+        },
+        "judge:qwen2.5:0.5b@8": {
+          "preds": [
+            {
+              "id": "c_0093",
+              "start": 404,
+              "end": 425,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.73,
+              "hook": "Everyone who's made it through cow has already experienced some disappointment.",
+              "reason": "The clip starts with a common experience of not getting the desired outcome, which is a clear topic but lacks tension or punchline.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0169",
+              "start": 646,
+              "end": 689,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.72,
+              "hook": "I poured over his medical records, asking what I could have or should have done.",
+              "reason": "The hook is the first sentence, which introduces the topic and sets up the main idea of the clip.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0058",
+              "start": 220,
+              "end": 261,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.71,
+              "hook": "I tell you all the things I've learned in life.",
+              "reason": "The hook is a clear topic but no tension, making it an interesting and unexpected idea that sets the scene for the rest of the clip.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0188",
+              "start": 705,
+              "end": 761,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.699,
+              "hook": "You know that song, \"Everything is Awesome\"?",
+              "reason": "The hook is a clear topic but no tension, making it the most fitting for this clip.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0155",
+              "start": 607,
+              "end": 663,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.69,
+              "hook": "Personalization, pervasiveness, and permanence that are critical to how we bounce back from hardship.",
+              "reason": "The clip starts with a personalization of the event that led to Dave's death, emphasizing the belief in being at fault and highlighting the.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.1255547771395757
+            }
+          },
+          "n": 8
+        },
+        "shipped:qwen2.5:0.5b@8": {
+          "preds": [
+            {
+              "id": "c_0093",
+              "start": 404,
+              "end": 425,
+              "total": 0.621,
+              "judgeTotal": 0.575,
+              "pre": 0.73,
+              "hook": "Everyone who's made it through cow has already experienced some disappointment.",
+              "reason": "The clip starts with a common experience of not getting the desired outcome, which is a clear topic but lacks tension or punchline.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0169",
+              "start": 646,
+              "end": 689,
+              "total": 0.618,
+              "judgeTotal": 0.575,
+              "pre": 0.72,
+              "hook": "I poured over his medical records, asking what I could have or should have done.",
+              "reason": "The hook is the first sentence, which introduces the topic and sets up the main idea of the clip.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0058",
+              "start": 220,
+              "end": 261,
+              "total": 0.615,
+              "judgeTotal": 0.575,
+              "pre": 0.71,
+              "hook": "I tell you all the things I've learned in life.",
+              "reason": "The hook is a clear topic but no tension, making it an interesting and unexpected idea that sets the scene for the rest of the clip.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0188",
+              "start": 705,
+              "end": 761,
+              "total": 0.612,
+              "judgeTotal": 0.575,
+              "pre": 0.699,
+              "hook": "You know that song, \"Everything is Awesome\"?",
+              "reason": "The hook is a clear topic but no tension, making it the most fitting for this clip.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0155",
+              "start": 607,
+              "end": 663,
+              "total": 0.609,
+              "judgeTotal": 0.575,
+              "pre": 0.69,
+              "hook": "Personalization, pervasiveness, and permanence that are critical to how we bounce back from hardship.",
+              "reason": "The clip starts with a personalization of the event that led to Dave's death, emphasizing the belief in being at fault and highlighting the.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.1255547771395757
+            }
+          },
+          "n": 8
+        },
+        "judge:qwen2.5:0.5b@16": {
+          "preds": [
+            {
+              "id": "c_0224",
+              "start": 831,
+              "end": 886,
+              "total": 0.775,
+              "judgeTotal": 0.775,
+              "pre": 0.667,
+              "hook": "We're sad, and then we're sad that we're sad.",
+              "reason": "The quote from Rabbi Meir Kahana about accepting our feelings and knowing that they won't last forever is a clear topic but no tension.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0093",
+              "start": 404,
+              "end": 425,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.73,
+              "hook": "Everyone who's made it through cow has already experienced some disappointment.",
+              "reason": "The clip starts with a common experience of not getting the desired outcome, which is a clear topic but lacks tension or punchline.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0169",
+              "start": 646,
+              "end": 689,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.72,
+              "hook": "I poured over his medical records, asking what I could have or should have done.",
+              "reason": "The hook is the first sentence, which introduces the topic and sets up the main idea of the clip.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0058",
+              "start": 220,
+              "end": 261,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.71,
+              "hook": "I tell you all the things I've learned in life.",
+              "reason": "The hook is a clear topic but no tension, making it an interesting and unexpected idea that sets the scene for the rest of the clip.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0188",
+              "start": 705,
+              "end": 761,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.699,
+              "hook": "You know that song, \"Everything is Awesome\"?",
+              "reason": "The hook is a clear topic but no tension, making it the most fitting for this clip.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.04369823705518741
+            }
+          },
+          "n": 16
+        },
+        "shipped:qwen2.5:0.5b@16": {
+          "preds": [
+            {
+              "id": "c_0224",
+              "start": 831,
+              "end": 886,
+              "total": 0.743,
+              "judgeTotal": 0.775,
+              "pre": 0.667,
+              "hook": "We're sad, and then we're sad that we're sad.",
+              "reason": "The quote from Rabbi Meir Kahana about accepting our feelings and knowing that they won't last forever is a clear topic but no tension.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0093",
+              "start": 404,
+              "end": 425,
+              "total": 0.621,
+              "judgeTotal": 0.575,
+              "pre": 0.73,
+              "hook": "Everyone who's made it through cow has already experienced some disappointment.",
+              "reason": "The clip starts with a common experience of not getting the desired outcome, which is a clear topic but lacks tension or punchline.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0169",
+              "start": 646,
+              "end": 689,
+              "total": 0.618,
+              "judgeTotal": 0.575,
+              "pre": 0.72,
+              "hook": "I poured over his medical records, asking what I could have or should have done.",
+              "reason": "The hook is the first sentence, which introduces the topic and sets up the main idea of the clip.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0058",
+              "start": 220,
+              "end": 261,
+              "total": 0.615,
+              "judgeTotal": 0.575,
+              "pre": 0.71,
+              "hook": "I tell you all the things I've learned in life.",
+              "reason": "The hook is a clear topic but no tension, making it an interesting and unexpected idea that sets the scene for the rest of the clip.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0188",
+              "start": 705,
+              "end": 761,
+              "total": 0.612,
+              "judgeTotal": 0.575,
+              "pre": 0.699,
+              "hook": "You know that song, \"Everything is Awesome\"?",
+              "reason": "The hook is a clear topic but no tension, making it the most fitting for this clip.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.04369823705518741
+            }
+          },
+          "n": 16
+        },
+        "judge:qwen2.5:0.5b@24": {
+          "preds": [
+            {
+              "id": "c_0056",
+              "start": 213,
+              "end": 272,
+              "total": 0.775,
+              "judgeTotal": 0.775,
+              "pre": 0.71,
+              "hook": "You provide the youth.",
+              "reason": "The clip starts with a personal anecdote about losing a loved one, which immediately sets up the contrast between life and death, making it.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0224",
+              "start": 831,
+              "end": 886,
+              "total": 0.775,
+              "judgeTotal": 0.775,
+              "pre": 0.667,
+              "hook": "We're sad, and then we're sad that we're sad.",
+              "reason": "The quote from Rabbi Meir Kahana about accepting our feelings and knowing that they won't last forever is a clear topic but no tension.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0026",
+              "start": 99,
+              "end": 153,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.62,
+              "hook": "One of the women who came here in search of opportunity was Rosalyn Nuss.",
+              "reason": "The hook is a clear topic that immediately grabs attention and connects with the viewer's experience.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0093",
+              "start": 404,
+              "end": 425,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.73,
+              "hook": "Everyone who's made it through cow has already experienced some disappointment.",
+              "reason": "The clip starts with a common experience of not getting the desired outcome, which is a clear topic but lacks tension or punchline.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0169",
+              "start": 646,
+              "end": 689,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.72,
+              "hook": "I poured over his medical records, asking what I could have or should have done.",
+              "reason": "The hook is the first sentence, which introduces the topic and sets up the main idea of the clip.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.11378360356566286
+            }
+          },
+          "n": 24
+        },
+        "shipped:qwen2.5:0.5b@24": {
+          "preds": [
+            {
+              "id": "c_0056",
+              "start": 213,
+              "end": 272,
+              "total": 0.755,
+              "judgeTotal": 0.775,
+              "pre": 0.71,
+              "hook": "You provide the youth.",
+              "reason": "The clip starts with a personal anecdote about losing a loved one, which immediately sets up the contrast between life and death, making it.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0224",
+              "start": 831,
+              "end": 886,
+              "total": 0.743,
+              "judgeTotal": 0.775,
+              "pre": 0.667,
+              "hook": "We're sad, and then we're sad that we're sad.",
+              "reason": "The quote from Rabbi Meir Kahana about accepting our feelings and knowing that they won't last forever is a clear topic but no tension.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0026",
+              "start": 99,
+              "end": 153,
+              "total": 0.641,
+              "judgeTotal": 0.65,
+              "pre": 0.62,
+              "hook": "One of the women who came here in search of opportunity was Rosalyn Nuss.",
+              "reason": "The hook is a clear topic that immediately grabs attention and connects with the viewer's experience.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0093",
+              "start": 404,
+              "end": 425,
+              "total": 0.621,
+              "judgeTotal": 0.575,
+              "pre": 0.73,
+              "hook": "Everyone who's made it through cow has already experienced some disappointment.",
+              "reason": "The clip starts with a common experience of not getting the desired outcome, which is a clear topic but lacks tension or punchline.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0169",
+              "start": 646,
+              "end": 689,
+              "total": 0.618,
+              "judgeTotal": 0.575,
+              "pre": 0.72,
+              "hook": "I poured over his medical records, asking what I could have or should have done.",
+              "reason": "The hook is the first sentence, which introduces the topic and sets up the main idea of the clip.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.11378360356566286
+            }
+          },
+          "n": 24
         }
       },
       "timings": {
         "transcribeSec": 204.127,
-        "candidatesSec": 0.03,
+        "candidatesSec": 0.009,
         "nCandidates": 230
       },
-      "judgeRuns": {},
+      "judgeRuns": {
+        "qwen2.5:0.5b@8": {
+          "model": "qwen2.5:0.5b",
+          "n": 8,
+          "size": 8,
+          "wallSec": 146.549,
+          "newCalls": 8,
+          "listwiseSec": null
+        },
+        "qwen2.5:0.5b@16": {
+          "model": "qwen2.5:0.5b",
+          "n": 16,
+          "size": 16,
+          "wallSec": 57.755,
+          "newCalls": 8,
+          "listwiseSec": null
+        },
+        "qwen2.5:0.5b@24": {
+          "model": "qwen2.5:0.5b",
+          "n": 24,
+          "size": 24,
+          "wallSec": 71.503,
+          "newCalls": 11,
+          "listwiseSec": null
+        }
+      },
       "shortlistCeiling": {
         "4": {
           "heatmap": {
@@ -2946,14 +5149,14 @@
       "nShortlist": 8,
       "calls": {
         "qwen2.5:0.5b|window": {
-          "n": 8,
-          "wallSec": 10.07125,
-          "loadSec": 0.22499999999999998,
-          "words": 98.125,
-          "promptTokens": 385.375,
-          "promptTokPerSec": 92.49499999999999,
-          "outTokens": 59.625,
-          "outTokPerSec": 12.923749999999998
+          "n": 35,
+          "wallSec": 10.179714285714285,
+          "loadSec": 0.2605714285714287,
+          "words": 88.82857142857142,
+          "promptTokens": 371.7142857142857,
+          "promptTokPerSec": 118.52000000000002,
+          "outTokens": 59.457142857142856,
+          "outTokPerSec": 14.45742857142857
         }
       }
     },
@@ -3576,14 +5779,609 @@
             }
           },
           "n": 168
+        },
+        "judge:qwen2.5:0.5b@8": {
+          "preds": [
+            {
+              "id": "c_0084",
+              "start": 504.49,
+              "end": 562.14,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.682,
+              "hook": "Criminals now have, you know, WhatsApp, iMessage, but for criminals.",
+              "reason": "The clip introduces the concept of mobile device management (MDM) and its potential for criminals to use it without their knowledge or even.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0034",
+              "start": 115.93,
+              "end": 145.19,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.68,
+              "hook": "You take the panel off.",
+              "reason": "The clip introduces a new element (the Australian border force) and sets up tension about missing equipment.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0059",
+              "start": 256.68,
+              "end": 298.58,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.68,
+              "hook": "Briefly, what I'm going to talk about, the phone, so that's the software, the hardware, the network itself, and for the first time, the FBI front-end interface.",
+              "reason": "The hook introduces the topic in a way that immediately grabs attention, while the standalone provides context and background information.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0073",
+              "start": 445.78,
+              "end": 501.28,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.677,
+              "hook": "Even though I think most people in this room would probably agree, a lot of this is security theatre.",
+              "reason": "The user profiles inside a norm look like they are security precautions for drug traffickers and criminals.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0016",
+              "start": 65.68,
+              "end": 92.2,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.67,
+              "hook": "The FBI shuts down Phantom Secure in 2018.",
+              "reason": "The clip introduces a new element (a welder with his mate's company) and sets up the context for the FBI investigation.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.00896701560339718
+            }
+          },
+          "n": 8
+        },
+        "shipped:qwen2.5:0.5b@8": {
+          "preds": [
+            {
+              "id": "c_0084",
+              "start": 504.49,
+              "end": 562.14,
+              "total": 0.66,
+              "judgeTotal": 0.65,
+              "pre": 0.682,
+              "hook": "Criminals now have, you know, WhatsApp, iMessage, but for criminals.",
+              "reason": "The clip introduces the concept of mobile device management (MDM) and its potential for criminals to use it without their knowledge or even.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0034",
+              "start": 115.93,
+              "end": 145.19,
+              "total": 0.607,
+              "judgeTotal": 0.575,
+              "pre": 0.68,
+              "hook": "You take the panel off.",
+              "reason": "The clip introduces a new element (the Australian border force) and sets up tension about missing equipment.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0059",
+              "start": 256.68,
+              "end": 298.58,
+              "total": 0.607,
+              "judgeTotal": 0.575,
+              "pre": 0.68,
+              "hook": "Briefly, what I'm going to talk about, the phone, so that's the software, the hardware, the network itself, and for the first time, the FBI front-end interface.",
+              "reason": "The hook introduces the topic in a way that immediately grabs attention, while the standalone provides context and background information.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0073",
+              "start": 445.78,
+              "end": 501.28,
+              "total": 0.606,
+              "judgeTotal": 0.575,
+              "pre": 0.677,
+              "hook": "Even though I think most people in this room would probably agree, a lot of this is security theatre.",
+              "reason": "The user profiles inside a norm look like they are security precautions for drug traffickers and criminals.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0016",
+              "start": 65.68,
+              "end": 92.2,
+              "total": 0.603,
+              "judgeTotal": 0.575,
+              "pre": 0.67,
+              "hook": "The FBI shuts down Phantom Secure in 2018.",
+              "reason": "The clip introduces a new element (a welder with his mate's company) and sets up the context for the FBI investigation.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.00896701560339718
+            }
+          },
+          "n": 8
+        },
+        "judge:qwen2.5:0.5b@16": {
+          "preds": [
+            {
+              "id": "c_0084",
+              "start": 504.49,
+              "end": 562.14,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.682,
+              "hook": "Criminals now have, you know, WhatsApp, iMessage, but for criminals.",
+              "reason": "The clip introduces the concept of mobile device management (MDM) and its potential for criminals to use it without their knowledge or even.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0116",
+              "start": 640.27,
+              "end": 695.23,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.637,
+              "hook": "You have the classic Alice and Bob sort of chat example, right?",
+              "reason": "The hook introduces the backdoor and its impact on the communication process, making it stand out from other examples.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0152",
+              "start": 752.78,
+              "end": 811.72,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.633,
+              "hook": "You then encrypt it to a key that just the FBI has.",
+              "reason": "The hook introduces the concept of a backdoor and its use for wiretapping, which sets up the context for the subsequent content.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0107",
+              "start": 607,
+              "end": 662.75,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.614,
+              "hook": "The DOJ is never going to admit this.",
+              "reason": "The clip introduces a new concept by introducing the backdoor infrastructure and the way it works.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0034",
+              "start": 115.93,
+              "end": 145.19,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.68,
+              "hook": "You take the panel off.",
+              "reason": "The clip introduces a new element (the Australian border force) and sets up tension about missing equipment.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.030263182850783898
+            }
+          },
+          "n": 16
+        },
+        "shipped:qwen2.5:0.5b@16": {
+          "preds": [
+            {
+              "id": "c_0084",
+              "start": 504.49,
+              "end": 562.14,
+              "total": 0.66,
+              "judgeTotal": 0.65,
+              "pre": 0.682,
+              "hook": "Criminals now have, you know, WhatsApp, iMessage, but for criminals.",
+              "reason": "The clip introduces the concept of mobile device management (MDM) and its potential for criminals to use it without their knowledge or even.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0116",
+              "start": 640.27,
+              "end": 695.23,
+              "total": 0.646,
+              "judgeTotal": 0.65,
+              "pre": 0.637,
+              "hook": "You have the classic Alice and Bob sort of chat example, right?",
+              "reason": "The hook introduces the backdoor and its impact on the communication process, making it stand out from other examples.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0152",
+              "start": 752.78,
+              "end": 811.72,
+              "total": 0.645,
+              "judgeTotal": 0.65,
+              "pre": 0.633,
+              "hook": "You then encrypt it to a key that just the FBI has.",
+              "reason": "The hook introduces the concept of a backdoor and its use for wiretapping, which sets up the context for the subsequent content.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0107",
+              "start": 607,
+              "end": 662.75,
+              "total": 0.639,
+              "judgeTotal": 0.65,
+              "pre": 0.614,
+              "hook": "The DOJ is never going to admit this.",
+              "reason": "The clip introduces a new concept by introducing the backdoor infrastructure and the way it works.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0034",
+              "start": 115.93,
+              "end": 145.19,
+              "total": 0.607,
+              "judgeTotal": 0.575,
+              "pre": 0.68,
+              "hook": "You take the panel off.",
+              "reason": "The clip introduces a new element (the Australian border force) and sets up tension about missing equipment.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.030263182850783898
+            }
+          },
+          "n": 16
+        },
+        "judge:qwen2.5:0.5b@24": {
+          "preds": [
+            {
+              "id": "c_0084",
+              "start": 504.49,
+              "end": 562.14,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.682,
+              "hook": "Criminals now have, you know, WhatsApp, iMessage, but for criminals.",
+              "reason": "The clip introduces the concept of mobile device management (MDM) and its potential for criminals to use it without their knowledge or even.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0116",
+              "start": 640.27,
+              "end": 695.23,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.637,
+              "hook": "You have the classic Alice and Bob sort of chat example, right?",
+              "reason": "The hook introduces the backdoor and its impact on the communication process, making it stand out from other examples.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0149",
+              "start": 745.6,
+              "end": 802.58,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.633,
+              "hook": "You have the new database dump on the far edge.",
+              "reason": "The hook is the first sentence that catches the viewer's attention and immediately sets up the new data transfer process.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0107",
+              "start": 607,
+              "end": 662.75,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.614,
+              "hook": "The DOJ is never going to admit this.",
+              "reason": "The clip introduces a new concept by introducing the backdoor infrastructure and the way it works.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0034",
+              "start": 115.93,
+              "end": 145.19,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.68,
+              "hook": "You take the panel off.",
+              "reason": "The clip introduces a new element (the Australian border force) and sets up tension about missing equipment.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.030263182850783898
+            }
+          },
+          "n": 24
+        },
+        "shipped:qwen2.5:0.5b@24": {
+          "preds": [
+            {
+              "id": "c_0084",
+              "start": 504.49,
+              "end": 562.14,
+              "total": 0.66,
+              "judgeTotal": 0.65,
+              "pre": 0.682,
+              "hook": "Criminals now have, you know, WhatsApp, iMessage, but for criminals.",
+              "reason": "The clip introduces the concept of mobile device management (MDM) and its potential for criminals to use it without their knowledge or even.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0116",
+              "start": 640.27,
+              "end": 695.23,
+              "total": 0.646,
+              "judgeTotal": 0.65,
+              "pre": 0.637,
+              "hook": "You have the classic Alice and Bob sort of chat example, right?",
+              "reason": "The hook introduces the backdoor and its impact on the communication process, making it stand out from other examples.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0149",
+              "start": 745.6,
+              "end": 802.58,
+              "total": 0.645,
+              "judgeTotal": 0.65,
+              "pre": 0.633,
+              "hook": "You have the new database dump on the far edge.",
+              "reason": "The hook is the first sentence that catches the viewer's attention and immediately sets up the new data transfer process.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0107",
+              "start": 607,
+              "end": 662.75,
+              "total": 0.639,
+              "judgeTotal": 0.65,
+              "pre": 0.614,
+              "hook": "The DOJ is never going to admit this.",
+              "reason": "The clip introduces a new concept by introducing the backdoor infrastructure and the way it works.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0034",
+              "start": 115.93,
+              "end": 145.19,
+              "total": 0.607,
+              "judgeTotal": 0.575,
+              "pre": 0.68,
+              "hook": "You take the panel off.",
+              "reason": "The clip introduces a new element (the Australian border force) and sets up tension about missing equipment.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.030263182850783898
+            }
+          },
+          "n": 24
         }
       },
       "timings": {
         "transcribeSec": 306.28,
-        "candidatesSec": 0.037,
+        "candidatesSec": 0.01,
         "nCandidates": 168
       },
-      "judgeRuns": {},
+      "judgeRuns": {
+        "qwen2.5:0.5b@8": {
+          "model": "qwen2.5:0.5b",
+          "n": 8,
+          "size": 8,
+          "wallSec": 95.023,
+          "newCalls": 8,
+          "listwiseSec": null
+        },
+        "qwen2.5:0.5b@16": {
+          "model": "qwen2.5:0.5b",
+          "n": 16,
+          "size": 16,
+          "wallSec": 88.258,
+          "newCalls": 8,
+          "listwiseSec": null
+        },
+        "qwen2.5:0.5b@24": {
+          "model": "qwen2.5:0.5b",
+          "n": 24,
+          "size": 24,
+          "wallSec": 85.746,
+          "newCalls": 9,
+          "listwiseSec": null
+        }
+      },
       "shortlistCeiling": {
         "4": {
           "heatmap": {
@@ -3659,14 +6457,14 @@
       "nShortlist": 8,
       "calls": {
         "qwen2.5:0.5b|window": {
-          "n": 8,
-          "wallSec": 13.661249999999999,
-          "loadSec": 0.28125,
-          "words": 109.875,
-          "promptTokens": 403.375,
-          "promptTokPerSec": 89.74375,
-          "outTokens": 61.25,
-          "outTokPerSec": 12.260000000000002
+          "n": 33,
+          "wallSec": 11.461818181818183,
+          "loadSec": 0.29363636363636364,
+          "words": 110,
+          "promptTokens": 402.3333333333333,
+          "promptTokPerSec": 96.53393939393938,
+          "outTokens": 59.42424242424242,
+          "outTokPerSec": 12.863939393939393
         }
       }
     },
@@ -4289,14 +7087,609 @@
             }
           },
           "n": 114
+        },
+        "judge:qwen2.5:0.5b@8": {
+          "preds": [
+            {
+              "id": "c_0084",
+              "start": 545.14,
+              "end": 600,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.73,
+              "hook": "\"What do you think is the most important aspect of great customer service?\"",
+              "reason": "The hook highlights the patient's need and the doctor's responsibility in making them feel like they are being attended to.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0001",
+              "start": 10,
+              "end": 37,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.74,
+              "hook": ">> I can, can you hear me?",
+              "reason": "The clip starts with a question about the narrator's interest in the job and then directly addresses their concern by mentioning their love,.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0008",
+              "start": 71,
+              "end": 97,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.707,
+              "hook": ">> Have you been working as a nurse at the Washington?",
+              "reason": "The clip introduces the narrator as a nurse at a rural hospital, providing context about their position and setting.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0094",
+              "start": 681.11,
+              "end": 720,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.684,
+              "hook": "I always like to say, \"What can I do for you right now that would help this situation?",
+              "reason": "The clip is about the family member's upset and their desire to help, but they end up switching hospitals due to a hospitalist who does a.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0028",
+              "start": 168.14,
+              "end": 195,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.666,
+              "hook": "We're transitioning into not doing paper orders, and I was like, \"What is this?\"",
+              "reason": "The clip starts with a personal anecdote about transitioning to a rural hospital and the shift in perspective it brings, which immediately p.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.3333333333333333,
+              "p5": 0.2,
+              "r5": 0.2,
+              "miou5": 0.11265038279256279
+            }
+          },
+          "n": 8
+        },
+        "shipped:qwen2.5:0.5b@8": {
+          "preds": [
+            {
+              "id": "c_0084",
+              "start": 545.14,
+              "end": 600,
+              "total": 0.674,
+              "judgeTotal": 0.65,
+              "pre": 0.73,
+              "hook": "\"What do you think is the most important aspect of great customer service?\"",
+              "reason": "The hook highlights the patient's need and the doctor's responsibility in making them feel like they are being attended to.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0001",
+              "start": 10,
+              "end": 37,
+              "total": 0.624,
+              "judgeTotal": 0.575,
+              "pre": 0.74,
+              "hook": ">> I can, can you hear me?",
+              "reason": "The clip starts with a question about the narrator's interest in the job and then directly addresses their concern by mentioning their love,.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0008",
+              "start": 71,
+              "end": 97,
+              "total": 0.615,
+              "judgeTotal": 0.575,
+              "pre": 0.707,
+              "hook": ">> Have you been working as a nurse at the Washington?",
+              "reason": "The clip introduces the narrator as a nurse at a rural hospital, providing context about their position and setting.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0094",
+              "start": 681.11,
+              "end": 720,
+              "total": 0.608,
+              "judgeTotal": 0.575,
+              "pre": 0.684,
+              "hook": "I always like to say, \"What can I do for you right now that would help this situation?",
+              "reason": "The clip is about the family member's upset and their desire to help, but they end up switching hospitals due to a hospitalist who does a.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0028",
+              "start": 168.14,
+              "end": 195,
+              "total": 0.602,
+              "judgeTotal": 0.575,
+              "pre": 0.666,
+              "hook": "We're transitioning into not doing paper orders, and I was like, \"What is this?\"",
+              "reason": "The clip starts with a personal anecdote about transitioning to a rural hospital and the shift in perspective it brings, which immediately p.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.3333333333333333,
+              "p5": 0.2,
+              "r5": 0.2,
+              "miou5": 0.11265038279256279
+            }
+          },
+          "n": 8
+        },
+        "judge:qwen2.5:0.5b@16": {
+          "preds": [
+            {
+              "id": "c_0084",
+              "start": 545.14,
+              "end": 600,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.73,
+              "hook": "\"What do you think is the most important aspect of great customer service?\"",
+              "reason": "The hook highlights the patient's need and the doctor's responsibility in making them feel like they are being attended to.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0070",
+              "start": 401,
+              "end": 454,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.635,
+              "hook": "How do you show people you're listening to that?",
+              "reason": "The clip introduces a patient's perspective on how nurses show they are listening by regurgitating what they say and ensuring understanding.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0050",
+              "start": 312,
+              "end": 369,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.614,
+              "hook": "I'm not afraid to ask questions.",
+              "reason": "The clip provides a clear topic about the author's daily routine, mentioning classes and certifications that they have taken.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0001",
+              "start": 10,
+              "end": 37,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.74,
+              "hook": ">> I can, can you hear me?",
+              "reason": "The clip starts with a question about the narrator's interest in the job and then directly addresses their concern by mentioning their love,.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0008",
+              "start": 71,
+              "end": 97,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.707,
+              "hook": ">> Have you been working as a nurse at the Washington?",
+              "reason": "The clip introduces the narrator as a nurse at a rural hospital, providing context about their position and setting.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.3333333333333333,
+              "p5": 0.2,
+              "r5": 0.2,
+              "miou5": 0.23811673340577508
+            }
+          },
+          "n": 16
+        },
+        "shipped:qwen2.5:0.5b@16": {
+          "preds": [
+            {
+              "id": "c_0084",
+              "start": 545.14,
+              "end": 600,
+              "total": 0.674,
+              "judgeTotal": 0.65,
+              "pre": 0.73,
+              "hook": "\"What do you think is the most important aspect of great customer service?\"",
+              "reason": "The hook highlights the patient's need and the doctor's responsibility in making them feel like they are being attended to.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0070",
+              "start": 401,
+              "end": 454,
+              "total": 0.645,
+              "judgeTotal": 0.65,
+              "pre": 0.635,
+              "hook": "How do you show people you're listening to that?",
+              "reason": "The clip introduces a patient's perspective on how nurses show they are listening by regurgitating what they say and ensuring understanding.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0050",
+              "start": 312,
+              "end": 369,
+              "total": 0.639,
+              "judgeTotal": 0.65,
+              "pre": 0.614,
+              "hook": "I'm not afraid to ask questions.",
+              "reason": "The clip provides a clear topic about the author's daily routine, mentioning classes and certifications that they have taken.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0001",
+              "start": 10,
+              "end": 37,
+              "total": 0.624,
+              "judgeTotal": 0.575,
+              "pre": 0.74,
+              "hook": ">> I can, can you hear me?",
+              "reason": "The clip starts with a question about the narrator's interest in the job and then directly addresses their concern by mentioning their love,.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0008",
+              "start": 71,
+              "end": 97,
+              "total": 0.615,
+              "judgeTotal": 0.575,
+              "pre": 0.707,
+              "hook": ">> Have you been working as a nurse at the Washington?",
+              "reason": "The clip introduces the narrator as a nurse at a rural hospital, providing context about their position and setting.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.3333333333333333,
+              "p5": 0.2,
+              "r5": 0.2,
+              "miou5": 0.23811673340577508
+            }
+          },
+          "n": 16
+        },
+        "judge:qwen2.5:0.5b@24": {
+          "preds": [
+            {
+              "id": "c_0084",
+              "start": 545.14,
+              "end": 600,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.73,
+              "hook": "\"What do you think is the most important aspect of great customer service?\"",
+              "reason": "The hook highlights the patient's need and the doctor's responsibility in making them feel like they are being attended to.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0070",
+              "start": 401,
+              "end": 454,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.635,
+              "hook": "How do you show people you're listening to that?",
+              "reason": "The clip introduces a patient's perspective on how nurses show they are listening by regurgitating what they say and ensuring understanding.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0050",
+              "start": 312,
+              "end": 369,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.614,
+              "hook": "I'm not afraid to ask questions.",
+              "reason": "The clip provides a clear topic about the author's daily routine, mentioning classes and certifications that they have taken.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0001",
+              "start": 10,
+              "end": 37,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.74,
+              "hook": ">> I can, can you hear me?",
+              "reason": "The clip starts with a question about the narrator's interest in the job and then directly addresses their concern by mentioning their love,.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0008",
+              "start": 71,
+              "end": 97,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.707,
+              "hook": ">> Have you been working as a nurse at the Washington?",
+              "reason": "The clip introduces the narrator as a nurse at a rural hospital, providing context about their position and setting.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.3333333333333333,
+              "p5": 0.2,
+              "r5": 0.2,
+              "miou5": 0.23811673340577508
+            }
+          },
+          "n": 24
+        },
+        "shipped:qwen2.5:0.5b@24": {
+          "preds": [
+            {
+              "id": "c_0084",
+              "start": 545.14,
+              "end": 600,
+              "total": 0.674,
+              "judgeTotal": 0.65,
+              "pre": 0.73,
+              "hook": "\"What do you think is the most important aspect of great customer service?\"",
+              "reason": "The hook highlights the patient's need and the doctor's responsibility in making them feel like they are being attended to.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0070",
+              "start": 401,
+              "end": 454,
+              "total": 0.645,
+              "judgeTotal": 0.65,
+              "pre": 0.635,
+              "hook": "How do you show people you're listening to that?",
+              "reason": "The clip introduces a patient's perspective on how nurses show they are listening by regurgitating what they say and ensuring understanding.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0050",
+              "start": 312,
+              "end": 369,
+              "total": 0.639,
+              "judgeTotal": 0.65,
+              "pre": 0.614,
+              "hook": "I'm not afraid to ask questions.",
+              "reason": "The clip provides a clear topic about the author's daily routine, mentioning classes and certifications that they have taken.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0001",
+              "start": 10,
+              "end": 37,
+              "total": 0.624,
+              "judgeTotal": 0.575,
+              "pre": 0.74,
+              "hook": ">> I can, can you hear me?",
+              "reason": "The clip starts with a question about the narrator's interest in the job and then directly addresses their concern by mentioning their love,.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0008",
+              "start": 71,
+              "end": 97,
+              "total": 0.615,
+              "judgeTotal": 0.575,
+              "pre": 0.707,
+              "hook": ">> Have you been working as a nurse at the Washington?",
+              "reason": "The clip introduces the narrator as a nurse at a rural hospital, providing context about their position and setting.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 1,
+              "hit5": 1,
+              "p3": 0.3333333333333333,
+              "p5": 0.2,
+              "r5": 0.2,
+              "miou5": 0.23811673340577508
+            }
+          },
+          "n": 24
         }
       },
       "timings": {
         "transcribeSec": 179.985,
-        "candidatesSec": 0.011,
+        "candidatesSec": 0.01,
         "nCandidates": 114
       },
-      "judgeRuns": {},
+      "judgeRuns": {
+        "qwen2.5:0.5b@8": {
+          "model": "qwen2.5:0.5b",
+          "n": 8,
+          "size": 8,
+          "wallSec": 136.44,
+          "newCalls": 8,
+          "listwiseSec": null
+        },
+        "qwen2.5:0.5b@16": {
+          "model": "qwen2.5:0.5b",
+          "n": 16,
+          "size": 16,
+          "wallSec": 105.558,
+          "newCalls": 8,
+          "listwiseSec": null
+        },
+        "qwen2.5:0.5b@24": {
+          "model": "qwen2.5:0.5b",
+          "n": 24,
+          "size": 24,
+          "wallSec": 65.569,
+          "newCalls": 8,
+          "listwiseSec": null
+        }
+      },
       "shortlistCeiling": {
         "4": {
           "heatmap": {
@@ -4372,14 +7765,14 @@
       "nShortlist": 8,
       "calls": {
         "qwen2.5:0.5b|window": {
-          "n": 8,
-          "wallSec": 20.11875,
-          "loadSec": 0.34750000000000003,
-          "words": 109.375,
-          "promptTokens": 396.5,
-          "promptTokPerSec": 46.808749999999996,
-          "outTokens": 60.25,
-          "outTokPerSec": 8.35125
+          "n": 32,
+          "wallSec": 14.636249999999999,
+          "loadSec": 0.338125,
+          "words": 110.0625,
+          "promptTokens": 398.84375,
+          "promptTokPerSec": 75.78687499999998,
+          "outTokens": 59.96875,
+          "outTokPerSec": 12.164687500000001
         }
       }
     },
@@ -5002,14 +8395,609 @@
             }
           },
           "n": 218
+        },
+        "judge:qwen2.5:0.5b@8": {
+          "preds": [
+            {
+              "id": "c_0123",
+              "start": 600.27,
+              "end": 649.12,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.81,
+              "hook": "How clear are they?\"",
+              "reason": "The clip uses clear pronunciation and proper intonation to convey meaning effectively, making it a strong point of clarity.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0209",
+              "start": 978.08,
+              "end": 1033.2,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.724,
+              "hook": "I think I only heard one or two small slips.",
+              "reason": "The clip is about the natural flow of language and vocabulary in English, which is excellent for native speakers.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0198",
+              "start": 942.96,
+              "end": 981.52,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.71,
+              "hook": "Coherence is the only area that I'm really, really concerned about.",
+              "reason": "The clip is clear and well-structured with a focus on the negative aspects of the conversation.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0172",
+              "start": 822.72,
+              "end": 860.08,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.75,
+              "hook": "\"How often do you every day?\"",
+              "reason": "The clip provides a clear topic but no tension, making it a good starting point for the next part of the video.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0177",
+              "start": 848.36,
+              "end": 888.64,
+              "total": 0.575,
+              "judgeTotal": 0.575,
+              "pre": 0.75,
+              "hook": "Just make sure that you answer every question exactly how they want it.",
+              "reason": "The clip shows the examiner being cautious and not taking risks on exam day.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.0758345428156748
+            }
+          },
+          "n": 8
+        },
+        "shipped:qwen2.5:0.5b@8": {
+          "preds": [
+            {
+              "id": "c_0123",
+              "start": 600.27,
+              "end": 649.12,
+              "total": 0.698,
+              "judgeTotal": 0.65,
+              "pre": 0.81,
+              "hook": "How clear are they?\"",
+              "reason": "The clip uses clear pronunciation and proper intonation to convey meaning effectively, making it a strong point of clarity.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0209",
+              "start": 978.08,
+              "end": 1033.2,
+              "total": 0.672,
+              "judgeTotal": 0.65,
+              "pre": 0.724,
+              "hook": "I think I only heard one or two small slips.",
+              "reason": "The clip is about the natural flow of language and vocabulary in English, which is excellent for native speakers.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0198",
+              "start": 942.96,
+              "end": 981.52,
+              "total": 0.668,
+              "judgeTotal": 0.65,
+              "pre": 0.71,
+              "hook": "Coherence is the only area that I'm really, really concerned about.",
+              "reason": "The clip is clear and well-structured with a focus on the negative aspects of the conversation.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0172",
+              "start": 822.72,
+              "end": 860.08,
+              "total": 0.627,
+              "judgeTotal": 0.575,
+              "pre": 0.75,
+              "hook": "\"How often do you every day?\"",
+              "reason": "The clip provides a clear topic but no tension, making it a good starting point for the next part of the video.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            },
+            {
+              "id": "c_0177",
+              "start": 848.36,
+              "end": 888.64,
+              "total": 0.627,
+              "judgeTotal": 0.575,
+              "pre": 0.75,
+              "hook": "Just make sure that you answer every question exactly how they want it.",
+              "reason": "The clip shows the examiner being cautious and not taking risks on exam day.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 3
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.0758345428156748
+            }
+          },
+          "n": 8
+        },
+        "judge:qwen2.5:0.5b@16": {
+          "preds": [
+            {
+              "id": "c_0186",
+              "start": 897.28,
+              "end": 936.56,
+              "total": 0.7,
+              "judgeTotal": 0.7,
+              "pre": 0.7,
+              "hook": "Can they speak at length about topics?",
+              "reason": "The clip starts with a filler sentence that sets up the next part and provides context for what follows.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 1
+              }
+            },
+            {
+              "id": "c_0123",
+              "start": 600.27,
+              "end": 649.12,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.81,
+              "hook": "How clear are they?\"",
+              "reason": "The clip uses clear pronunciation and proper intonation to convey meaning effectively, making it a strong point of clarity.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0209",
+              "start": 978.08,
+              "end": 1033.2,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.724,
+              "hook": "I think I only heard one or two small slips.",
+              "reason": "The clip is about the natural flow of language and vocabulary in English, which is excellent for native speakers.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0198",
+              "start": 942.96,
+              "end": 981.52,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.71,
+              "hook": "Coherence is the only area that I'm really, really concerned about.",
+              "reason": "The clip is clear and well-structured with a focus on the negative aspects of the conversation.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0011",
+              "start": 26.87,
+              "end": 84.16,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.694,
+              "hook": "Is music an important subject in schools in your country?",
+              "reason": "The clip starts with a personal anecdote about the importance of music in schools, which immediately sets up the topic and draws attention.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.0758345428156748
+            }
+          },
+          "n": 16
+        },
+        "shipped:qwen2.5:0.5b@16": {
+          "preds": [
+            {
+              "id": "c_0186",
+              "start": 897.28,
+              "end": 936.56,
+              "total": 0.7,
+              "judgeTotal": 0.7,
+              "pre": 0.7,
+              "hook": "Can they speak at length about topics?",
+              "reason": "The clip starts with a filler sentence that sets up the next part and provides context for what follows.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 1
+              }
+            },
+            {
+              "id": "c_0123",
+              "start": 600.27,
+              "end": 649.12,
+              "total": 0.698,
+              "judgeTotal": 0.65,
+              "pre": 0.81,
+              "hook": "How clear are they?\"",
+              "reason": "The clip uses clear pronunciation and proper intonation to convey meaning effectively, making it a strong point of clarity.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0209",
+              "start": 978.08,
+              "end": 1033.2,
+              "total": 0.672,
+              "judgeTotal": 0.65,
+              "pre": 0.724,
+              "hook": "I think I only heard one or two small slips.",
+              "reason": "The clip is about the natural flow of language and vocabulary in English, which is excellent for native speakers.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0198",
+              "start": 942.96,
+              "end": 981.52,
+              "total": 0.668,
+              "judgeTotal": 0.65,
+              "pre": 0.71,
+              "hook": "Coherence is the only area that I'm really, really concerned about.",
+              "reason": "The clip is clear and well-structured with a focus on the negative aspects of the conversation.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0011",
+              "start": 26.87,
+              "end": 84.16,
+              "total": 0.663,
+              "judgeTotal": 0.65,
+              "pre": 0.694,
+              "hook": "Is music an important subject in schools in your country?",
+              "reason": "The clip starts with a personal anecdote about the importance of music in schools, which immediately sets up the topic and draws attention.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.0758345428156748
+            }
+          },
+          "n": 16
+        },
+        "judge:qwen2.5:0.5b@24": {
+          "preds": [
+            {
+              "id": "c_0186",
+              "start": 897.28,
+              "end": 936.56,
+              "total": 0.7,
+              "judgeTotal": 0.7,
+              "pre": 0.7,
+              "hook": "Can they speak at length about topics?",
+              "reason": "The clip starts with a filler sentence that sets up the next part and provides context for what follows.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 1
+              }
+            },
+            {
+              "id": "c_0123",
+              "start": 600.27,
+              "end": 649.12,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.81,
+              "hook": "How clear are they?\"",
+              "reason": "The clip uses clear pronunciation and proper intonation to convey meaning effectively, making it a strong point of clarity.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0209",
+              "start": 978.08,
+              "end": 1033.2,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.724,
+              "hook": "I think I only heard one or two small slips.",
+              "reason": "The clip is about the natural flow of language and vocabulary in English, which is excellent for native speakers.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0198",
+              "start": 942.96,
+              "end": 981.52,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.71,
+              "hook": "Coherence is the only area that I'm really, really concerned about.",
+              "reason": "The clip is clear and well-structured with a focus on the negative aspects of the conversation.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0011",
+              "start": 26.87,
+              "end": 84.16,
+              "total": 0.65,
+              "judgeTotal": 0.65,
+              "pre": 0.694,
+              "hook": "Is music an important subject in schools in your country?",
+              "reason": "The clip starts with a personal anecdote about the importance of music in schools, which immediately sets up the topic and draws attention.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.0758345428156748
+            }
+          },
+          "n": 24
+        },
+        "shipped:qwen2.5:0.5b@24": {
+          "preds": [
+            {
+              "id": "c_0186",
+              "start": 897.28,
+              "end": 936.56,
+              "total": 0.7,
+              "judgeTotal": 0.7,
+              "pre": 0.7,
+              "hook": "Can they speak at length about topics?",
+              "reason": "The clip starts with a filler sentence that sets up the next part and provides context for what follows.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 5,
+                "clarity": 1
+              }
+            },
+            {
+              "id": "c_0123",
+              "start": 600.27,
+              "end": 649.12,
+              "total": 0.698,
+              "judgeTotal": 0.65,
+              "pre": 0.81,
+              "hook": "How clear are they?\"",
+              "reason": "The clip uses clear pronunciation and proper intonation to convey meaning effectively, making it a strong point of clarity.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0209",
+              "start": 978.08,
+              "end": 1033.2,
+              "total": 0.672,
+              "judgeTotal": 0.65,
+              "pre": 0.724,
+              "hook": "I think I only heard one or two small slips.",
+              "reason": "The clip is about the natural flow of language and vocabulary in English, which is excellent for native speakers.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0198",
+              "start": 942.96,
+              "end": 981.52,
+              "total": 0.668,
+              "judgeTotal": 0.65,
+              "pre": 0.71,
+              "hook": "Coherence is the only area that I'm really, really concerned about.",
+              "reason": "The clip is clear and well-structured with a focus on the negative aspects of the conversation.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            },
+            {
+              "id": "c_0011",
+              "start": 26.87,
+              "end": 84.16,
+              "total": 0.663,
+              "judgeTotal": 0.65,
+              "pre": 0.694,
+              "hook": "Is music an important subject in schools in your country?",
+              "reason": "The clip starts with a personal anecdote about the importance of music in schools, which immediately sets up the topic and draws attention.",
+              "scores": {
+                "hook": 5,
+                "standalone": 3,
+                "payoff": 1,
+                "clarity": 5
+              }
+            }
+          ],
+          "metrics": {
+            "heatmap": {
+              "hit3": 0,
+              "hit5": 0,
+              "p3": 0,
+              "p5": 0,
+              "r5": 0,
+              "miou5": 0.0758345428156748
+            }
+          },
+          "n": 24
         }
       },
       "timings": {
         "transcribeSec": 267.057,
-        "candidatesSec": 0.011,
+        "candidatesSec": 0.02,
         "nCandidates": 218
       },
-      "judgeRuns": {},
+      "judgeRuns": {
+        "qwen2.5:0.5b@8": {
+          "model": "qwen2.5:0.5b",
+          "n": 8,
+          "size": 8,
+          "wallSec": 113.689,
+          "newCalls": 8,
+          "listwiseSec": null
+        },
+        "qwen2.5:0.5b@16": {
+          "model": "qwen2.5:0.5b",
+          "n": 16,
+          "size": 16,
+          "wallSec": 67.672,
+          "newCalls": 8,
+          "listwiseSec": null
+        },
+        "qwen2.5:0.5b@24": {
+          "model": "qwen2.5:0.5b",
+          "n": 24,
+          "size": 24,
+          "wallSec": 82.34,
+          "newCalls": 8,
+          "listwiseSec": null
+        }
+      },
       "shortlistCeiling": {
         "4": {
           "heatmap": {
@@ -5085,14 +9073,14 @@
       "nShortlist": 8,
       "calls": {
         "qwen2.5:0.5b|window": {
-          "n": 8,
-          "wallSec": 19.982499999999998,
-          "loadSec": 0.39,
-          "words": 114.5,
-          "promptTokens": 407.25,
-          "promptTokPerSec": 41.792500000000004,
-          "outTokens": 59.625,
-          "outTokPerSec": 8.713750000000001
+          "n": 32,
+          "wallSec": 13.234375000000002,
+          "loadSec": 0.32,
+          "words": 113.75,
+          "promptTokens": 407.125,
+          "promptTokPerSec": 82.40781249999999,
+          "outTokens": 60.3125,
+          "outTokPerSec": 12.91875
         }
       }
     }
