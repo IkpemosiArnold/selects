@@ -7,12 +7,16 @@
 // a request that is refused for a feature is retried once without it, and the answer is
 // read with the same tolerant parser the in-browser models use.
 
+import { schemaHint } from "./tasks.mjs";
+
 export const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
 /** The request body for messages [{ role: "system" | "user", content }]. */
 export function geminiBody(messages, { schema, maxTokens = 256, temperature = 0.2, features = {} } = {}) {
   const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
-  const user = messages.filter((m) => m.role !== "system").map((m) => m.content).join("\n\n");
+  let user = messages.filter((m) => m.role !== "system").map((m) => m.content).join("\n\n");
+  // without JSON mode the model only knows the shape from the prompt
+  if (features.json === false && schema) user += `\n\n${schemaHint(schema)}`;
   const useSystem = features.system !== false && system;
   const body = {
     contents: [{ role: "user", parts: [{ text: useSystem || !system ? user : `${system}\n\n${user}` }] }],

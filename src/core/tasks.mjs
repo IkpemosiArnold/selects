@@ -92,3 +92,25 @@ export function slimTask(task) {
   if (task.kind === "listwise") return { kind: "listwise", top: task.top.map(c) };
   return { kind: task.kind, candidate: c(task.candidate) };
 }
+
+/**
+ * A one-line description of the answer's JSON shape, appended to the user message for
+ * runtimes that cannot force a schema (MediaPipe in the browser, or a Gemini model that
+ * refuses JSON mode). Example: {"hook": 1-5, ..., "reason": "text"}.
+ */
+export function schemaHint(schema) {
+  const show = (s) => {
+    if (!s) return '"text"';
+    if (s.type === "integer") return s.minimum != null && s.maximum != null ? `${s.minimum}-${s.maximum}` : "0";
+    if (s.type === "string") return s.enum ? s.enum.map((e) => `"${e}"`).join(" or ") : '"text"';
+    if (s.type === "array") return `[${show(s.items)}, ...]`;
+    if (s.type === "object") return `{${Object.entries(s.properties || {}).map(([k, v]) => `"${k}": ${show(v)}`).join(", ")}}`;
+    return "null";
+  };
+  return `Answer with only this JSON, nothing before or after it: ${show(schema)}`;
+}
+
+/** The task's messages with the JSON-shape line added to the user turn. */
+export function withSchemaHint(messages, schema) {
+  return messages.map((m, i) => (i === messages.length - 1 && m.role === "user" ? { ...m, content: `${m.content}\n\n${schemaHint(schema)}` } : m));
+}

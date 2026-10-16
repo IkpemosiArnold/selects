@@ -143,6 +143,41 @@ export function paintCaption(ctx, chunkWords, highlightIdx, { width, caption: c,
   }
 }
 
+/**
+ * When each caption image is on screen, for a clip of clipDur seconds: a list of
+ * { cue, word, dur } in order, where cue = -1 is a blank gap. The bold style shows one
+ * image per spoken word (its cue, that word highlighted) until the next word starts; the
+ * subtitle style one image per cue (word = null). A cue is held until the next one or
+ * 0.4 s after its last word. render.mjs turns this into an ffconcat list of PNGs; the
+ * browser build draws the same images on the frames.
+ */
+export function captionTimeline(cues, clipDur, { perWord = true } = {}) {
+  const entries = [];
+  let t = 0;
+  const push = (cue, word, until) => {
+    const d = +(until - t).toFixed(3);
+    if (d <= 0.001) return;
+    entries.push({ cue, word, dur: d });
+    t = until;
+  };
+  cues.forEach((ch, ci) => {
+    if (!ch.words?.length) return;
+    const nextStart = cues[ci + 1]?.s ?? clipDur;
+    const holdUntil = Math.min(nextStart, ch.e + 0.4, clipDur);
+    if (ch.s > t) push(-1, null, Math.min(ch.s, clipDur));
+    if (!perWord) {
+      push(ci, null, Math.max(t, holdUntil));
+      return;
+    }
+    ch.words.forEach((w, wi) => {
+      const until = wi < ch.words.length - 1 ? Math.max(t, ch.words[wi + 1].s) : Math.max(t, holdUntil);
+      push(ci, wi, Math.min(until, clipDur));
+    });
+  });
+  if (t < clipDur) push(-1, null, clipDur);
+  return entries;
+}
+
 /** Where the caption image sits: its top edge, so its bottom stays above the platform UI. */
 export const captionTop = (H, c) => Math.round(H * c.bottomLimit - c.boxHeight);
 

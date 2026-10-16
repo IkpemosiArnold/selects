@@ -10,13 +10,13 @@ import { blurBoxes, blurFilter } from "./blur.mjs";
 import { clipCues, cuesFromWords, loadCaptions, toSrt, toVtt } from "./captions.mjs";
 import { FONT_PATH, FONT_FALLBACK_PATH, jobsDir } from "./config.mjs";
 import { speechOnly } from "./nonspeech.mjs";
-import { captionOptions, clipWords, motionSize, paintCaption, PRESETS, reframeByShape, reframeFromMotion, workingSize } from "./layout.mjs";
+import { captionOptions, captionTimeline, clipWords, motionSize, paintCaption, PRESETS, reframeByShape, reframeFromMotion, workingSize } from "./layout.mjs";
 import { uprightSize } from "./probe.mjs";
 import { readJson, run } from "./util.mjs";
 
 // presets, caption layout and the reframe decision have no Node imports (layout.mjs), so the
 // browser build draws the same captions; they are re-exported here for older callers
-export { PRESETS, captionOptions, clipWords, captionChunks, layoutCaption, paintCaption, captionTop, workingSize, reframeByShape, reframeFromMotion, motionSize } from "./layout.mjs";
+export { PRESETS, captionOptions, clipWords, captionChunks, layoutCaption, paintCaption, captionTop, captionTimeline, workingSize, reframeByShape, reframeFromMotion, motionSize } from "./layout.mjs";
 
 let fontReady = false;
 const FONT_FAMILY = "Selects Caption";
@@ -48,37 +48,16 @@ export function drawCaption(chunkWords, highlightIdx, opts) {
  */
 export function buildCaptionTrack(cues, clipDur, dir, opts) {
   fs.mkdirSync(dir, { recursive: true });
-  const perWord = opts.caption.style !== "subtitle";
   const blank = path.join(dir, "blank.png");
   fs.writeFileSync(blank, drawCaption([], -1, opts));
-  const entries = []; // { file, dur }
-  let t = 0;
-  let n = 0;
-  const push = (file, until) => {
-    const d = +(until - t).toFixed(3);
-    if (d <= 0.001) return;
-    entries.push({ file, dur: d });
-    t = until;
-  };
-  cues.forEach((ch, ci) => {
-    if (!ch.words?.length) return;
-    const nextStart = cues[ci + 1]?.s ?? clipDur;
-    const holdUntil = Math.min(nextStart, ch.e + 0.4, clipDur);
-    if (ch.s > t) push(blank, Math.min(ch.s, clipDur));
-    if (!perWord) {
-      const file = path.join(dir, `cap-${String(n++).padStart(4, "0")}.png`);
-      fs.writeFileSync(file, drawCaption(ch.words, null, opts));
-      push(file, Math.max(t, holdUntil));
-      return;
-    }
-    ch.words.forEach((w, wi) => {
-      const file = path.join(dir, `cap-${String(n++).padStart(4, "0")}.png`);
-      fs.writeFileSync(file, drawCaption(ch.words, wi, opts));
-      const until = wi < ch.words.length - 1 ? Math.max(t, ch.words[wi + 1].s) : Math.max(t, holdUntil);
-      push(file, Math.min(until, clipDur));
-    });
+  // the timing lives in layout.mjs, so the browser build shows each word for the same span
+  const entries = captionTimeline(cues, clipDur, { perWord: opts.caption.style !== "subtitle" }).map((e, n) => {
+    if (e.cue < 0) return { file: blank, dur: e.dur };
+    const file = path.join(dir, `cap-${String(n).padStart(4, "0")}.png`);
+    fs.writeFileSync(file, drawCaption(cues[e.cue].words, e.word, opts));
+    return { file, dur: e.dur };
   });
-  if (t < clipDur) push(blank, clipDur);
+  const n = entries.filter((e) => e.file !== blank).length;
   const last = entries[entries.length - 1]?.file ?? blank;
   const lines = ["ffconcat version 1.0"];
   for (const e of entries) lines.push(`file '${e.file.replace(/'/g, "'\\''")}'`, `duration ${e.dur}`);
