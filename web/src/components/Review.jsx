@@ -45,6 +45,19 @@ export default function Review({ job, words, faces, onCandidate, onRender, onRet
     if (!blurOpen) setArmed(false);
   }, [blurOpen]);
   const [captionsOn, setCaptionsOn] = useState(job.settings?.captions !== false);
+  // The preview shows the reviewed captions (captions.json), so a fix made in
+  // the caption review shows up here too. Falls back to the raw words.
+  const [capWords, setCapWords] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    api
+      .getCaptions(job.id)
+      .then((c) => alive && c?.cues && setCapWords(c.cues.flatMap((q) => q.words || [])))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [job.id]);
   const shellRef = useRef(null);
   const footRef = useRef(null);
   const selRef = useRef(sel);
@@ -196,7 +209,7 @@ export default function Review({ job, words, faces, onCandidate, onRender, onRet
           <div className="bay-preview">
             <Preview
               job={job}
-              words={words}
+              words={capWords?.length ? capWords : words}
               candidate={sel}
               player={player}
               blur={{ spec: blurSpec, change: blurChange }}

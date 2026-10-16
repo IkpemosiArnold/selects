@@ -35,6 +35,7 @@
 .lq-hint { font-size: var(--t-13); color: var(--ink-2); max-width: 80ch; }
 .lq-toggle { min-height: 32px; padding: 0 8px; margin-left: -8px; font-size: var(--t-13); }
 .lq-strip .lq-toggle { margin-left: 0; }
+.lq-q .lq-toggle { margin-left: -8px; }
 .lq-form { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: flex-end; width: 100%; }
 .lq-form .field { min-width: 180px; flex: 0 1 240px; }
 .lq-form .input { min-height: 40px; font-size: var(--t-15); }
@@ -47,14 +48,14 @@
 .lq-strip .lq-confirm { flex-basis: 100%; }
 
 /* ---------- new job: mode and language ---------- */
-.mode-row { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; margin-top: 18px; }
+.mode-row { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; margin: 4px 0 6px; }
 .seg-light { border-color: var(--line-2); }
 .seg-light .seg-btn { color: var(--ink-2); min-height: 32px; padding: 0 14px; font-size: var(--t-13); }
 .seg-light .seg-btn.is-on { background: var(--ink); color: var(--table); }
 .seg-light .seg-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .lang-field { display: inline-flex; align-items: center; gap: 8px; font-size: var(--t-15); }
 .lang-field .input { width: auto; min-height: 36px; font-size: var(--t-15); }
-.caption-brief { line-height: 1.6; color: var(--ink); max-width: 60ch; }
+.caption-brief { line-height: 1.6; color: var(--ink); max-width: 60ch; margin-top: 10px; }
 
 /* ---------- caption studio frame ---------- */
 .studio-shell { min-height: 100dvh; display: grid; grid-template-rows: auto auto 1fr auto; grid-template-columns: minmax(0, 1fr); }
@@ -250,4 +251,12 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .tab, .cue-input { transition: none; }
+}
+
+/* the review action bar gained two controls: keep it on one row on laptops */
+@media (max-width: 1520px) {
+  .review-shell .ab-keys span:nth-child(n + 5) { display: none; }
+}
+@media (max-width: 1280px) {
+  .review-shell .ab-keys { display: none; }
 }

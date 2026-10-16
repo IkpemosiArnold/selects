@@ -218,7 +218,8 @@ export default function CaptionStudio({ job, words, mode, faces, captionsVersion
 
   useEffect(() => {
     player.setWindow(0, dur, { seek: false });
-  }, [player, dur]);
+    if (!isCaption && approved.length) player.seek(approved[0].start);
+  }, [player, dur]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const flash = useCallback((msg, kind = "ok") => setToast({ msg, kind, at: Date.now() }), []);
   useEffect(() => {
@@ -305,9 +306,7 @@ export default function CaptionStudio({ job, words, mode, faces, captionsVersion
 
   return (
     <div className="studio-shell">
-      <Masthead job={job}>
-        {!isCaption && <a className="btn btn-quiet" href={`#/job/${job.id}/review`}>Back to clips</a>}
-      </Masthead>
+      <Masthead job={job} />
       <LanguageQuality job={job} variant="strip" onRetranscribe={onRetranscribe} />
       <main className="studio">
         <h1 className="sr-only">{isCaption ? "Caption the video" : "Review captions"} for {job.source?.name}</h1>
