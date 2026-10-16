@@ -174,3 +174,42 @@ test("GET a clip's posting kit with absolute paths", async () => {
   assert.equal(r.json.file, path.join(jobDir(j.id), "clips", `${c.id}.mp4`));
   assert.equal((await req("GET", `/api/jobs/${j.id}/candidates/${j.candidates[1].id}/kit`)).status, 404);
 });
+
+test("captions: get, edit keeping timings, SRT and VTT downloads, reset", async () => {
+  const g = await req("GET", `/api/jobs/${job.id}/captions`);
+  assert.equal(g.status, 200);
+  assert.ok(g.json.cues.length > 10);
+  assert.equal(g.json.lowP, 0.5);
+  const cues = g.json.cues.map((c) => ({ s: c.s, e: c.e, text: c.text }));
+  cues[0].text = "Edited " + cues[0].text.split(" ").slice(1).join(" ");
+  const put = await req("PUT", `/api/jobs/${job.id}/captions`, { body: { cues } });
+  assert.equal(put.status, 200);
+  assert.equal(put.json.edited, true);
+  assert.equal(put.json.cues[0].words[0].w, "Edited");
+  assert.equal(put.json.cues[0].words[0].s, g.json.cues[0].words[0].s);
+  const srt = await req("GET", `/api/jobs/${job.id}/captions.srt`);
+  assert.match(srt.text, /^1\n00:00:00,000 --> .*\nEdited /);
+  const vtt = await req("GET", `/api/jobs/${job.id}/captions.vtt`);
+  assert.match(vtt.text, /^WEBVTT/);
+  const bad = await req("PUT", `/api/jobs/${job.id}/captions`, { body: { nope: 1 } });
+  assert.equal(bad.status, 400);
+  const reset = await req("POST", `/api/jobs/${job.id}/captions/reset`);
+  assert.equal(reset.json.edited, false);
+});
+
+test("blur is validated on clips and job settings", async () => {
+  const cid = (await req("GET", `/api/jobs/${job.id}`)).json.candidates[0].id;
+  const ok = await req("PATCH", `/api/jobs/${job.id}/candidates/${cid}`, { body: { blur: { faces: { mode: "others" }, regions: [{ x: 0.1, y: 0.1, w: 0.2, h: 0.2, start: null, end: null }] } } });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.json.blur.faces.mode, "others");
+  const bad = await req("PATCH", `/api/jobs/${job.id}/candidates/${cid}`, { body: { blur: { regions: [{ x: 2, y: 0, w: 1, h: 1 }] } } });
+  assert.equal(bad.status, 400);
+  const js = await req("PATCH", `/api/jobs/${job.id}`, { body: { settings: { blur: { faces: { mode: "all" } }, captions: false } } });
+  assert.equal(js.status, 200);
+  assert.equal(js.json.settings.blur.faces.mode, "all");
+  assert.equal(js.json.settings.captions, false);
+  const lang = await req("POST", `/api/jobs/${job.id}/language`, { body: { language: "not a code" } });
+  assert.equal(lang.status, 400);
+  const faces = await req("GET", `/api/jobs/${job.id}/faces`);
+  assert.equal(faces.status, 404);
+});

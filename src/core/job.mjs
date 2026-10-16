@@ -197,7 +197,13 @@ export function resumeJob(id, opts = {}) {
  * Transcribe again with another language or model (the one-click override). Clears the
  * language decision, the transcript, the captions and everything picked from them.
  */
-export function retranscribe(id, { language, asrModel, asrPrompt, asrPreprocess } = {}, opts = {}) {
+export function retranscribe(id, patch = {}, opts = {}) {
+  resetTranscript(id, patch);
+  return runJob(id, opts);
+}
+
+/** The reset half of retranscribe, for callers that run the job through the queue. */
+export function resetTranscript(id, { language, asrModel, asrPrompt, asrPreprocess } = {}) {
   if (running.has(id)) {
     const err = new Error("This job is still running. Wait for it to finish, then change the language.");
     err.status = 409;
@@ -220,7 +226,7 @@ export function retranscribe(id, { language, asrModel, asrPrompt, asrPreprocess 
   job.stage = "queued";
   saveJob(job);
   emit(id, "job", job);
-  return runJob(id, opts);
+  return job;
 }
 
 /** Run face detection for a job (macOS) and keep the tracks in faces.json. */

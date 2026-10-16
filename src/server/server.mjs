@@ -7,7 +7,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { REPO, ollamaModels, ollamaUrl, selectsHome, whisperBin, whisperModel } from "../core/config.mjs";
 import { measuredSpeeds } from "../core/judge.mjs";
-import { createJob, isRunning, jobDir, jobEvents, listJobs, loadJob, loadWords, updateCandidate, updateJobSettings } from "../core/job.mjs";
+import { editCaptions, loadCaptions, resetCaptions, toSrt, toVtt } from "../core/captions.mjs";
+import { createJob, detectJobFaces, isRunning, jobDir, jobEvents, listJobs, loadJob, loadWords, resetTranscript, saveJob, updateCandidate, updateJobSettings } from "../core/job.mjs";
+import { LOW_P } from "../core/quality.mjs";
+import { hwaccelArgs } from "../core/render.mjs";
 import { drainQueue, enqueue, queueState } from "../core/queue.mjs";
 import { diskFreeGb } from "../core/util.mjs";
 
@@ -36,6 +39,7 @@ const MIME = {
   ".webm": "video/webm",
   ".mkv": "video/x-matroska",
   ".srt": "application/x-subrip; charset=utf-8",
+  ".vtt": "text/vtt; charset=utf-8",
   ".txt": "text/plain; charset=utf-8",
 };
 
@@ -53,7 +57,7 @@ function cors(req, res) {
   if (origin && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "content-type");
   }
   return !origin || res.hasHeader("Access-Control-Allow-Origin");
@@ -118,6 +122,19 @@ function sendFile(req, res, file, { cache = "no-cache" } = {}) {
   res.writeHead(200, { ...base, "content-length": st.size });
   if (req.method === "HEAD") return res.end();
   fs.createReadStream(file).pipe(res);
+}
+
+/** Run a command and collect binary stdout. */
+function runBinary(cmd, args) {
+  return new Promise((resolve) => {
+    import("node:child_process").then(({ spawn }) => {
+      const p = spawn(cmd, args);
+      const bufs = [];
+      p.stdout.on("data", (d) => bufs.push(d));
+      p.on("close", () => resolve(Buffer.concat(bufs)));
+      p.on("error", () => resolve(Buffer.alloc(0)));
+    });
+  });
 }
 
 function getJob(id) {
@@ -265,7 +282,7 @@ async function route(req, res) {
     try {
       return sendJson(res, 200, updateJobSettings(r[1], body.settings || {}));
     } catch (e) {
-      throw new HttpError(e.status || 400, e.message);
+      throw new HttpError(e.status || 400, e.message, e.hint);
     }
   }
   if ((r = m(/^\/api\/jobs\/([^/]+)\/events$/)) && method === "GET") return sse(req, res, r[1]);
@@ -292,8 +309,70 @@ async function route(req, res) {
     try {
       return sendJson(res, 200, updateCandidate(r[1], r[2], body));
     } catch (e) {
-      throw new HttpError(e.status || 400, e.message);
+      throw new HttpError(e.status || 400, e.message, e.hint);
     }
+  }
+  if ((r = m(/^\/api\/jobs\/([^/]+)\/captions(\.srt|\.vtt)?$/)) && method === "GET") {
+    const job = getJob(r[1]);
+    if (job.stages.transcribe?.status !== "done") throw new HttpError(404, "There are no captions yet.", "Wait for the transcript to finish.");
+    const caps = loadCaptions(jobDir(job.id));
+    if (r[2]) {
+      const body = r[2] === ".srt" ? toSrt(caps.cues) : toVtt(caps.cues);
+      const name = `${path.parse(job.source.name).name}${r[2]}`;
+      res.writeHead(200, { "content-type": MIME[r[2]], "content-disposition": `attachment; filename="${name.replace(/"/g, "")}"`, "cache-control": "no-store" });
+      return res.end(body);
+    }
+    return sendJson(res, 200, { ...caps, lowP: LOW_P });
+  }
+  if ((r = m(/^\/api\/jobs\/([^/]+)\/captions$/)) && method === "PUT") {
+    const job = getJob(r[1]);
+    const body = await readBody(req, 8e6);
+    if (!Array.isArray(body.cues)) throw new HttpError(400, "Send { cues: [{ s, e, text }] }, the whole list in order.");
+    const caps = editCaptions(jobDir(job.id), body.cues);
+    // rendered clips and outputs no longer match the captions
+    for (const c of job.candidates || []) if (c.render?.status === "done") c.render.stale = true;
+    if (job.output?.status === "done") job.output.stale = true;
+    saveJob(job);
+    jobEvents.emit(job.id, { type: "captions", data: { cues: caps.cues.length, edited: true } });
+    return sendJson(res, 200, { ...caps, lowP: LOW_P });
+  }
+  if ((r = m(/^\/api\/jobs\/([^/]+)\/captions\/reset$/)) && method === "POST") {
+    const job = getJob(r[1]);
+    const caps = resetCaptions(jobDir(job.id), { style: loadCaptions(jobDir(job.id)).style });
+    return sendJson(res, 200, { ...caps, lowP: LOW_P });
+  }
+  if ((r = m(/^\/api\/jobs\/([^/]+)\/language$/)) && method === "POST") {
+    const job = getJob(r[1]);
+    const body = await readBody(req);
+    if (!body.language || !/^(auto|[a-z]{2,3})$/.test(body.language)) throw new HttpError(400, "Send { language } as an ISO code such as en or yo, or auto.");
+    if (body.asrModel != null && !/^[\w.-]+$/.test(body.asrModel)) throw new HttpError(400, "asrModel is a model name such as small.en.");
+    try {
+      resetTranscript(job.id, { language: body.language, asrModel: body.asrModel || undefined });
+    } catch (e) {
+      throw new HttpError(e.status || 400, e.message, e.hint);
+    }
+    enqueue({ jobId: job.id, kind: "analyze" });
+    drainQueue();
+    return sendJson(res, 202, { queued: true, queue: queueState() });
+  }
+  if ((r = m(/^\/api\/jobs\/([^/]+)\/faces$/)) && method === "GET") {
+    const job = getJob(r[1]);
+    const f = path.join(jobDir(job.id), "faces.json");
+    if (!fs.existsSync(f)) throw new HttpError(404, "Faces have not been detected for this video yet.", "POST to this address to detect them (macOS only).");
+    return sendFile(req, res, f);
+  }
+  if ((r = m(/^\/api\/jobs\/([^/]+)\/faces$/)) && method === "POST") {
+    const job = getJob(r[1]);
+    const body = await readBody(req);
+    detectJobFaces(job.id, { force: !!body.force }).catch(() => {}); // the result goes out as a faces event
+    return sendJson(res, 202, { started: true });
+  }
+  if ((r = m(/^\/api\/jobs\/([^/]+)\/render$/)) && method === "POST" && getJob(r[1]).settings.mode === "caption") {
+    const job = getJob(r[1]);
+    if (job.stages.transcribe?.status !== "done") throw new HttpError(400, "The video has not been transcribed yet.", "Wait for the transcript, review the captions, then render.");
+    enqueue({ jobId: job.id, kind: "render" });
+    drainQueue();
+    return sendJson(res, 202, { queued: true, queue: queueState() });
   }
   if ((r = m(/^\/api\/jobs\/([^/]+)\/render$/)) && method === "POST") {
     const job = getJob(r[1]);
@@ -309,6 +388,13 @@ async function route(req, res) {
   if ((r = m(/^\/api\/jobs\/([^/]+)\/resume$/)) && method === "POST") {
     const job = getJob(r[1]);
     if (isRunning(job.id)) return sendJson(res, 202, { queued: false, running: true });
+    const body = await readBody(req);
+    if (body.force) {
+      // judge an unreliable transcript anyway
+      const j = loadJob(job.id);
+      j.settings.qualityGate = false;
+      saveJob(j);
+    }
     enqueue({ jobId: job.id, kind: "analyze" });
     drainQueue();
     return sendJson(res, 202, { queued: true, queue: queueState() });
@@ -323,6 +409,20 @@ async function route(req, res) {
     getJob(r[1]);
     const preview = url.searchParams.get("preset") === "preview";
     return sendFile(req, res, path.join(jobDir(r[1]), "clips", `${r[2]}${preview ? ".preview" : ""}.mp4`));
+  }
+  if ((r = m(/^\/media\/([^/]+)\/output$/)) && (method === "GET" || method === "HEAD")) {
+    const job = getJob(r[1]);
+    if (!job.output?.path) throw new HttpError(404, "The captioned video has not been rendered yet.");
+    return sendFile(req, res, path.join(jobDir(job.id), job.output.path));
+  }
+  if ((r = m(/^\/media\/([^/]+)\/frame$/)) && (method === "GET" || method === "HEAD")) {
+    const job = getJob(r[1]);
+    const t = Math.max(0, Math.min(Number(url.searchParams.get("t")) || 0, (job.source.duration || 1) - 0.05));
+    // one upright frame, long side 960 px (for drawing blur regions)
+    const out = await runBinary("ffmpeg", ["-v", "error", ...hwaccelArgs(job.source), "-ss", String(t), "-i", job.source.path, "-frames:v", "1", "-vf", "scale='if(gt(iw,ih),960,-2)':'if(gt(iw,ih),-2,960)'", "-f", "image2", "-c:v", "mjpeg", "-q:v", "4", "pipe:1"]);
+    if (!out.length) throw new HttpError(500, "Could not read a frame at that time.");
+    res.writeHead(200, { "content-type": "image/jpeg", "content-length": out.length, "cache-control": "private, max-age=3600" });
+    return res.end(method === "HEAD" ? undefined : out);
   }
   if (p.startsWith("/api/") || p.startsWith("/media/")) throw new HttpError(404, `Nothing at ${method} ${p}.`);
   if (method === "GET" || method === "HEAD") return serveStatic(req, res, p);
