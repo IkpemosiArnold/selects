@@ -3,6 +3,7 @@
 // so a fix made in the review step shows up in caption mode and in every clip.
 import fs from "node:fs";
 import path from "node:path";
+import { speechOnly } from "./nonspeech.mjs";
 import { readJson, srtTime, writeJsonAtomic } from "./util.mjs";
 
 /** Caption styles: how many words a cue holds and how it is drawn. */
@@ -162,7 +163,7 @@ export function loadCaptions(dir, { style = "bold" } = {}) {
   const f = captionsFile(dir);
   const saved = readJson(f, null);
   if (saved?.cues) return saved;
-  const words = readJson(path.join(dir, "words.json"), []);
+  const words = speechOnly(readJson(path.join(dir, "words.json"), [])); // never caption "[Music]"
   const caps = { edited: false, style, updatedAt: new Date().toISOString(), cues: cuesFromWords(words, style) };
   writeJsonAtomic(f, caps);
   return caps;

@@ -3,35 +3,38 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { whisperBin, whisperModel } from "./config.mjs";
+import { splitNonSpeech } from "./nonspeech.mjs";
 import { readJson, run, writeJsonAtomic } from "./util.mjs";
 
 const SEG_RE = /^\[(\d+):(\d+):(\d+)[.,](\d+)\s*-->\s*(\d+):(\d+):(\d+)[.,](\d+)\](?: {2})?(.*)$/; // whisper prints "]  " then the token text
 const toSec = (h, m, s, ms) => +h * 3600 + +m * 60 + +s + +ms / 1000;
 
-// Non-speech markers whisper emits, like [BLANK_AUDIO], (laughs), [Music], * applause *
-const NON_SPEECH = /^\s*[[(*♪].*[\])*♪]\s*$/;
 
 /**
  * Turn whisper's one-token-ish segments into words. A segment that does not start with a
  * space and starts with punctuation or an apostrophe is glued to the previous word
  * ("don" + "'t", "end" + ".").
+ * Whisper's non-speech notes ([BLANK_AUDIO], (laughs), a split-up "(speaking in foreign
+ * language)") are dropped; their spans stay as gaps and ride along as a non-enumerable
+ * `events` property ([{ type, s, e }], see nonspeech.mjs).
  * @param {{text:string,from:number,to:number,p?:number}[]} segs times in seconds
  */
 export function segmentsToWords(segs) {
-  const words = [];
+  const glued = [];
   for (const seg of segs) {
     const raw = seg.text ?? "";
     const text = raw.trim();
-    if (!text || NON_SPEECH.test(text)) continue;
-    const prev = words[words.length - 1];
+    if (!text) continue;
+    const prev = glued[glued.length - 1];
     const glue = prev && !/^\s/.test(raw) && /^([^\w\s]|'|n't)/i.test(text) && seg.from - prev.e < 1;
     if (glue) {
       prev.w += text;
       prev.e = Math.max(prev.e, seg.to);
     } else {
-      words.push({ w: text, s: seg.from, e: seg.to, p: seg.p ?? 1 });
+      glued.push({ w: text, s: seg.from, e: seg.to, p: seg.p ?? 1 });
     }
   }
+  const { words, events } = splitNonSpeech(glued);
   for (let i = 0; i < words.length; i++) {
     const w = words[i];
     // zero-length words happen; give them a little time without overlapping the next word
@@ -40,6 +43,7 @@ export function segmentsToWords(segs) {
     w.e = +w.e.toFixed(3);
     w.p = +(+w.p).toFixed(2);
   }
+  Object.defineProperty(words, "events", { value: events.map((e) => ({ ...e, s: +e.s.toFixed(3), e: +e.e.toFixed(3) })), enumerable: false });
   return words;
 }
 

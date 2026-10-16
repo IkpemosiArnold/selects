@@ -9,6 +9,7 @@ import { createCanvas, GlobalFonts } from "@napi-rs/canvas";
 import { blurBoxes, blurFilter } from "./blur.mjs";
 import { chunkWords, clipCues, cuesFromWords, loadCaptions, STYLES, toSrt, toVtt } from "./captions.mjs";
 import { FONT_PATH, FONT_FALLBACK_PATH, jobsDir } from "./config.mjs";
+import { speechOnly } from "./nonspeech.mjs";
 import { uprightSize } from "./probe.mjs";
 import { readJson, run } from "./util.mjs";
 
@@ -437,7 +438,7 @@ export async function render(job, candidate, { preset = "shorts", onProgress, jo
       const capFile = path.join(dir, "captions.json");
       if (fs.existsSync(capFile)) all = loadCaptions(dir).cues;
     }
-    const clipped = all ? clipCues(all, candidate.start, candidate.end, start) : cuesFromWords(clipWords(words || readJson(path.join(dir, "words.json")), candidate.start, candidate.end, start), "bold");
+    const clipped = all ? clipCues(all, candidate.start, candidate.end, start) : cuesFromWords(clipWords(words || speechOnly(readJson(path.join(dir, "words.json"))), candidate.start, candidate.end, start), "bold");
     fs.writeFileSync(path.join(dir, srtRel), toSrt(clipped));
     const capOpts = { width: P.width, caption: { ...P.caption, style: "bold" } };
     const track = withCaptions ? buildCaptionTrack(clipped, dur, tmp, capOpts) : null;

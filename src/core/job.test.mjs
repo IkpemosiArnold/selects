@@ -205,3 +205,29 @@ test("caption mode skips clip finding and waits for the caption review", async (
   assert.equal(res.language.used, "en");
   assert.ok(res.transcriptQuality);
 });
+
+test("whisper's notes never reach sentences, candidates or captions; laughter is kept as an event", async () => {
+  const job = createJob(video, { k: 3, model: "mock", qualityGate: false });
+  const deps = mocks({ probe: 0, transcribe: 0, judge: 0 });
+  // an older words.json: notes left in as words, split over tokens the way whisper -ml 1 does
+  const noisy = [];
+  WORDS.forEach((w, i) => {
+    noisy.push(w);
+    if (i % 25 === 12) for (const t of ["(speaking", "in", "foreign", "language)"]) noisy.push({ w: t, s: w.e + 0.01, e: w.e + 0.05, p: 0.3 });
+    if (i % 40 === 20) noisy.push({ w: "(laughs)", s: w.e + 0.01, e: w.e + 0.06, p: 0.5 });
+    if (i % 33 === 5) noisy.push({ w: "[BLANK_AUDIO]", s: w.e + 0.01, e: w.e + 0.06, p: 0.5 });
+  });
+  deps.transcribe = async () => noisy;
+  const ready = await runJob(job.id, { deps });
+  assert.equal(ready.stage, "ready");
+  const dir = jobDir(job.id);
+  const bad = /[[\]()]|speaking|BLANK|laughs/;
+  const cands = JSON.parse(fs.readFileSync(path.join(dir, "candidates.json"), "utf8")).shortlist;
+  assert.ok(cands.length > 0);
+  for (const c of [...cands, ...ready.candidates]) assert.doesNotMatch(c.text, bad);
+  assert.ok(!JSON.parse(fs.readFileSync(path.join(dir, "words.json"), "utf8")).some((w) => bad.test(w.w)));
+  const caps = (await import("./captions.mjs")).loadCaptions(dir);
+  for (const cue of caps.cues) assert.doesNotMatch(cue.text, bad);
+  const events = JSON.parse(fs.readFileSync(path.join(dir, "events.json"), "utf8"));
+  assert.ok(events.some((e) => e.type === "laughter"));
+});

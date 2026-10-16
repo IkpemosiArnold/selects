@@ -83,3 +83,28 @@ test("loudnessFromWav gives one dBFS value per half second", async () => {
   assert.equal(l.db.length, 4);
   assert.ok(l.db[0] < -100 && l.db[3] > -10, JSON.stringify(l.db));
 });
+
+test("segmentsToWords drops a note split over several tokens and keeps laughter as an event", () => {
+  const seg = (text, from, to) => ({ text, from, to });
+  const w = segmentsToWords([
+    seg(" She", 0, 0.3),
+    seg(" said", 0.3, 0.6),
+    seg(" (speaking", 1, 1.4),
+    seg(" in", 1.4, 1.6),
+    seg(" foreign", 1.6, 2),
+    seg(" language)", 2, 2.6),
+    seg(" then", 3, 3.3),
+    seg(" (laughs)", 3.4, 4.2),
+    seg(" [inaudible]", 4.3, 5),
+    seg(" yes", 5.1, 5.4),
+    seg(".", 5.4, 5.4),
+  ]);
+  assert.deepEqual(w.map((x) => x.w), ["She", "said", "then", "yes."]);
+  assert.equal(w[2].s, 3, "speech keeps its times; the note is a gap");
+  assert.deepEqual(w.events, [
+    { type: "foreign", s: 1, e: 2.6 },
+    { type: "laughter", s: 3.4, e: 4.2 },
+    { type: "inaudible", s: 4.3, e: 5 },
+  ]);
+  assert.ok(!Object.keys(w).includes("events"), "events do not end up in words.json");
+});

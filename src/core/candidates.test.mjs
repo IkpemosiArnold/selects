@@ -105,3 +105,19 @@ test("low-confidence windows score lower and are left out of the shortlist", asy
   const short = shortlist(cands, { n: 4, duration: ws[ws.length - 1].e });
   assert.ok(short.every((c) => c.meanP >= 0.45));
 });
+
+test("laughter events raise the pre-score of the window they land in, never its text", () => {
+  const ws = talk(40);
+  const sents = toSentences(ws);
+  const base = makeCandidates(sents, { minLen: 10, maxLen: 30 });
+  const target = base[Math.floor(base.length / 2)];
+  const events = [{ type: "laughter", s: target.end + 0.4, e: target.end + 1.4 }, { type: "music", s: 0, e: 2 }];
+  const withLaugh = makeCandidates(sents, { minLen: 10, maxLen: 30, events });
+  const same = withLaugh.find((c) => c.start === target.start && c.end === target.end);
+  assert.ok(same.pre > target.pre, `${same.pre} vs ${target.pre}`);
+  assert.equal(same.preParts.laughter, 0.04);
+  assert.equal(same.text, target.text);
+  const far = withLaugh.find((c) => c.end + 2 < events[0].s);
+  assert.ok(far);
+  assert.equal(far.preParts.laughter, undefined);
+});

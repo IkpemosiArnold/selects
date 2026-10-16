@@ -67,7 +67,8 @@ export function loudnessContext(loudness) {
  * The cheap first stage: a 0..1 score from text, timing and loudness, no LLM.
  * Rewards a short opener with a hook phrase, question or number; contrast inside the
  * window (a turn is where the point usually is); a steady pace without long pauses;
- * and moments louder than the talk's median (emphasis, laughter, applause).
+ * moments louder than the talk's median (emphasis, laughter, applause), and laughter whisper
+ * marked inside the window or just after it (`win.laughs`, from the non-speech events).
  * Penalises soft openers, question endings and filler.
  */
 export function preScore(win, ctx = null) {
@@ -100,6 +101,7 @@ export function preScore(win, ctx = null) {
   const fillers = (win.text.match(FILLERS) || []).length / Math.max(1, words.length);
   add("filler", -Math.min(0.2, fillers * 4));
   // whisper's own confidence: never let the judge spend a call on words it did not really hear
+  if (win.laughs) add("laughter", Math.min(0.08, win.laughs * 0.04));
   if (win.meanP != null) add("confidence", win.meanP < 0.8 ? -Math.min(0.35, (0.8 - win.meanP) * 1.2) : 0);
   if (ctx?.db?.length) {
     const i0 = Math.floor(win.start / ctx.step);
@@ -119,6 +121,8 @@ export function preScore(win, ctx = null) {
   return score;
 }
 
+const LAUGH_AFTER = 1.5;
+
 /**
  * Make sentence-snapped candidate windows.
  * For each start sentence (at least `stride` seconds after the previous start used) it takes
@@ -126,8 +130,11 @@ export function preScore(win, ctx = null) {
  * that open on a dangling reference or end mid-thought.
  * @returns Candidate[] (unranked, with a `pre` score; time-ordered ids c_0001...)
  */
-export function makeCandidates(sentences, { minLen = 20, maxLen = 60, stride = 6, keepRejected = false, loudness = null, words = null } = {}) {
+export function makeCandidates(sentences, { minLen = 20, maxLen = 60, stride = 6, keepRejected = false, loudness = null, words = null, events = null } = {}) {
   const ctx = loudnessContext(loudness);
+  // a laugh counts for the window it lands in, or the one it follows within LAUGH_AFTER seconds
+  const laughs = (events || []).filter((e) => e.type === "laughter");
+  const laughsIn = (s, e) => laughs.filter((x) => x.s >= s && x.s <= e + LAUGH_AFTER).length;
   const wins = [];
   let lastStart = -Infinity;
   const targets = [0.15, 0.5, 0.9].map((f) => minLen + f * (maxLen - minLen));
@@ -150,7 +157,7 @@ export function makeCandidates(sentences, { minLen = 20, maxLen = 60, stride = 6
     }
     for (const j of [...picked].sort((a, b) => a - b)) {
       const sents = sentences.slice(i, j + 1);
-      wins.push({ start: s0.s, end: sentences[j].e, sentences: sents, text: sents.map((x) => x.text).join(" "), meanP: words ? windowMeanP(words, sents) : null });
+      wins.push({ start: s0.s, end: sentences[j].e, sentences: sents, text: sents.map((x) => x.text).join(" "), meanP: words ? windowMeanP(words, sents) : null, laughs: laughsIn(s0.s, sentences[j].e) });
     }
   }
   const out = [];

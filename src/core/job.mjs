@@ -12,6 +12,7 @@ import { applyProfile } from "./profiles.mjs";
 import { transcriptQuality } from "./quality.mjs";
 import { attributionLine, captionWithCredit, MEDIA_REMINDER, normaliseLicense } from "./attribution.mjs";
 import { makeCandidates, shortlist } from "./candidates.mjs";
+import { splitNonSpeech, speechOnly } from "./nonspeech.mjs";
 import { judge as realJudge, listwise as realListwise } from "./judge.mjs";
 import { plainKit, postingKit as realKit } from "./kit.mjs";
 import { probe as realProbe } from "./probe.mjs";
@@ -141,8 +142,15 @@ export function listJobs() {
     .sort((a, b) => (a.id < b.id ? 1 : -1));
 }
 
+/** The job's speech words (whisper's notes like "[Music]" are dropped, even from older words.json files). */
 export function loadWords(id) {
-  return readJson(path.join(jobDir(id), "words.json"), []);
+  return speechOnly(readJson(path.join(jobDir(id), "words.json"), []));
+}
+
+/** Non-speech events ([{ type, s, e }]): events.json plus any notes left in an older words.json. */
+function loadEvents(dir, rawWords) {
+  const saved = readJson(path.join(dir, "events.json"), []);
+  return [...(Array.isArray(saved) ? saved : []), ...splitNonSpeech(rawWords).events].sort((a, b) => a.s - b.s);
 }
 
 /** Make thumbnails for the filmstrip from keyframes only (fast: no full decode). */
@@ -217,7 +225,7 @@ export function resetTranscript(id, { language, asrModel, asrPrompt, asrPreproce
   if (asrPrompt !== undefined) job.settings.asrPrompt = asrPrompt || null;
   if (asrPreprocess) job.settings.asrPreprocess = asrPreprocess;
   const dir = jobDir(id);
-  for (const f of ["whisper.json", "whisper.meta.json", "words.json", "captions.json", "candidates.json", "judged.json", "loudness.json"]) fs.rmSync(path.join(dir, f), { force: true });
+  for (const f of ["whisper.json", "whisper.meta.json", "words.json", "events.json", "captions.json", "candidates.json", "judged.json", "loudness.json"]) fs.rmSync(path.join(dir, f), { force: true });
   for (const s of ["language", "transcribe", "candidates", "judge"]) job.stages[s] = freshStage();
   job.language = null;
   job.transcriptQuality = null;
@@ -395,6 +403,9 @@ async function runStages(id, { deps = {}, signal } = {}) {
         onProgress: (p) => progress("transcribe", p),
         onWords: (chunk) => emit(id, "words", chunk),
       });
+      const split = splitNonSpeech(words); // a no-op for segmentsToWords output, which is already clean
+      writeJsonAtomic(path.join(dir, "events.json"), [...(words.events || []), ...split.events].sort((a, b) => a.s - b.s));
+      words = split.words;
       writeJsonAtomic(wordsFile, words);
       fs.rmSync(path.join(dir, "captions.json"), { force: true }); // new words, new cues
       const sec = (Date.now() - t0) / 1000;
@@ -437,9 +448,12 @@ async function runStages(id, { deps = {}, signal } = {}) {
     if (job.stages.candidates.status !== "done" || !fs.existsSync(candFile)) {
       current = "candidates";
       begin("candidates");
-      const sentences = toSentences(words);
+      // sentences and windows are built from speech only; laughter is kept as a pre-score signal
+      const events = loadEvents(dir, words);
+      const speech = speechOnly(words);
+      const sentences = toSentences(speech);
       const loudness = readJson(path.join(dir, "loudness.json"), null);
-      const all = makeCandidates(sentences, { minLen: job.settings.minLen, maxLen: job.settings.maxLen, stride: job.settings.stride ?? 6, loudness, words });
+      const all = makeCandidates(sentences, { minLen: job.settings.minLen, maxLen: job.settings.maxLen, stride: job.settings.stride ?? 6, loudness, words: speech, events });
       short = shortlist(all, { n: job.settings.judgeN ?? 8, duration: job.source.duration });
       writeJsonAtomic(candFile, { sentences: sentences.length, windows: all.length, shortlist: short });
       job.candidates = short;
@@ -678,7 +692,7 @@ async function renderClips(id, { ids, deps = {}, signal, kit, preset } = {}) {
   if (!targets.length) return job;
   const isDone = (c) => c[field]?.status === "done" && !c[field].stale && c[field].path && fs.existsSync(path.join(dir, c[field].path));
   if (targets.every(isDone)) return job; // nothing to do: keep the stage's real timings
-  const words = readJson(path.join(dir, "words.json"));
+  const words = loadWords(id);
   const prevStage = job.stage;
   job.stage = "rendering";
   job.stages.render = { ...freshStage(), status: "running", startedAt: now(), note: `${usePreset} preset` };

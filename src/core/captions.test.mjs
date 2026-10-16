@@ -79,3 +79,17 @@ test("clipCues keeps only words in the clip, shifted to clip time", () => {
   assert.deepEqual(cc.flatMap((c) => c.words.map((w) => w.w)), ["b", "c", "d"]);
   assert.equal(cc[0].s, 0.1);
 });
+
+test("captions built from words.json never show whisper's notes", async () => {
+  const fs = (await import("node:fs")).default;
+  const os = (await import("node:os")).default;
+  const path = (await import("node:path")).default;
+  const { loadCaptions } = await import("./captions.mjs");
+  const { words } = await import("./test/fixtures.mjs");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "selects-caps-ns-"));
+  fs.writeFileSync(path.join(dir, "words.json"), JSON.stringify(words("Hello [Music] there (speaking in foreign language) friend (laughs) [BLANK_AUDIO] bye.")));
+  const caps = loadCaptions(dir);
+  const text = caps.cues.map((c) => c.text).join(" ");
+  assert.equal(text, "Hello there friend bye.");
+  fs.rmSync(dir, { recursive: true, force: true });
+});
