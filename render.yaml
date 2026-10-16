@@ -1,0 +1,53 @@
+# Render Blueprint for Selects Web. Not deployed yet: Arnold connects the repo in Render.
+#
+# 1. selects-web: the static site. The browser does all the work (whisper, Gemma, the
+#    render), so the host only serves files. Multithreaded WebAssembly needs the two
+#    cross-origin isolation headers below; "credentialless" keeps model downloads from
+#    Hugging Face's CDN working.
+# 2. selects-smart-proxy: a free Node web service for Smart mode. It holds the Gemini API
+#    key (GEMINI_API_KEY, set in the dashboard, never in git), accepts only Selects judge
+#    tasks (clip text, size-limited), rate limits per IP, and does not log clip text.
+#    Free web services sleep after 15 minutes idle and take up to about a minute to wake;
+#    the page shows a "waking" note while it waits.
+services:
+  - type: web
+    name: selects-web
+    runtime: static
+    buildCommand: npm --prefix src/browser ci && npm --prefix src/browser run build
+    staticPublishPath: ./dist-web
+    envVars:
+      # the proxy's public URL, baked into the page at build time
+      # (for example https://selects-smart-proxy.onrender.com)
+      - key: VITE_SELECTS_PROXY_URL
+        sync: false
+    headers:
+      - path: /*
+        name: Cross-Origin-Opener-Policy
+        value: same-origin
+      - path: /*
+        name: Cross-Origin-Embedder-Policy
+        value: credentialless
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+
+  - type: web
+    name: selects-smart-proxy
+    runtime: node
+    plan: free
+    buildCommand: "true"
+    startCommand: node server-proxy/server.mjs
+    healthCheckPath: /healthz
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMMA_MODEL
+        value: gemma-4-31b-it
+      - key: GEMMA_FALLBACKS
+        value: gemma-4-26b-a4b-it,gemma-3-27b-it
+      # the static site's URL, for example https://selects-web.onrender.com
+      - key: ALLOWED_ORIGINS
+        sync: false

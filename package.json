@@ -13,7 +13,7 @@
   "scripts": {
     "selects": "node bin/selects.mjs",
     "serve": "node src/server/server.mjs",
-    "test": "node --test src/**/*.test.mjs eval/*.test.mjs",
+    "test": "node --test src/**/*.test.mjs eval/*.test.mjs server-proxy/*.test.mjs",
     "eval": "node eval/run-eval.mjs"
   },
   "dependencies": {
