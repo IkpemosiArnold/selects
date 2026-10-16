@@ -10,7 +10,7 @@ import { talk } from "../core/test/fixtures.mjs";
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "selects-server-"));
 process.env.SELECTS_HOME = home;
 process.env.SELECTS_OLLAMA_URL = "http://127.0.0.1:9"; // nothing listens there: health reports ollama false fast
-const { createJob, runJob } = await import("../core/job.mjs");
+const { createJob, runJob, saveJob, loadJob, jobDir } = await import("../core/job.mjs");
 const { startServer } = await import("./server.mjs");
 
 const WORDS = talk(100);
@@ -158,4 +158,18 @@ test("PATCH a job's credit and licence", async () => {
   assert.equal(r.json.settings.credit, "Jenni, EMF 2026");
   const bad = await req("PATCH", `/api/jobs/${job.id}`, { body: { settings: { k: 9 } } });
   assert.equal(bad.status, 400);
+});
+
+test("GET a clip's posting kit with absolute paths", async () => {
+  const j = loadJob(job.id);
+  const c = j.candidates[0];
+  c.render = { status: "done", path: `clips/${c.id}.mp4`, srt: `clips/${c.id}.srt`, kit: `clips/${c.id}.kit.json`, progress: 1 };
+  saveJob(j);
+  fs.mkdirSync(path.join(jobDir(j.id), "clips"), { recursive: true });
+  fs.writeFileSync(path.join(jobDir(j.id), c.render.kit), JSON.stringify({ title: "T", caption: "C", captionText: "C", hashtags: ["a"], attribution: null }));
+  const r = await req("GET", `/api/jobs/${j.id}/candidates/${c.id}/kit`);
+  assert.equal(r.status, 200);
+  assert.equal(r.json.caption, "C");
+  assert.equal(r.json.file, path.join(jobDir(j.id), "clips", `${c.id}.mp4`));
+  assert.equal((await req("GET", `/api/jobs/${j.id}/candidates/${j.candidates[1].id}/kit`)).status, 404);
 });

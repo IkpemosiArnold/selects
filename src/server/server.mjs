@@ -273,6 +273,19 @@ async function route(req, res) {
     getJob(r[1]);
     return sendJson(res, 200, loadWords(r[1]));
   }
+  if ((r = m(/^\/api\/jobs\/([^/]+)\/candidates\/([^/]+)\/kit$/)) && method === "GET") {
+    // The posting kit for one rendered clip, with absolute paths for "copy path".
+    const job = getJob(r[1]);
+    const c = job.candidates.find((x) => x.id === r[2]);
+    if (!c) throw new HttpError(404, `No clip called ${r[2]} in this job.`);
+    let kit = null;
+    try {
+      kit = c.render?.kit ? JSON.parse(fs.readFileSync(path.join(jobDir(job.id), c.render.kit), "utf8")) : null;
+    } catch {}
+    if (!kit) throw new HttpError(404, "This clip has no posting kit yet.", "Render it first. The kit is written after the video.");
+    const abs = (f) => (f ? (path.isAbsolute(f) ? f : path.join(jobDir(job.id), f)) : null);
+    return sendJson(res, 200, { ...kit, file: abs(c.render.path), srtFile: abs(c.render.srt) });
+  }
   if ((r = m(/^\/api\/jobs\/([^/]+)\/candidates\/([^/]+)$/)) && method === "PATCH") {
     getJob(r[1]);
     const body = await readBody(req);
