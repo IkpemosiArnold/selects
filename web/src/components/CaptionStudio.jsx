@@ -177,7 +177,7 @@ function OutputPanel({ job, onRender, busy }) {
           {relative && <p className="field-hint">Paths are inside this job's folder.</p>}
         </>
       ) : o.status === "error" ? (
-        <p className="field-error" role="alert">{o.message || job.error?.message || "The render stopped."} {job.error?.hint || ""}</p>
+        <p className="field-error" role="alert">{o.message || job.error?.message || "The render stopped."} {job.error?.hint || "Render again to retry."}</p>
       ) : (
         <div className="out-running" aria-live="polite">
           <p className="mono">
@@ -284,8 +284,9 @@ export default function CaptionStudio({ job, words, mode, faces, captionsVersion
   }, [player]);
 
   const captionsOn = job.settings?.captions !== false;
-  const out = job.output;
-  const rendering = out && (out.status === "running" || out.status === "pending") || job.stage === "rendering";
+  const renderFailed = job.stage === "error" && job.error?.stage === "render";
+  const out = job.output && renderFailed && job.output.status !== "done" ? { ...job.output, status: "error", message: job.error.message } : job.output;
+  const rendering = !renderFailed && ((out && (out.status === "running" || out.status === "pending")) || job.stage === "rendering");
   const editedCount = caps.items ? caps.items.filter(isEdited).length : 0;
 
   const renderVideo = async () => {
@@ -419,7 +420,7 @@ export default function CaptionStudio({ job, words, mode, faces, captionsVersion
                 duration={dur}
               />
             )}
-            {tab === "video" && <OutputPanel job={job} onRender={renderVideo} busy={busy || rendering} />}
+            {tab === "video" && <OutputPanel job={{ ...job, output: out }} onRender={renderVideo} busy={busy || rendering} />}
           </div>
         </section>
       </main>
