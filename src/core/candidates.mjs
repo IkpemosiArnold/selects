@@ -25,18 +25,24 @@ const DANGLING_LAST_WORD = /^(and|but|or|so|because|the|a|an|of|to|with|for|that
 const FILLERS = /\b(um+|uh+|erm|you know|i mean|sort of|kind of|basically|actually|like,)\b/gi;
 const HOOKY = /\b(you|your|never|nobody|no one|everyone|secret|mistake|wrong|truth|problem|why|how|what if|turns out|surprising|actually|stop|don'?t|best|worst|first|only|real|lie|myth|\d+)\b/i;
 
-export function isDanglingOpener(sentence) {
+/**
+ * @param {string} sentence
+ * @param {{soft?:boolean}} [opts] soft: the sentence was split on timing in an unpunctuated
+ *   transcript, so its case carries no signal
+ */
+export function isDanglingOpener(sentence, { soft = false } = {}) {
   const t = sentence.trim();
   // a lowercase start means whisper's sentence began mid-thought (or the recording did)
-  if (/^[a-z]/.test(t) && !/^(i|i'm|i've|i'd|i'll)\b/.test(t)) return true;
+  if (!soft && /^[a-z]/.test(t) && !/^(i|i'm|i've|i'd|i'll)\b/.test(t)) return true;
   // a first "sentence" that is only filler ("Okay.", "Right, so.") opens on nothing
   if (/^((okay|ok|so|right|um+|uh+|yeah|yes|alright|all right|cool|well|great|thanks|thank you)[\s,.!?]*)+$/i.test(t)) return true;
   return DANGLING_OPENERS.some((r) => r.test(t)) || BACK_REFERENCE.test(t);
 }
 
-export function isDanglingEnding(sentence) {
+/** @param {{soft?:boolean}} [opts] soft: ended at a pause in an unpunctuated transcript, not at a full stop */
+export function isDanglingEnding(sentence, { soft = false } = {}) {
   const t = sentence.trim();
-  if (!/[.!]["')\]]*$/.test(t) && !/\?["')\]]*$/.test(t)) return true; // whisper left it unpunctuated: probably mid-thought
+  if (!soft && !/[.!]["')\]]*$/.test(t) && !/\?["')\]]*$/.test(t)) return true; // whisper left it unpunctuated: probably mid-thought
   if (/(\.\.\.|…|:|,)$/.test(t)) return true;
   const last = t.replace(/[.!?"')\]]+$/, "").split(/\s+/).pop() || "";
   if (DANGLING_LAST_WORD.test(last)) return true;
@@ -162,11 +168,11 @@ export function makeCandidates(sentences, { minLen = 20, maxLen = 60, stride = 6
   }
   const out = [];
   for (const w of wins) {
-    const first = w.sentences[0].text;
-    const last = w.sentences[w.sentences.length - 1].text;
+    const s0 = w.sentences[0];
+    const s1 = w.sentences[w.sentences.length - 1];
     let reject = null;
-    if (isDanglingOpener(first)) reject = "opens on a reference to earlier context";
-    else if (isDanglingEnding(last)) reject = "ends mid-thought";
+    if (isDanglingOpener(s0.text, { soft: !!s0.soft })) reject = "opens on a reference to earlier context";
+    else if (isDanglingEnding(s1.text, { soft: !!s1.soft })) reject = "ends mid-thought";
     if (reject && !keepRejected) continue;
     out.push({
       id: null,
@@ -174,7 +180,7 @@ export function makeCandidates(sentences, { minLen = 20, maxLen = 60, stride = 6
       start: +w.start.toFixed(3),
       end: +w.end.toFixed(3),
       text: w.text,
-      hook: first,
+      hook: s0.text,
       scores: null,
       total: null,
       reason: null,
