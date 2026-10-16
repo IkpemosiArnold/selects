@@ -139,3 +139,72 @@ All additive: nothing above was removed or renamed.
 - **Attribution (16 Oct):** `settings.credit` (for example "Jenni, EMF 2026"), `settings.license` (a canonical id such as `CC-BY-SA-4.0`; spellings like "cc by-sa 4.0" are normalised) and `settings.sourceUrl` can be set when creating a job, or later with `PATCH /api/jobs/:id` and body `{ settings: { credit?, license?, sourceUrl? } }`, which returns the Job (other keys give a 400). Each `clips/<cid>.kit.json` now has `caption` (with the credit line appended), `captionText` (without it), `attribution` (the line, or null) and `reminder` ("Check slides and on-screen media: a talk's licence may not cover every figure."). Changing the credit rewrites existing kits; nothing re-renders. `src/core/attribution.mjs` exports `LICENSES`, `normaliseLicense`, `licenseCheck` (ND: adaptations not allowed; NC: no paid campaigns), `attributionLine` and `MEDIA_REMINDER`. CLI: `--credit`, `--license`, `--source-url` on `selects <video>` and `selects review <job-id>`.
 - **Scoring (16 Oct, after the spread test in notes/timings.md):** each judged candidate has `judgeTotal` (the rubric alone, 0..1, weights hook 0.35, standalone 0.3, payoff 0.2, clarity 0.15) and `total`, the number it is ranked by: `0.7 * judgeTotal + 0.3 * pre`, then the listwise round. **Eval: use `judgeTotal` for a pure judge method, and `total` for the shipped pipeline.** The listwise round (`listwise(candidates, { model, n: 4 })` in `judge.mjs`, prompt in `prompts/listwise.md`) sends the top 4 distinct windows (NMS, IoU 0.3) as first and last sentences only, in one call, and the model orders them. Each total becomes `0.85 * total + 0.15 * listScore`, where listScore is 1, 2/3, 1/3, 0 by position, and 0 for windows outside the round. Candidates in the round get `listRank` (1 = best) and `listReason`. The job records `job.listwise = { order: ids[], reasons: {id: text}, complete, sec }`. `settings.listwise` (default true) turns the round off; `settings.listN` (default 4) sets its size. The judge schema puts the four scores before `reason`.
 - **Posting kit over HTTP (16 Oct, web):** `GET /api/jobs/:id/candidates/:cid/kit` returns that clip's `kit.json` (`title`, `caption`, `captionText`, `hashtags`, `attribution`, `reminder`, ...) plus `file` and `srtFile`, the absolute paths of the rendered MP4 and SRT. 404 with a hint if the clip has no kit yet. The review app reads it for the render results.
+
+## Languages, captions, transcript quality and blur (16 Oct, feature engineer)
+
+All additive. Defaults keep every earlier job working.
+
+### Settings (job.settings)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `mode` | `"clips"` | `"clips"` (find and render short clips) or `"caption"` (caption the whole video, keep its aspect, no clipping) |
+| `language` | `"en"` | the spoken language: an ISO 639-1 code, or `"auto"` (decode-and-compare picks it). Never trust whisper's own auto-detect for accented English: it labelled Nigerian-accented English as Yoruba with p = 0.88. |
+| `asrModel` | `"auto"` | `"auto"`, a model name in the models folder (`base.en`, `small.en`, `medium.en-q5_0`, `base`, `small`, ...) or an absolute path to a ggml file. Auto: `base.en` for English, the best installed multilingual model otherwise. |
+| `asrPrompt` | `null` | a short neutral context passed to whisper as `--prompt` |
+| `captions` | `true` | burn captions into rendered clips (`--no-captions` turns it off) |
+| `captionLang` | `"source"` | `"source"`, `"en"` (whisper translate) or `"both"` (two lines: source over English). Only `"source"` is built; the others are stretch goals. |
+| `captionStyle` | `"auto"` | `"bold"` (2 to 4 words, current word in marker yellow; the clip default) or `"subtitle"` (up to 2 lines of about 42 characters, no highlight; the caption-mode default for landscape) |
+| `blur` | `null` | the blur spec below, for caption-mode jobs (clips use `candidate.blur`, falling back to this) |
+
+### Blur spec
+
+```js
+blur: {
+  faces: { mode: "off" | "all" | "others" | "chosen", tracks: ["f_02"] },  // "others" keeps the main speaker; "chosen" blurs only the listed tracks
+  regions: [{ x: 0.62, y: 0.08, w: 0.3, h: 0.12, start: null, end: null }] // normalised to the upright source frame (after rotation); start/end in source seconds, null = the whole clip
+}
+```
+
+`candidate.blur` has the same shape (PATCH it like status). Face tracks come from `<job>/faces.json` (macOS only, Apple Vision): `{ fps, width, height, tracks: [{ id: "f_01", start, end, boxes: [{ t, x, y, w, h }], area, share, main: bool }] }`, boxes normalised to the upright frame. `tools/faces/faces` writes the raw detections (`faces-raw.json`: `{ fps, width, height, frames: [{ t, faces: [{ x, y, w, h, c }] }] }`), and `src/core/faces.mjs` tracks them.
+
+### Job fields
+
+- `job.language`: `{ setting, used, detected: { code, p } | null, compared: [{ code, meanP, words }], margin, decided: "setting" | "compare", warning: null | string, sec }`. `detected` is whisper's own first-30-seconds guess, shown only as a warning. `compared` is decode-and-compare: 3 samples of about 20 s spread over the video, decoded with each candidate language (the setting, the detected language and "en") using multilingual base, ranked by mean word probability. Cached in `<job>/language.json`.
+- `job.transcriptQuality`: `{ score, meanP, lowShare, repeatShare, compression, words, verdict: "good" | "shaky" | "unreliable", hint }`. Clip mode stops before candidates when the verdict is `"unreliable"` (stage `transcribe` ends `done`, `job.stage` becomes `"error"` with that hint); `"shaky"` continues with a warning.
+- `job.asr`: `{ provider: "whisper.cpp", model, language, prompt, preprocess, sec, speed }`.
+- `job.output` (caption mode): `{ status, path: "output/captioned.mp4", srt, vtt, progress, wallSec }`.
+- Stage `language` sits between `probe` and `transcribe` in `job.stages`. Caption mode skips `candidates` and `judge` (status `"skipped"`) and waits in `"ready"` for the caption review.
+- `source` also has `rotation` (degrees, from the display matrix), `uprightWidth`, `uprightHeight` (display size after rotation and SAR), `vcodec`, `audioStreams: [{ index, channels, sampleRate, codec }]`.
+- Candidates have `meanP` (mean word probability in the window). The pre-score has a `confidence` part that penalises low-confidence windows, and `shortlist` drops windows with `meanP < 0.45` when enough others exist.
+
+### Captions file
+
+`<job>/captions.json`: `{ edited: bool, updatedAt, cues: [{ s, e, text, words: [{ w, s, e, p }] }] }`. Built from `words.json` the first time it is asked for. Clip renders and caption mode both read it, so edits apply everywhere. SRT and VTT are written from it.
+
+### HTTP additions
+
+| Method | Path | Body or result |
+|---|---|---|
+| GET | `/api/jobs/:id/captions` | `{ edited, cues, lowP: 0.5 }` |
+| PUT | `/api/jobs/:id/captions` | `{ cues: [{ s, e, text }] }`: the whole list, in order. Splits and merges change the cue list; text edits change words. Timings are kept: a cue whose word count did not change keeps every word's time, otherwise its words are spread over the cue by length. Returns the new captions. |
+| POST | `/api/jobs/:id/captions/reset` | rebuild from `words.json` |
+| GET | `/api/jobs/:id/captions.srt`, `.vtt` | the files |
+| POST | `/api/jobs/:id/language` | `{ language, asrModel? }`: re-transcribe with that language (the one-click override). 202. |
+| POST | `/api/jobs/:id/faces` | run face detection (macOS). 202; a `faces` event carries the tracks when done. |
+| GET | `/api/jobs/:id/faces` | `faces.json`, or 404 with a hint |
+| PATCH | `/api/jobs/:id` | `settings` may now also carry `blur`, `captions`, `captionStyle`, `captionLang` |
+| PATCH | `/api/jobs/:id/candidates/:cid` | may carry `blur` |
+| POST | `/api/jobs/:id/render` | caption mode renders the whole video into `job.output` |
+| GET | `/media/:id/output` | the captioned video (Range support) |
+| GET | `/media/:id/frame?t=12.5` | one upright JPEG frame (for drawing blur regions) |
+
+New SSE events: `faces`, `output` (caption-mode render progress, same shape as `render`), `captions`.
+
+### CLI additions
+
+`selects caption <video> [--language en|auto|<code>] [--asr-model small.en] [--prompt "..."] [--captions source|en|both] [--style bold|subtitle] [--edit] [--srt fixed.srt] [--blur-faces all|others] [--blur-region x,y,w,h[@start-end]] [--out dir]`, and on clip runs `--language`, `--asr-model`, `--prompt`, `--no-captions`, `--blur-faces`, `--blur-region`.
+
+### ASR providers
+
+`src/core/asr/` holds providers behind one interface: `{ id, local: bool, available(): Promise<bool>, transcribe(wav, { language, model, prompt, translate, signal, onProgress, onSegments }) -> { words, raw } }`. Only `whisper.cpp` is built. `elevenlabs-scribe` is listed as a future opt-in cloud provider and throws "not built" if chosen.
