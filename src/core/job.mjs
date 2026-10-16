@@ -715,7 +715,7 @@ async function renderClips(id, { ids, deps = {}, signal, kit, preset } = {}) {
         let k;
         const k0 = Date.now();
         try {
-          k = kitMode === "model" ? await d.postingKit(c, { model: job.settings.model, signal }) : plainKit(c);
+          k = kitMode === "model" ? await d.postingKit(c, { model: job.settings.model, signal, cacheDir: dir }) : plainKit(c);
         } catch {
           k = plainKit(c);
         }

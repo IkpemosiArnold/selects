@@ -50,6 +50,12 @@ export function writeJsonAtomic(file, data) {
   fs.renameSync(tmp, file);
 }
 
+/** Append one JSON line to a log file, creating its folder first. */
+export function appendJsonLine(file, data) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.appendFileSync(file, JSON.stringify(data) + "\n");
+}
+
 export function readJson(file, fallback = undefined) {
   try {
     return JSON.parse(fs.readFileSync(file, "utf8"));

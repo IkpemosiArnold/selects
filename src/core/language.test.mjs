@@ -95,3 +95,18 @@ test("decideLanguage decodes each candidate once, then caches", async () => {
   assert.equal(calls.length, 2, "second call is served from language.json");
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("decideLanguage creates a missing cacheDir before writing samples", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "selects-lang-dir-"));
+  const dir = path.join(root, "a", "b");
+  const deps = {
+    model: "/fake/ggml-base.bin",
+    extractAudio: async (_v, wav) => fs.writeFileSync(wav, "x"),
+    detectLanguage: async () => ({ code: "en", p: 0.9 }),
+    decode: async () => [],
+  };
+  const res = await decideLanguage("/fake.mov", { duration: 60, setting: "en", cacheDir: dir, deps });
+  assert.equal(res.used, "en");
+  assert.ok(fs.existsSync(path.join(dir, "language.json")));
+  fs.rmSync(root, { recursive: true, force: true });
+});

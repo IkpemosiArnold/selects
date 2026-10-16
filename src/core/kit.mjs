@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { PROMPTS_DIR } from "./config.mjs";
 import { ollamaJson } from "./judge.mjs";
+import { appendJsonLine } from "./util.mjs";
 
 const SCHEMA = {
   type: "object",
@@ -24,10 +25,11 @@ export function plainKit(candidate) {
 
 /**
  * @param {object} candidate
- * @param {{model:string, request?:Function, signal?:AbortSignal}} opts
+ * @param {{model:string, request?:Function, signal?:AbortSignal, cacheDir?:string}} opts
+ *   with `cacheDir`, the call is appended to <cacheDir>/judge-calls.jsonl (kind "kit")
  * @returns {Promise<{title:string, caption:string, hashtags:string[]}>}
  */
-export async function postingKit(candidate, { model, request, signal } = {}) {
+export async function postingKit(candidate, { model, request, signal, cacheDir } = {}) {
   const md = fs.readFileSync(path.join(PROMPTS_DIR, "kit.md"), "utf8");
   const system = md.split("<!-- system -->")[1].split("<!-- user -->")[0].trim();
   const user = md
@@ -41,6 +43,7 @@ export async function postingKit(candidate, { model, request, signal } = {}) {
   ];
   const ask = request || ((m) => ollamaJson({ model, messages: m, schema: SCHEMA, numPredict: 120, signal }));
   const res = await ask(messages);
+  if (cacheDir && res.stats) appendJsonLine(path.join(cacheDir, "judge-calls.jsonl"), { at: new Date().toISOString(), model, id: candidate.id, kind: "kit", ...res.stats });
   const d = res.data ?? res;
   const tags = (Array.isArray(d.hashtags) ? d.hashtags : [])
     .map((t) => String(t).toLowerCase().replace(/[^a-z0-9]/g, ""))

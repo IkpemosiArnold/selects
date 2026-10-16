@@ -101,6 +101,7 @@ export async function decideLanguage(videoPath, { duration, setting = "en", reme
   const extract = deps.extractAudio || extractAudio;
   const detect = deps.detectLanguage || detectLanguage;
   const decode = deps.decode || (async (wav, code, outBase) => wordsFromWhisperJson(await runWhisper(wav, { outBase, model, language: code, signal })));
+  fs.mkdirSync(cacheDir, { recursive: true }); // ffmpeg and whisper write their samples here
   const wav = path.join(cacheDir, "langcheck.wav");
   const ranges = sampleRanges(duration);
   try {

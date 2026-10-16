@@ -211,3 +211,9 @@ New SSE events: `faces`, `output` (caption-mode render progress, same shape as `
 ### ASR providers
 
 `src/core/asr/` holds providers behind one interface: `{ id, local: bool, available(): Promise<bool>, transcribe(wav, { language, model, prompt, translate, signal, onProgress, onSegments }) -> { words, raw } }`. Only `whisper.cpp` is built. `elevenlabs-scribe` is listed as a future opt-in cloud provider and throws "not built" if chosen.
+
+## Fixes (16 Oct, after the first real runs)
+
+All additive.
+
+- Every log or cache write in `src/core` creates its folder first (`appendJsonLine` in `util.mjs`). `judge-calls.jsonl` also gets one line per posting-kit call (`kind: "kit"`) when `postingKit` is given `cacheDir`.

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { ollamaUrl, PROMPTS_DIR, selectsHome } from "./config.mjs";
-import { readJson, sha1, writeJsonAtomic } from "./util.mjs";
+import { appendJsonLine, readJson, sha1, writeJsonAtomic } from "./util.mjs";
 
 /**
  * Weights for the combined score. For a short, the first two seconds decide whether
@@ -240,7 +240,7 @@ export async function judge(candidates, { model, cacheDir, onProgress, onResult,
       const started = Date.now();
       let res;
       const logCall = (stats, extra = {}) => {
-        if (cacheDir && stats) fs.appendFileSync(path.join(cacheDir, "judge-calls.jsonl"), JSON.stringify({ at: new Date().toISOString(), model, id: c.id, words: c.text.split(/\s+/).length, ...stats, ...extra }) + "\n");
+        if (cacheDir && stats) appendJsonLine(path.join(cacheDir, "judge-calls.jsonl"), { at: new Date().toISOString(), model, id: c.id, words: c.text.split(/\s+/).length, ...stats, ...extra });
       };
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
@@ -407,7 +407,7 @@ export async function listwise(candidates, { model, n = 4, cacheDir, request, si
       cache[key] = hit;
       writeJsonAtomic(cacheFile, cache);
     }
-    if (cacheDir && stats) fs.appendFileSync(path.join(cacheDir, "judge-calls.jsonl"), JSON.stringify({ at: new Date().toISOString(), model, id: "listwise", kind: "listwise", clips: letters.length, complete: parsed.complete, ...stats }) + "\n");
+    if (cacheDir && stats) appendJsonLine(path.join(cacheDir, "judge-calls.jsonl"), { at: new Date().toISOString(), model, id: "listwise", kind: "listwise", clips: letters.length, complete: parsed.complete, ...stats });
   }
   const byLetter = Object.fromEntries(top.map((c, i) => [letters[i], c]));
   const listScore = new Map();

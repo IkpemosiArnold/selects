@@ -119,3 +119,28 @@ test("listwise orders the top distinct clips from first and last sentences only"
   assert.deepEqual(p.order, ["B", "A", "C"]);
   assert.equal(p.complete, false);
 });
+
+test("judge and listwise create a missing cacheDir before logging calls", async () => {
+  const { listwise } = await import("./judge.mjs");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "selects-judge-dir-"));
+  const stats = { wallSec: 1, promptTokens: 10, promptSec: 0.5, outTokens: 5, outSec: 0.5 };
+  try {
+    const dir1 = path.join(root, "not", "there", "yet");
+    await judge([cand("c_1", "One. Two.")], { model: "m", cacheDir: dir1, request: async () => ({ data: { hook: 3, standalone: 3, payoff: 3, clarity: 3, reason: "Fine." }, stats }) });
+    const lines = fs.readFileSync(path.join(dir1, "judge-calls.jsonl"), "utf8").trim().split("\n");
+    assert.equal(lines.length, 1);
+    assert.equal(JSON.parse(lines[0]).id, "c_1");
+
+    // a failed call is logged too, and that can be the very first write
+    const dir2 = path.join(root, "fails", "first");
+    await assert.rejects(judge([cand("c_2", "Three.")], { model: "m", cacheDir: dir2, request: async () => { throw Object.assign(new Error("Ollama returned 500"), { stats }); } }), /500/);
+    assert.match(fs.readFileSync(path.join(dir2, "judge-calls.jsonl"), "utf8"), /"failed":"Ollama returned 500"/);
+
+    const dir3 = path.join(root, "listwise", "dir");
+    const mk = (id, start, total) => ({ id, start, end: start + 30, total, pre: 0.5, hook: "Opens.", text: "Opens. Ends." });
+    await listwise([mk("a", 0, 0.7), mk("b", 100, 0.6)], { model: "m", n: 2, cacheDir: dir3, request: async () => ({ data: { ranking: [{ clip: "B", reason: "x" }, { clip: "A", reason: "y" }] }, stats }) });
+    assert.match(fs.readFileSync(path.join(dir3, "judge-calls.jsonl"), "utf8"), /"kind":"listwise"/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
