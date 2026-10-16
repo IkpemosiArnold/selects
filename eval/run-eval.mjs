@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // Selects eval runner. Compares clip pickers against labelled moments.
 //
-//   node eval/run-eval.mjs                         all videos, methods: random, energy, judge:<every local model in MODELS>
+//   node eval/run-eval.mjs                         all videos, the default plan (see DEFAULT_PLAN)
+//   node eval/run-eval.mjs --plan "qwen2.5:0.5b@8,gemma3-4b-hf:latest@8+list"
 //   node eval/run-eval.mjs --only id1,id2          a subset of videos
 //   node eval/run-eval.mjs --limit 4               the 4 shortest videos
-//   node eval/run-eval.mjs --models gemma3-4b-hf:latest,qwen2.5:0.5b
 //   node eval/run-eval.mjs --report                rebuild results from caches only (no whisper, no Ollama)
+//   node eval/run-eval.mjs --start-after <ISO>     do not take the CPU lock before this time
 //
 // Every expensive step is cached under eval/cache/<videoId>/, so re-runs are cheap.
 // Heavy steps (whisper, Ollama) take the shared CPU lock .selects/heavy.lock, waiting if
@@ -27,16 +28,12 @@ const LOCK = join(ROOT, ".selects", "heavy.lock");
 const RANDOM_SEEDS = 200;
 const K = 5;
 const SETTINGS = { minLen: 20, maxLen: 60 };
-// Order matters: the runner judges every video with the first model before starting the next,
-// so the fast model gives a full row early and the headline model (Gemma 4B) follows overnight.
-const DEFAULT_MODELS = ["qwen2.5:0.5b", "gemma3-4b-hf:latest", "gemma3:1b", "phi3:mini"];
 
 const args = process.argv.slice(2);
 const opt = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : null);
 const REPORT_ONLY = args.includes("--report");
 const ONLY = opt("--only")?.split(",");
 const LIMIT = opt("--limit") ? Number(opt("--limit")) : null;
-const MODELS_ARG = opt("--models")?.split(",");
 
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 const readJson = (f, d = null) => (existsSync(f) ? JSON.parse(readFileSync(f, "utf8")) : d);
@@ -88,7 +85,8 @@ async function core() {
   const [t, s, c, j, r, cfg] = await Promise.all(["transcribe.mjs", "sentences.mjs", "candidates.mjs", "judge.mjs", "rank.mjs", "config.mjs"].map(imp));
   return {
     transcribe: t.transcribe, toSentences: s.toSentences, makeCandidates: c.makeCandidates, shortlist: c.shortlist,
-    judge: j.judge, rank: r.rank, curve: r.curve, maxJudge: cfg.DEFAULT_SETTINGS?.judgeN ?? 8,
+    judge: j.judge, listwise: j.listwise, promptVersion: j.loadPrompt ? j.loadPrompt().version : null,
+    rank: r.rank, curve: r.curve, maxJudge: cfg.DEFAULT_SETTINGS?.judgeN ?? 8,
   };
 }
 
@@ -99,8 +97,23 @@ async function ollamaModels() {
   } catch { return []; }
 }
 
+// ---------- the experiment plan ----------
+// Each entry is model@N: judge the N prefiltered windows with that model. "+list" also runs the
+// listwise final round. The runner works through the plan in order, one entry across every
+// video before the next, so the cheap sweep lands first and the slow Gemma runs follow.
+export const DEFAULT_PLAN = "qwen2.5:0.5b@8,qwen2.5:0.5b@16,qwen2.5:0.5b@24,gemma3-4b-hf:latest@8+list,gemma3-4b-hf:latest@16,qwen2.5:0.5b@all";
+export function parsePlan(str) {
+  return str.split(",").filter(Boolean).map((e) => {
+    const m = /^(.+)@(\d+|all)(\+list)?$/.exec(e.trim());
+    if (!m) throw new Error(`bad plan entry "${e}" (want model@N, model@all or model@N+list)`);
+    return { model: m[1], n: m[2] === "all" ? "all" : Number(m[2]), list: !!m[3] };
+  });
+}
+const PLAN = parsePlan(opt("--plan") || DEFAULT_PLAN);
+const short = (m) => m.replace(":latest", "").replace("gemma3-4b-hf", "gemma3-4b");
+
 // ---------- per-video pipeline ----------
-export async function runVideo(v, C, models) {
+export async function runVideo(v, C, plan = []) {
   const dir = join(CACHE, v.id);
   mkdirSync(dir, { recursive: true });
   const timingsFile = join(dir, "timings.json");
@@ -156,87 +169,101 @@ export async function runVideo(v, C, models) {
   writeJson(timingsFile, timings);
 
   const labels = { heatmap: v.labels.filter((l) => l.source === "heatmap"), human: v.labels.filter((l) => l.source === "human") };
-  const out = { id: v.id, title: v.title, duration: v.duration, nWords: words.length, nCandidates: cands.length, labels, methods: {}, timings };
+  const out = { id: v.id, title: v.title, duration: v.duration, nWords: words.length, nCandidates: cands.length, labels, methods: {}, timings, judgeRuns: {} };
   const curves = { id: v.id, duration: v.duration, labels: v.labels, heatmap: v.heatmapPath ? readJson(resolve(ROOT, v.heatmapPath), {})?.heatmap ?? null : null, methods: {} };
-  const pick = (scored) => C.rank(scored, { k: K }).map((c) => ({ id: c.id, start: c.start, end: c.end, total: c.total, hook: c.hook, reason: c.reason, scores: c.scores }));
+  const pick = (scored) => C.rank(scored, { k: K }).map((c) => ({ id: c.id, start: c.start, end: c.end, total: c.total, judgeTotal: c.judgeTotal, pre: c.pre, hook: c.hook, reason: c.reason, scores: c.scores, listRank: c.listRank }));
   const evalPreds = (preds) => Object.fromEntries(Object.entries(labels).filter(([, ls]) => ls.length).map(([src, ls]) => [src, scoreVideo(preds, ls)]));
+  const shortlistOf = (n) => (n === "all" ? cands.slice() : C.shortlist(cands, { n, duration: v.duration }));
 
-  // What the judge reads: the product's shortlist (time-bucketed best pre-scores), as in a real job.
-  const short = C.shortlist ? C.shortlist(cands, { n: C.maxJudge, duration: v.duration }) : cands;
-  out.nShortlist = short.length;
-
-  // oracle: the best any picker could do choosing K windows from the pool it sees
+  // no-LLM rows over all candidates
   out.methods.oracle = { preds: [], metrics: oracle(cands, labels) };
-  out.methods["oracle:shortlist"] = { preds: [], metrics: oracle(short, labels) };
-  // How big must the shortlist be for the judge to have a chance? Ceiling by shortlist size (no LLM).
-  if (C.shortlist) {
-    out.shortlistCeiling = {};
-    for (const n of [4, 8, 12, 16, 24, 36]) out.shortlistCeiling[n] = oracle(C.shortlist(cands, { n, duration: v.duration }), labels);
-  }
-
-  // prescore: the core's text rules alone (no LLM), ranking every candidate
-  if (cands.length && typeof cands[0].pre === "number") {
-    const pScored = cands.map((c) => ({ ...c, total: c.pre }));
-    out.methods.prescore = { preds: pick(pScored), metrics: evalPreds(pick(pScored)) };
-    // prefilter: stage 1 alone. The exact windows the judge reads, ordered by pre-score.
-    // judge:<model> minus prefilter is what the LLM adds.
-    const sScored = short.map((c) => ({ ...c, total: c.pre }));
-    out.methods.prefilter = { preds: pick(sScored), metrics: evalPreds(pick(sScored)) };
-  }
-
-  // random: chance level, averaged over many seeds, over all candidates and over the shortlist
-  const runs = [], sRuns = [];
-  for (let seed = 1; seed <= RANDOM_SEEDS; seed++) {
-    runs.push(evalPreds(pick(randomScore(cands, seed))));
-    sRuns.push(evalPreds(pick(randomScore(short, seed))));
-  }
+  const pScored = cands.map((c) => ({ ...c, total: c.pre }));
+  out.methods.prescore = { preds: pick(pScored), metrics: evalPreds(pick(pScored)) };
+  const runs = [];
+  for (let seed = 1; seed <= RANDOM_SEEDS; seed++) runs.push(evalPreds(pick(randomScore(cands, seed))));
   out.methods.random = { preds: pick(randomScore(cands, 1)), metrics: avgMetrics(runs), seeds: RANDOM_SEEDS };
-  out.methods["random:shortlist"] = { preds: [], metrics: avgMetrics(sRuns), seeds: RANDOM_SEEDS };
-
-  // energy: no-LLM heuristic
   const eScored = energyScore(cands, env, words);
   out.methods.energy = { preds: pick(eScored), metrics: evalPreds(pick(eScored)) };
   curves.methods.energy = C.curve(eScored, v.duration, { step: 5 });
 
-  // judge:<model>
-  for (const model of models) {
-    const key = `judge:${model}`;
-    const jf = join(dir, `judge-${model.replace(/[^a-z0-9.]+/gi, "_")}.json`);
-    let judged = readJson(jf);
-    if (!judged || judged.n !== short.length || judged.candidatesHash !== hashCands(short)) {
-      if (REPORT_ONLY) continue; // not judged yet: leave this row out for this video
-      judged = await withHeavyLock(`judge ${model} ${v.id}`, async () => {
-        log(`${v.id}: judging ${short.length} shortlisted of ${cands.length} candidates with ${model}`);
+  // per shortlist size: stage 1 alone, chance within the shortlist, and the ceiling
+  const sizes = [...new Set([C.maxJudge, 4, 8, 12, 16, 24, 36, ...plan.map((p) => p.n)])];
+  out.shortlistCeiling = {};
+  for (const n of sizes) {
+    const sl = shortlistOf(n);
+    out.shortlistCeiling[n] = oracle(sl, labels);
+    if (!plan.some((p) => p.n === n) && n !== C.maxJudge) continue;
+    out.methods[`oracle:shortlist@${n}`] = { preds: [], metrics: oracle(sl, labels), n: sl.length };
+    const sScored = sl.map((c) => ({ ...c, total: c.pre }));
+    out.methods[`prefilter@${n}`] = { preds: pick(sScored), metrics: evalPreds(pick(sScored)), n: sl.length };
+    const sRuns = [];
+    for (let seed = 1; seed <= RANDOM_SEEDS; seed++) sRuns.push(evalPreds(pick(randomScore(sl, seed))));
+    out.methods[`random:shortlist@${n}`] = { preds: [], metrics: avgMetrics(sRuns), n: sl.length };
+  }
+  out.nShortlist = shortlistOf(C.maxJudge).length;
+
+  // judge runs from the plan (each cached; in --report mode only cached ones are used)
+  const jdir = join(dir, "judge");
+  mkdirSync(jdir, { recursive: true });
+  for (const p of plan) {
+    const sl = shortlistOf(p.n);
+    const tag = `${p.model}@${p.n}`;
+    const jf = join(dir, `judge-${p.model.replace(/[^a-z0-9.]+/gi, "_")}-n${p.n}.json`);
+    let run = readJson(jf);
+    const fresh = run && run.candidatesHash === hashCands(sl) && run.promptVersion === C.promptVersion;
+    if (!fresh) {
+      if (REPORT_ONLY || p.skip) continue; // not judged yet: leave these rows out for this video
+      run = await withHeavyLock(`judge ${tag} ${v.id}`, async () => {
+        log(`${v.id}: judging ${sl.length} of ${cands.length} windows with ${p.model}`);
         const t0 = Date.now();
         let last = 0;
-        mkdirSync(join(dir, "judge"), { recursive: true });
-        const res = await C.judge(short, {
-          model,
-          cacheDir: join(dir, "judge"),
-          onProgress: (p) => { const now = Date.now(); if (now - last > 60_000) { last = now; log(`${v.id} ${model}: ${Math.round((p?.progress ?? p ?? 0) * 100)}%`); } },
+        const res = await C.judge(sl, {
+          model: p.model,
+          cacheDir: jdir,
+          onProgress: (q) => { const now = Date.now(); if (now - last > 120_000) { last = now; log(`${v.id} ${tag}: ${q.done}/${q.total}`); } },
         });
-        const sec = (Date.now() - t0) / 1000;
-        return { model, n: short.length, candidatesHash: hashCands(short), wallSec: sec, secPerCandidate: sec / short.length, judgedAt: new Date().toISOString(), candidates: res };
+        return { model: p.model, n: p.n, size: sl.length, candidatesHash: hashCands(sl), promptVersion: C.promptVersion, wallSec: (Date.now() - t0) / 1000, newCalls: res.stats?.judged ?? null, judgedAt: new Date().toISOString(), candidates: res };
       });
-      writeJson(jf, judged);
-      log(`${v.id}: ${model} done in ${Math.round(judged.wallSec)} s (${judged.secPerCandidate.toFixed(1)} s per candidate)`);
+      writeJson(jf, run);
+      log(`${v.id}: ${tag} done in ${Math.round(run.wallSec)} s (${run.newCalls} new calls)`);
     }
-    const preds = pick(judged.candidates);
-    out.methods[key] = { preds, metrics: evalPreds(preds), judgeSec: judged.wallSec, secPerCandidate: judged.secPerCandidate, calls: judgeCalls(join(dir, "judge"), model) };
-    curves.methods[key] = C.curve(judged.candidates, v.duration, { step: 5 });
+    if (p.list && !run.listwise) {
+      if (REPORT_ONLY || p.skip) { /* leave the listwise row out */ } else {
+        run.listwise = await withHeavyLock(`listwise ${tag} ${v.id}`, async () => {
+          const t0 = Date.now();
+          const lw = await C.listwise(run.candidates, { model: p.model, n: 4, cacheDir: jdir });
+          return { order: lw.order, complete: lw.complete ?? true, sec: (Date.now() - t0) / 1000, candidates: lw.candidates };
+        });
+        writeJson(jf, run);
+        log(`${v.id}: listwise ${tag} done in ${Math.round(run.listwise.sec)} s`);
+      }
+    }
+    // judge:<model>@N ranks by the model's own score; shipped:<model>@N by Selects' blend with the pre-score
+    const byJudge = run.candidates.map((c) => ({ ...c, total: c.judgeTotal ?? c.total }));
+    out.methods[`judge:${tag}`] = { preds: pick(byJudge), metrics: evalPreds(pick(byJudge)), n: sl.length };
+    out.methods[`shipped:${tag}`] = { preds: pick(run.candidates), metrics: evalPreds(pick(run.candidates)), n: sl.length };
+    if (run.listwise) out.methods[`shipped+list:${tag}`] = { preds: pick(run.listwise.candidates), metrics: evalPreds(pick(run.listwise.candidates)), n: sl.length };
+    out.judgeRuns[tag] = { model: p.model, n: p.n, size: sl.length, wallSec: run.wallSec, newCalls: run.newCalls, listwiseSec: run.listwise?.sec ?? null };
+    curves.methods[`judge:${tag}`] = C.curve(byJudge, v.duration, { step: 5 });
   }
+  out.calls = judgeCalls(jdir);
   writeJson(join(RESULTS, "curves", `${v.id}.json`), curves);
   return out;
 }
 
-// Per-call Ollama stats written by src/core/judge.mjs (judge-calls.jsonl in its cacheDir).
-function judgeCalls(dir, model) {
+// Per-call Ollama stats written by src/core/judge.mjs (judge-calls.jsonl in its cacheDir),
+// grouped by model and kind (per-window judge call or listwise round).
+function judgeCalls(dir) {
   const f = join(dir, "judge-calls.jsonl");
-  if (!existsSync(f)) return null;
-  const rows = readFileSync(f, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.model === model);
-  if (!rows.length) return null;
-  const avg = (k) => { const xs = rows.map((r) => r[k]).filter((x) => typeof x === "number"); return xs.length ? mean(xs) : null; };
-  return { n: rows.length, wallSec: avg("wallSec"), loadSec: avg("loadSec"), words: avg("words"), promptTokens: avg("promptTokens"), promptTokPerSec: avg("promptTokPerSec"), outTokens: avg("outTokens"), outTokPerSec: avg("outTokPerSec") };
+  if (!existsSync(f)) return {};
+  const rows = readFileSync(f, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)).filter((r) => !r.failed);
+  const out = {};
+  for (const r of rows) {
+    const key = `${r.model}|${r.kind || "window"}`;
+    (out[key] ||= []).push(r);
+  }
+  const avg = (rs, k) => { const xs = rs.map((r) => r[k]).filter((x) => typeof x === "number"); return xs.length ? mean(xs) : null; };
+  return Object.fromEntries(Object.entries(out).map(([k, rs]) => [k, { n: rs.length, wallSec: avg(rs, "wallSec"), loadSec: avg(rs, "loadSec"), words: avg(rs, "words"), promptTokens: avg(rs, "promptTokens"), promptTokPerSec: avg(rs, "promptTokPerSec"), outTokens: avg(rs, "outTokens"), outTokPerSec: avg(rs, "outTokPerSec") }]));
 }
 
 function hashCands(cands) {
@@ -267,6 +294,7 @@ export function oracle(cands, labels) {
 }
 
 // ---------- aggregate and report ----------
+const isJudgeKey = (m) => /^(judge|shipped|shipped\+list):/.test(m);
 export function aggregate(videos) {
   const methods = [...new Set(videos.flatMap((v) => Object.keys(v.methods)))];
   const agg = {};
@@ -277,127 +305,180 @@ export function aggregate(videos) {
       if (!rows.length) continue;
       const col = (k) => rows.map((v) => v.methods[m].metrics[src][k]);
       agg[src][m] = {
-        n: rows.length,
+        n: rows.length, videos: rows.map((v) => v.id),
         hit3: bootstrapCI(col("hit3")), p3: bootstrapCI(col("p3")), hit5: bootstrapCI(col("hit5")), p5: bootstrapCI(col("p5")), r5: bootstrapCI(col("r5")), miou5: bootstrapCI(col("miou5")),
-        hit3s: rows.map((v) => v.methods[m].metrics[src].hit3), // per-video, for transparency
-        judgeMinPerVideo: m.startsWith("judge:") ? mean(rows.map((v) => v.methods[m].judgeSec / 60)) : null,
-        secPerCandidate: m.startsWith("judge:") ? mean(rows.map((v) => v.methods[m].secPerCandidate)) : null,
       };
     }
-    // paired comparisons on mean best IoU, same videos
+    // paired comparisons on the same videos: hit@3 and mean best IoU
     agg[src].paired = {};
+    const pair = (a, b) => {
+      const rows = videos.filter((v) => v.methods[a]?.metrics?.[src] && v.methods[b]?.metrics?.[src]);
+      if (rows.length < 3) return;
+      const g = (m, k) => rows.map((v) => v.methods[m].metrics[src][k]);
+      agg[src].paired[`${a} vs ${b}`] = { miou5: pairedBootstrap(g(a, "miou5"), g(b, "miou5")), hit3: pairedBootstrap(g(a, "hit3"), g(b, "hit3")), n: rows.length };
+    };
     for (const m of methods.filter((x) => x.startsWith("judge:"))) {
-      for (const base of ["prefilter", "energy", "random"]) {
-        const rows = videos.filter((v) => v.methods[m]?.metrics?.[src] && v.methods[base]?.metrics?.[src]);
-        if (rows.length < 3) continue;
-        agg[src].paired[`${m} vs ${base}`] = pairedBootstrap(rows.map((v) => v.methods[m].metrics[src].miou5), rows.map((v) => v.methods[base].metrics[src].miou5));
-      }
+      const n = m.split("@")[1];
+      pair(m, `prefilter@${n}`);
+      pair(m, "random");
     }
+    const judged = methods.filter((x) => x.startsWith("judge:"));
+    for (const a of judged) for (const b of judged) if (a < b && a.split("@")[1] === b.split("@")[1]) pair(a, b);
+    for (const m of methods.filter((x) => x.startsWith("shipped+list:"))) pair(m, m.replace("shipped+list:", "shipped:"));
+    for (const m of methods.filter((x) => x.startsWith("shipped:"))) pair(m, m.replace("shipped:", "judge:"));
   }
+  // judge cost per model from Ollama's counters, pooled over videos
+  agg.cost = {};
+  for (const v of videos) for (const [k, c] of Object.entries(v.calls || {})) {
+    const a = (agg.cost[k] ||= { n: 0, sums: {} });
+    for (const f of ["wallSec", "loadSec", "words", "promptTokens", "promptTokPerSec", "outTokens", "outTokPerSec"]) if (c[f] != null) { a.sums[f] = (a.sums[f] || 0) + c[f] * c.n; a.sums[f + "N"] = (a.sums[f + "N"] || 0) + c.n; }
+    a.n += c.n;
+  }
+  for (const a of Object.values(agg.cost)) for (const f of ["wallSec", "loadSec", "words", "promptTokens", "promptTokPerSec", "outTokens", "outTokPerSec"]) a[f] = a.sums[f + "N"] ? a.sums[f] / a.sums[f + "N"] : null;
   return agg;
 }
 
 const pct = (x) => (x == null || Number.isNaN(x) ? "n/a" : `${Math.round(x * 100)}%`);
 const f2 = (x) => (x == null || Number.isNaN(x) ? "n/a" : x.toFixed(2));
-const ci = (c, fmt = pct) => (c.lo == null ? fmt(c.mean) : `${fmt(c.mean)} (${fmt(c.lo)} to ${fmt(c.hi)})`);
+const ci = (c, fmt = pct) => (!c ? "n/a" : c.lo == null ? fmt(c.mean) : `${fmt(c.mean)} (${fmt(c.lo)} to ${fmt(c.hi)})`);
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+const signed = (x) => (x >= 0 ? "+" : "") + f2(x);
 
-export function report(videos, agg, manifest) {
+function methodName(m) {
+  const fixed = {
+    oracle: "ceiling: best possible from all windows",
+    random: `random over all windows (mean of ${RANDOM_SEEDS} seeds)`,
+    energy: "energy: loudness + speech rate, no LLM",
+    prescore: "text rules over all windows, no LLM",
+  };
+  if (fixed[m]) return fixed[m];
+  const [kind, rest] = m.split(/:(.+)/);
+  const [model, n] = (rest || kind).split("@");
+  const N = n === "all" ? "all" : n;
+  if (m.startsWith("oracle:shortlist@")) return `ceiling: best possible from the ${N} prefiltered windows`;
+  if (m.startsWith("prefilter@")) return `**prefilter alone** (top ${N} by text rules, no LLM)`;
+  if (m.startsWith("random:shortlist@")) return `random from the ${N} prefiltered windows`;
+  if (kind === "judge") return `**prefilter + ${short(model)}** (${N} windows, model score only)`;
+  if (kind === "shipped") return `prefilter + ${short(model)}, shipped blend 0.7 model + 0.3 text rules (${N})`;
+  if (kind === "shipped+list") return `prefilter + ${short(model)}, shipped blend + listwise round (${N})`;
+  return m;
+}
+
+export function report(videos, agg, manifest, plan = PLAN) {
   const L = [];
+  const N0 = videos[0]?.nShortlist ?? 8;
+  const models = [...new Set(plan.map((p) => p.model))];
+  const ns = [...new Set(plan.map((p) => p.n))];
   L.push("# Selects eval results", "");
-  L.push(`Generated ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC by \`node eval/run-eval.mjs\`. Machine: Intel i5-7360U (2 cores, 2017), 16 GB, no GPU.`, "");
-  L.push(`Videos scored: **n = ${videos.length}** of ${manifest.length} in the manifest. Each method picks its top ${K} clips (20 to 60 s) from the same candidate windows.`, "");
-  for (const src of ["heatmap", "human"]) {
-    const rows = Object.entries(agg[src]).filter(([k]) => k !== "paired");
-    if (!rows.length) { if (src === "human") L.push("## Against human picks", "", "No human labels yet. Run `node eval/label.mjs` and mark 5 moments per video.", ""); continue; }
-    L.push(src === "heatmap" ? "## Against YouTube Most Replayed peaks (proxy labels)" : "## Against human picks (Arnold)", "");
-    L.push("| Method | n | hit@3 (95% CI) | precision@3 | hit@5 | precision@5 | recall@5 | mean best IoU (95% CI) | judge time per video | s per window |");
-    L.push("|---|---|---|---|---|---|---|---|---|---|");
-    const order = (k) => ({ random: 0, energy: 1, prescore: 2, "random:shortlist": 3, prefilter: 4, "oracle:shortlist": 8, oracle: 9 })[k] ?? 5;
-    for (const [m, a] of rows.sort((x, y) => order(x[0]) - order(y[0]))) {
-      const name = {
-        oracle: "ceiling: best possible from all candidates",
-        "oracle:shortlist": "ceiling: best possible from the shortlist",
-        random: `random over all candidates (mean of ${RANDOM_SEEDS} seeds)`,
-        "random:shortlist": `random from the shortlist (mean of ${RANDOM_SEEDS} seeds)`,
-        energy: "energy: loudness + speech rate, no LLM",
-        prescore: "text rules over all candidates, no LLM",
-        prefilter: "**prefilter alone** (stage 1, no LLM)",
-      }[m] ?? `**prefilter + ${m}**`;
-      L.push(`| ${name} | ${a.n} | ${ci(a.hit3)} | ${pct(a.p3.mean)} | ${pct(a.hit5.mean)} | ${pct(a.p5.mean)} | ${pct(a.r5.mean)} | ${ci(a.miou5, f2)} | ${a.judgeMinPerVideo == null ? "-" : a.judgeMinPerVideo.toFixed(1) + " min"} | ${a.secPerCandidate == null ? "-" : a.secPerCandidate.toFixed(1)} |`);
+  L.push(`Generated ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC by \`node eval/run-eval.mjs\`. Machine: Intel i5-7360U (2 cores, 2017), 16 GB, no GPU, on battery power at times.`, "");
+  L.push(`Videos: **n = ${videos.length}** (manifest: ${manifest.length}). Every method picks its top ${K} clips (20 to 60 s) from the same sentence-snapped candidate windows. A pick hits when its time overlap with a label is IoU 0.5 or more. Rows marked with a smaller n are still running.`, "");
+
+  // headline table
+  const src = "heatmap";
+  const A = agg[src];
+  const head = ["random", "energy", `prefilter@${N0}`, `random:shortlist@${N0}`, ...models.flatMap((m) => [`judge:${m}@${N0}`]), ...models.flatMap((m) => [`shipped:${m}@${N0}`, `shipped+list:${m}@${N0}`]), `oracle:shortlist@${N0}`, "oracle"].filter((m) => A[m]);
+  const table = (keys) => {
+    L.push("| Method | n | hit@3 (95% CI) | precision@3 | hit@5 | recall@5 | mean best IoU (95% CI) |", "|---|---|---|---|---|---|---|");
+    for (const m of keys) { const a = A[m]; L.push(`| ${methodName(m)} | ${a.n} | ${ci(a.hit3)} | ${pct(a.p3.mean)} | ${pct(a.hit5.mean)} | ${pct(a.r5.mean)} | ${ci(a.miou5, f2)} |`); }
+    L.push("");
+  };
+  L.push(`## Headline: against YouTube Most Replayed peaks (${N0} windows judged, the shipped default)`, "");
+  table(head);
+
+  // shortlist-size sweep
+  const sweepN = ns.filter((n) => A[`prefilter@${n}`]);
+  if (sweepN.length) {
+    L.push("## Quality against time: how many windows the model reads", "");
+    L.push("hit@3 / mean best IoU for each shortlist size, and estimated judge minutes per video (N windows times the measured seconds per call for that model on this laptop).", "");
+    const cols = ["windows judged", "ceiling", "prefilter alone", ...models.map((m) => short(m)), ...models.map((m) => `${short(m)} min/video`)];
+    L.push(`| ${cols.join(" | ")} |`, `|${cols.map(() => "---").join("|")}|`);
+    for (const n of sweepN) {
+      const cell = (k) => (A[k] ? `${pct(A[k].hit3.mean)} / ${f2(A[k].miou5.mean)}${A[k].n < videos.length ? ` (n=${A[k].n})` : ""}` : "not run");
+      const size = n === "all" ? mean(videos.map((v) => v.nCandidates)) : n;
+      const est = (m) => { const c = agg.cost[`${m}|window`]; return c?.wallSec && plan.some((p) => p.model === m && p.n === n) ? `${(size * c.wallSec / 60).toFixed(n === "all" ? 0 : 1)}` : "-"; };
+      L.push(`| ${n === "all" ? `all (${Math.round(size)} on average)` : n} | ${cell(`oracle:shortlist@${n}`)} | ${cell(`prefilter@${n}`)} | ${models.map((m) => cell(`judge:${m}@${n}`)).join(" | ")} | ${models.map(est).join(" | ")} |`);
     }
     L.push("");
-    const paired = Object.entries(agg[src].paired || {});
-    if (paired.length) {
-      L.push("Paired difference in mean best IoU on the same videos (bootstrap 95% CI; an interval that crosses 0 means no clear difference):", "");
-      for (const [k, p] of paired) L.push(`- ${k}: ${p.diff >= 0 ? "+" : ""}${f2(p.diff)} (${f2(p.lo)} to ${f2(p.hi)}), n = ${p.n}`);
-      L.push("");
-    }
   }
 
+  // paired
+  const paired = Object.entries(A.paired || {});
+  if (paired.length) {
+    L.push("## Paired differences on the same videos", "", "Bootstrap 95% CI over videos. An interval that includes 0 means no clear difference at this n.", "");
+    L.push("| Comparison | n | hit@3 difference | mean best IoU difference |", "|---|---|---|---|");
+    for (const [k, p] of paired) L.push(`| ${k.replace(/gemma3-4b-hf:latest/g, "gemma3-4b")} | ${p.n} | ${signed(p.hit3.diff)} (${f2(p.hit3.lo)} to ${f2(p.hit3.hi)}) | ${signed(p.miou5.diff)} (${f2(p.miou5.lo)} to ${f2(p.miou5.hi)}) |`);
+    L.push("");
+  }
+
+  // human labels
+  if (Object.keys(agg.human).filter((k) => k !== "paired").length) {
+    L.push("## Against human picks (Arnold)", "");
+    const H = agg.human;
+    L.push("| Method | n | hit@3 | hit@5 | mean best IoU |", "|---|---|---|---|---|");
+    for (const m of Object.keys(H).filter((k) => k !== "paired")) L.push(`| ${methodName(m)} | ${H[m].n} | ${ci(H[m].hit3)} | ${pct(H[m].hit5.mean)} | ${ci(H[m].miou5, f2)} |`);
+    L.push("");
+  } else L.push("## Against human picks", "", "No human labels yet. Run `node eval/label.mjs` and mark 5 moments per video.", "");
+
+  // ceiling by shortlist size, no LLM
   const withCeil = videos.filter((v) => v.shortlistCeiling);
   if (withCeil.length) {
-    const ns = Object.keys(withCeil[0].shortlistCeiling);
-    L.push("## How big must the shortlist be?", "");
-    L.push("Best possible against replay peaks if the judge were perfect, by how many prefiltered windows it reads (no LLM involved; mean over videos):", "");
-    L.push(`| windows judged | ${ns.join(" | ")} | all |`, `|---|${ns.map(() => "---").join("|")}|---|`);
-    const row = (k, f) => `| ${k} | ${ns.map((n) => f(mean(withCeil.map((v) => v.shortlistCeiling[n].heatmap?.[k] ?? 0)))).join(" | ")} | ${f(mean(withCeil.map((v) => v.methods.oracle.metrics.heatmap?.[k] ?? 0)))} |`;
-    L.push(row("hit5", pct).replace("| hit5 |", "| ceiling hit@5 |"), row("r5", pct).replace("| r5 |", "| ceiling recall@5 |"));
-    L.push("", "Judge time grows linearly with this number (see the cost table).", "");
+    const cn = Object.keys(withCeil[0].shortlistCeiling).filter((n) => n !== "all").sort((a, b) => a - b);
+    L.push("## Ceiling by shortlist size (no LLM)", "", "The best any judge could do if it were perfect, by how many prefiltered windows it reads (mean over videos):", "");
+    L.push(`| windows | ${cn.join(" | ")} | all |`, `|---|${cn.map(() => "---").join("|")}|---|`);
+    const row = (label, k, f) => `| ${label} | ${cn.map((n) => f(mean(withCeil.map((v) => v.shortlistCeiling[n]?.heatmap?.[k] ?? 0)))).join(" | ")} | ${f(mean(withCeil.map((v) => v.methods.oracle.metrics.heatmap?.[k] ?? 0)))} |`;
+    L.push(row("ceiling hit@3", "hit3", pct), row("ceiling recall@5", "r5", pct), row("ceiling mean best IoU", "miou5", f2), "");
   }
 
-  L.push("## Wall time per video and stage", "");
-  const models = [...new Set(videos.flatMap((v) => Object.keys(v.methods).filter((m) => m.startsWith("judge:"))))];
-  const cols = ["Video", "evaluated length", "windows (judged)", "transcribe", ...models.map((m) => m.replace("judge:", "judge "))];
+  // wall time
+  L.push("## Wall time per video", "");
+  const tags = plan.map((p) => `${p.model}@${p.n}`);
+  const cols = ["Video", "evaluated length", "windows", "transcribe", ...tags.map((t) => `judge ${short(t)}`)];
   L.push(`| ${cols.join(" | ")} |`, `|${cols.map(() => "---").join("|")}|`);
   for (const v of videos) {
-    const title = v.title.replace(/\|/g, "/").slice(0, 60);
-    L.push(`| ${title} | ${mmss(v.duration)} | ${v.nCandidates} (${v.nShortlist}) | ${v.timings.transcribeSec ? mmss(v.timings.transcribeSec) : "n/a"} | ${models.map((m) => (v.methods[m] ? mmss(v.methods[m].judgeSec) : "-")).join(" | ")}${models.length ? " |" : ""}`);
+    const title = v.title.replace(/\|/g, "/").slice(0, 50);
+    L.push(`| ${title} | ${mmss(v.duration)} | ${v.nCandidates} | ${v.timings.transcribeSec ? mmss(v.timings.transcribeSec) : "n/a"} | ${tags.map((t) => { const r = v.judgeRuns?.[t]; return r ? `${mmss(r.wallSec)}${r.listwiseSec ? ` + ${Math.round(r.listwiseSec)} s list` : ""}` : "-"; }).join(" | ")} |`);
   }
-  L.push("");
+  L.push("", "Judge times are measured wall time for that run. A larger shortlist reuses cached calls for windows a smaller one already judged, so use the per-call cost below for estimates.", "");
 
-  const costRows = models.map((m) => {
-    const cs = videos.map((v) => v.methods[m]?.calls).filter(Boolean);
-    const n = cs.reduce((t, c) => t + c.n, 0);
-    const w = (k) => { const xs = cs.filter((c) => c[k] != null); const nn = xs.reduce((t, c) => t + c.n, 0); return nn ? xs.reduce((t, c) => t + c[k] * c.n, 0) / nn : null; };
-    return { m, n, wall: w("wallSec"), load: w("loadSec"), words: w("words"), pt: w("promptTokens"), pts: w("promptTokPerSec"), ot: w("outTokens"), ots: w("outTokPerSec") };
-  }).filter((r) => r.n);
+  const costRows = Object.entries(agg.cost);
   if (costRows.length) {
     const f1 = (x) => (x == null ? "n/a" : x.toFixed(1));
-    L.push("## Judge cost per call (from Ollama's own counters)", "");
-    L.push("| Model | calls | words per window | prompt tokens | prompt tok/s | output tokens | output tok/s | load s | wall s per call | wall per video (" + (videos[0]?.nShortlist ?? 8) + " windows) | cost |");
-    L.push("|---|---|---|---|---|---|---|---|---|---|---|");
-    for (const r of costRows) L.push(`| ${r.m.replace("judge:", "")} | ${r.n} | ${f1(r.words)} | ${f1(r.pt)} | ${f1(r.pts)} | ${f1(r.ot)} | ${f1(r.ots)} | ${f1(r.load)} | ${f1(r.wall)} | ${r.wall == null ? "n/a" : mmss(r.wall * (videos[0]?.nShortlist ?? 8))} | $0 (local) |`);
-    L.push("", "Calls served from the cache are not counted. Load time is the model being read into memory, mostly on the first call.", "");
+    L.push("## Judge cost per call (Ollama's own counters)", "");
+    L.push("| Model | call | calls | words in | prompt tokens | prompt tok/s | output tokens | output tok/s | load s | wall s per call | cost |", "|---|---|---|---|---|---|---|---|---|---|---|");
+    for (const [k, r] of costRows) { const [m, kind] = k.split("|"); L.push(`| ${short(m)} | ${kind === "listwise" ? "listwise round" : "one window"} | ${r.n} | ${f1(r.words)} | ${f1(r.promptTokens)} | ${f1(r.promptTokPerSec)} | ${f1(r.outTokens)} | ${f1(r.outTokPerSec)} | ${f1(r.loadSec)} | ${f1(r.wallSec)} | $0, local |`); }
+    L.push("", "Only fresh calls are logged; cache hits cost nothing. Load is the model being read into memory, mostly on a model's first call.", "");
   }
 
-  const best = models.map((m) => [m, agg.heatmap[m]?.miou5?.mean ?? -1]).sort((a, b) => b[1] - a[1])[0]?.[0];
-  if (best) {
-    const byIou = videos.filter((v) => v.methods[best]?.metrics?.heatmap).sort((a, b) => b.methods[best].metrics.heatmap.miou5 - a.methods[best].metrics.heatmap.miou5);
+  // examples
+  const exKey = [...models].reverse().map((m) => `judge:${m}@${N0}`).find((k) => A[k]);
+  if (exKey) {
+    const byIou = videos.filter((v) => v.methods[exKey]?.metrics?.heatmap).sort((a, b) => b.methods[exKey].metrics.heatmap.miou5 - a.methods[exKey].metrics.heatmap.miou5);
+    const centre = (w) => (w.start + w.end) / 2;
     const ex = (v, label) => {
-      const p = v.methods[best].preds[0];
-      const centre = (w) => (w.start + w.end) / 2;
+      const p = v.methods[exKey].preds[0];
+      if (!p) return;
       const lab = v.labels.heatmap.reduce((b, l) => (Math.abs(centre(l) - centre(p)) < Math.abs(centre(b) - centre(p)) ? l : b), v.labels.heatmap[0]);
-      L.push(`**${label}: ${v.title}** (mean best IoU ${f2(v.methods[best].metrics.heatmap.miou5)})`, "");
-      L.push(`- ${best} top pick: ${mmss(p.start)} to ${mmss(p.end)}, best IoU with any peak ${f2(bestIoU(p, v.labels.heatmap))}. Hook: "${(p.hook || "").slice(0, 160)}"${p.reason ? ` Reason: "${p.reason}"` : ""}`);
+      L.push(`**${label}: ${v.title}** (mean best IoU ${f2(v.methods[exKey].metrics.heatmap.miou5)})`, "");
+      L.push(`- Top pick: ${mmss(p.start)} to ${mmss(p.end)}, best IoU with any replay peak ${f2(bestIoU(p, v.labels.heatmap))}. Opens: "${(p.hook || "").slice(0, 160)}"${p.reason ? ` Model's reason: "${p.reason}"` : ""}`);
       if (lab) L.push(`- Nearest replay peak: ${mmss(lab.start)} to ${mmss(lab.end)} (peak height ${lab.weight})`);
       L.push("");
     };
-    L.push(`## Best and worst examples (${best})`, "");
+    L.push(`## Best and worst examples (${methodName(exKey).replace(/\*/g, "")})`, "");
     if (byIou.length) ex(byIou[0], "Best");
     if (byIou.length > 1) ex(byIou[byIou.length - 1], "Worst");
   }
 
   L.push("## How to read this, and caveats", "");
-  L.push(`- **n is small (${videos.length} video${videos.length === 1 ? "" : "s"}).** Confidence intervals are percentile bootstrap over videos; with n this small they are wide, and a difference whose interval crosses zero is not a finding.`);
+  L.push(`- **n is small (${videos.length} video${videos.length === 1 ? "" : "s"}).** Confidence intervals are percentile bootstrap over videos (2,000 resamples); with n this small they are wide, and a difference whose interval includes zero is not a finding.`);
   L.push("- **Most Replayed is a proxy.** It records where viewers rewatch or seek to, which is not the same as where a good standalone short is. Replays also gather around slides, demos and jokes that need visual context, which an audio-only picker cannot see.");
-  L.push("- **The heatmap is coarse.** YouTube gives about 100 segments per video (one per 6 to 27 s for these videos), so label boundaries are only accurate to a segment. Hit at IoU 0.5 is strict against such labels; the mean best IoU column and the two ceiling rows show how much is reachable at all.");
-  L.push(`- **Random is the chance level**, averaged over ${RANDOM_SEEDS} seeds on the same candidate windows, so it is not a single lucky or unlucky draw.`);
-  L.push("- **The judge reads a shortlist**, as Selects does in a real job: the cheap text pre-score keeps ${videos[0]?.nShortlist ?? 8} windows spread over the video, and only those go to the model. With ${videos[0]?.nShortlist ?? 8} windows and k = 5, any picker takes most of the shortlist, so hit@3 and precision@3 are the columns that separate prefilter alone from prefilter + judge. The judge rows therefore measure the shipped pipeline (pre-score shortlist, then model). The shortlist ceiling row shows what that shortlist can reach at best.");
+  L.push("- **The heatmap is coarse.** YouTube gives about 100 segments per video (one per 6 to 27 s for these videos), so label boundaries are only accurate to a segment. Hit at IoU 0.5 is strict against such labels; mean best IoU and the ceiling rows show how much is reachable at all.");
+  L.push(`- **Random is the chance level**, averaged over ${RANDOM_SEEDS} seeds on the same windows, so it is not a single lucky or unlucky draw.`);
+  L.push(`- **Two stages.** Selects first keeps ${N0} windows with cheap text rules spread over the video, then the model scores only those. With ${N0} windows and k = 5, any picker takes most of the shortlist, so hit@3 and precision@3 separate "prefilter alone" from "prefilter + model" better than hit@5. "Model score only" ranks by the model's rubric score; "shipped blend" is what the app ranks by (0.7 model score + 0.3 text-rule score).`);
   const thin = videos.filter((v) => v.nCandidates < 20);
-  if (thin.length) L.push(`- **Few candidate windows** for ${thin.map((v) => `${v.title.slice(0, 40)} (${v.nCandidates})`).join(", ")}: whisper returned little punctuation, so most windows failed the "ends mid-thought" rule. Every method then picks from almost the same few windows.`);
+  if (thin.length) L.push(`- **Few candidate windows** for ${thin.map((v) => `${v.title.slice(0, 40)} (${v.nCandidates})`).join(", ")}: whisper returned little punctuation, so most windows failed the "ends mid-thought" rule.`);
   L.push("- **Energy** scores loudness, loudness variation and words per second, the signals cheap clippers use. It does not read the words.");
-  L.push("- Judge models run locally through Ollama on CPU. Time is wall time on this laptop while other work may share the CPU; treat it as an order of magnitude.");
+  L.push("- Judge models run locally through Ollama on CPU. Times are wall time on this laptop with other apps open; treat them as an order of magnitude.");
+  L.push("- Videos longer than 20 minutes are evaluated on their first 15 minutes, with labels from the heatmap inside that range.");
   L.push("- Videos are Creative Commons BY on YouTube; see `eval/datasets/manifest.json` for each URL and licence.");
   L.push("");
   return L.join("\n");
@@ -412,26 +493,29 @@ async function main() {
   if (LIMIT) todo = todo.slice(0, LIMIT);
   const C = await core();
   const installed = await ollamaModels();
-  const models = (MODELS_ARG || DEFAULT_MODELS).filter((m) => REPORT_ONLY || installed.includes(m));
-  log(`videos: ${todo.length}; judge models: ${models.join(", ") || "none"}${REPORT_ONLY ? " (report only)" : ""}`);
+  const plan = REPORT_ONLY ? PLAN : PLAN.filter((p) => installed.includes(p.model) || (log(`skipping ${p.model}: not installed in Ollama`), false));
+  log(`videos: ${todo.length}; plan: ${plan.map((p) => `${p.model}@${p.n}${p.list ? "+list" : ""}`).join(", ")}${REPORT_ONLY ? " (report only)" : ""}`);
 
-  const prev = readJson(join(RESULTS, "results.json"), { videos: [] });
-  const done = new Map(prev.videos.map((v) => [v.id, v]));
-  // Pass 0 transcribes every video (and scores the no-LLM methods); pass i adds model i for
-  // every video. Earlier work is cached, so each pass only pays for the new model.
-  const passes = REPORT_ONLY ? [models] : [[], ...models.map((_, i) => models.slice(0, i + 1))];
-  for (const ms of passes) {
+  const done = new Map();
+  const write = () => {
+    const videos = todo.map((v) => done.get(v.id)).filter(Boolean);
+    const agg = aggregate(videos);
+    writeJson(join(RESULTS, "results.json"), { generatedAt: new Date().toISOString(), k: K, iouThreshold: 0.5, settings: SETTINGS, judgeN: C.maxJudge, promptVersion: C.promptVersion, plan, randomSeeds: RANDOM_SEEDS, aggregate: agg, videos });
+    writeFileSync(join(RESULTS, "RESULTS.md"), report(videos, agg, manifest, plan));
+  };
+  // Pass 0 transcribes every video and scores the no-LLM methods (every plan entry is used
+  // only if already cached). Pass i runs plan entry i on every video; earlier ones come from cache.
+  const passes = REPORT_ONLY ? [plan.length] : [0, ...plan.map((_, i) => i + 1)];
+  for (const upto of passes) {
+    const stepPlan = plan.map((p, i) => ({ ...p, skip: i >= upto }));
     for (const v of todo) {
       try {
-        done.set(v.id, await runVideo(v, C, ms));
+        done.set(v.id, await runVideo(v, C, stepPlan));
       } catch (e) {
         log(`${v.id}: ${e.message}`);
         if (!REPORT_ONLY && /not available yet/.test(e.message)) throw e;
       }
-      const videos = [...done.values()].filter((x) => manifest.some((m) => m.id === x.id));
-      const agg = aggregate(videos);
-      writeJson(join(RESULTS, "results.json"), { generatedAt: new Date().toISOString(), k: K, iouThreshold: 0.5, settings: SETTINGS, judgeN: C.maxJudge, randomSeeds: RANDOM_SEEDS, aggregate: agg, videos });
-      writeFileSync(join(RESULTS, "RESULTS.md"), report(videos, agg, manifest));
+      write();
     }
   }
   log("done");
