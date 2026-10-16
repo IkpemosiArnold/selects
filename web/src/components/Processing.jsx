@@ -2,7 +2,21 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Masthead } from "../App.jsx";
 import { tc, aboutMinutes } from "../lib/time.js";
 import { useReducedMotion } from "../lib/hooks.js";
-import LanguageQuality, { plainHint } from "./LanguageQuality.jsx";
+import { languageName } from "../lib/languages.js";
+
+// The core's hints name CLI flags; in the app the same advice is said plainly.
+function plainHint(h) {
+  if (!h) return h;
+  return h
+    .replace(/\s*To judge it anyway, resume with --force\.?/g, "")
+    .replace(/a bigger model \(--asr-model ([\w.-]+)\)/g, "a bigger speech model ($1)")
+    .replace(/--asr-model ([\w.-]+)/g, "the $1 speech model")
+    .replace(/set --language (\w+)/g, (_, c) => `set the language to ${languageName(c)}`)
+    .replace(/set --language to/g, "set the language to")
+    .replace(/\(--language\)/g, "")
+    .replace(/--language/g, "the language")
+    .replace(/\s+\./g, ".");
+}
 
 const STEPS = [
   { key: "probe", label: "Read the file" },
@@ -98,7 +112,7 @@ function Reveal({ words, active, reduce }) {
   );
 }
 
-export default function Processing({ job, words, onResume, onRetranscribe }) {
+export default function Processing({ job, words, onResume }) {
   const reduce = useReducedMotion();
   const [resuming, setResuming] = useState(false);
   const dur = job.source?.duration || 0;
@@ -197,14 +211,6 @@ export default function Processing({ job, words, onResume, onRetranscribe }) {
           )}
         </div>
 
-        {(job.language || job.transcriptQuality) && (
-          <LanguageQuality
-            job={job}
-            variant="block"
-            onRetranscribe={onRetranscribe}
-            onForce={captionMode ? null : () => onResume({ force: true })}
-          />
-        )}
 
         {((job.stage === "transcribing" && !checkingLanguage) || isErr) && (
           <div className="reel-progress">

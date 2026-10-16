@@ -3,7 +3,8 @@ import { api, isMock } from "./lib/api.js";
 import { tc } from "./lib/time.js";
 import NewJob from "./components/NewJob.jsx";
 import Processing from "./components/Processing.jsx";
-import Review from "./components/Review.jsx";
+import Reel from "./components/reel/Reel.jsx";
+import LanguageAsk from "./components/reel/LanguageAsk.jsx";
 import RenderScreen from "./components/RenderScreen.jsx";
 import CaptionStudio from "./components/CaptionStudio.jsx";
 import { useFaces } from "./components/Blur.jsx";
@@ -115,6 +116,7 @@ function JobView({ jobId, view }) {
   const [words, setWords] = useState([]);
   const [loadError, setLoadError] = useState(null);
   const [captionsVersion, setCaptionsVersion] = useState(0);
+  const [langLater, setLangLater] = useState(false); // "Decide later" on the language question
   const faces = useFaces(jobId);
   const facesEvent = faces.onEvent;
   const jobRef = useRef(null);
@@ -228,20 +230,39 @@ function JobView({ jobId, view }) {
   }
 
   const captionMode = job.settings?.mode === "caption";
-  const processing = BEFORE_READY.includes(job.stage) ||
-    (job.stage === "error" &&
-      (captionMode
-        ? ["probe", "language", "transcribe"].includes(job.error?.stage) || job.stages?.transcribe?.status !== "done"
-        : job.error?.stage !== "render" && !job.candidates?.length));
   // A new language or speech model starts the transcript again from scratch.
-  const retranscribe = async (body) => {
-    await api.setLanguage(jobId, body);
+  const afterRetranscribe = async () => {
     setWords([]);
     const j = await refetch();
     if (j && !BEFORE_READY.includes(j.stage)) setJob({ ...j, stage: "queued" });
     go(`#/job/${jobId}`);
   };
-  if (processing) return <Processing job={job} words={words} onRetranscribe={retranscribe} onResume={async (body) => {
+  const transcribed = job.stages?.transcribe?.status === "done";
+  const settled = ["ready", "done", "error"].includes(job.stage);
+  const stoppedUnreliable = job.stage === "error" && job.transcriptQuality?.verdict === "unreliable";
+  const asked = !!job.language?.question && transcribed && settled && !langLater;
+  if ((view === "language" && transcribed && settled) || stoppedUnreliable || asked) {
+    return (
+      <LanguageAsk
+        key={job.language?.question ? "q" : "m"}
+        job={job}
+        words={words}
+        manual={view === "language" && !asked && !stoppedUnreliable}
+        onRetranscribed={afterRetranscribe}
+        onClose={async (confirmed) => {
+          if (confirmed) await refetch();
+          else setLangLater(true);
+          if (view === "language") history.back();
+        }}
+      />
+    );
+  }
+  const processing = BEFORE_READY.includes(job.stage) ||
+    (job.stage === "error" &&
+      (captionMode
+        ? ["probe", "language", "transcribe"].includes(job.error?.stage) || job.stages?.transcribe?.status !== "done"
+        : job.error?.stage !== "render" && !job.candidates?.length));
+  if (processing) return <Processing job={job} words={words} onResume={async (body) => {
     await api.resume(jobId, body);
     await refetch();
   }} />;
@@ -262,7 +283,6 @@ function JobView({ jobId, view }) {
         captionsVersion={captionsVersion}
         onJob={setJob}
         refetch={refetch}
-        onRetranscribe={retranscribe}
         onRender={startRender}
       />
     );
@@ -272,7 +292,7 @@ function JobView({ jobId, view }) {
   if (renderView || (job.stage === "done" && view !== "review")) {
     return <RenderScreen job={job} refetch={refetch} />;
   }
-  return <Review job={job} words={words} faces={faces} onCandidate={updateCandidate} onRetranscribe={retranscribe} refetch={refetch} onRender={startRender} />;
+  return <Reel job={job} words={words} faces={faces} captionsVersion={captionsVersion} onCandidate={updateCandidate} onRender={startRender} />;
 }
 
 export default function App() {

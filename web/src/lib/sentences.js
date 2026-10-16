@@ -1,27 +1,13 @@
-// Client-side sentence boundaries, used only to preview where a trim will
-// snap while dragging. The server's snapTrim is the authority; the UI always
-// adopts the value the PATCH returns.
+// Sentence edges in the browser, from the core's own rules (src/core/sentences.mjs
+// has no Node imports), so a trim previewed here lands where the server's
+// snapTrim will put it. The server stays the authority: the UI always adopts
+// the start and end the PATCH returns.
+import { toSentences as coreSentences, snapTrim } from "../../../src/core/sentences.mjs";
+
+export { snapTrim };
+
 export function toSentences(words) {
-  const out = [];
-  let i0 = 0;
-  for (let i = 0; i < words.length; i++) {
-    if (/[.?!]["')\]]?$/.test(words[i].w) || i === words.length - 1) {
-      out.push({ s: words[i0].s, e: words[i].e, i0, i1: i });
-      i0 = i + 1;
-    }
-  }
-  return out;
-}
-
-function nearest(list, t) {
-  let best = list[0];
-  for (const v of list) if (Math.abs(v - t) < Math.abs(best - t)) best = v;
-  return best;
-}
-
-export function snapEdge(sentences, t, edge) {
-  if (!sentences.length) return t;
-  return nearest(sentences.map((x) => (edge === "start" ? x.s : x.e)), t);
+  return coreSentences(words).map((x) => ({ ...x, i0: x.wordIdx[0], i1: x.wordIdx[1] }));
 }
 
 // Move an edge by one sentence in a direction (-1 earlier, +1 later).

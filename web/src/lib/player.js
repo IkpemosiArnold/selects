@@ -12,6 +12,7 @@ export function createPlayer() {
   let lastFrame = 0;
   let lastNotify = 0;
   let stopAt = null; // playSpan: pause here once, then forget it
+  let mutedByPolicy = false; // the browser refused sound before the first click
   const subs = new Set(); // React subscribers, about 15 times a second
   const frameSubs = new Set(); // DOM subscribers, every frame
 
@@ -45,10 +46,31 @@ export function createPlayer() {
     raf = requestAnimationFrame(loop);
   };
 
+  // Browsers refuse to play sound before the first click: play muted and say so.
+  const startVideo = () => {
+    video.play().catch((e) => {
+      if (e?.name === "NotAllowedError" && !video.muted) {
+        video.muted = true;
+        mutedByPolicy = true;
+        video.play().catch(() => { playing = false; notify(true); });
+        notify(true);
+      } else {
+        playing = false;
+        notify(true);
+      }
+    });
+  };
+
   const api = {
     get time() { return time; },
     get playing() { return playing; },
     get window() { return win; },
+    get mutedByPolicy() { return mutedByPolicy; },
+    unmute() {
+      mutedByPolicy = false;
+      if (video) video.muted = false;
+      notify(true);
+    },
     attach(el) {
       video = el;
       if (el) {
@@ -72,7 +94,7 @@ export function createPlayer() {
       if (time < win.start || time >= win.end - 0.05) api.seek(win.start);
       playing = true;
       lastFrame = 0;
-      if (video) video.play().catch(() => { playing = false; notify(true); });
+      if (video) startVideo();
       raf = requestAnimationFrame(loop);
       notify(true);
     },
@@ -83,7 +105,7 @@ export function createPlayer() {
       if (!playing) {
         playing = true;
         lastFrame = 0;
-        if (video) video.play().catch(() => { playing = false; notify(true); });
+        if (video) startVideo();
         raf = requestAnimationFrame(loop);
         notify(true);
       }

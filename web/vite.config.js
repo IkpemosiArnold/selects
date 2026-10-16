@@ -7,6 +7,8 @@ export default defineConfig({
   plugins: [react()],
   build: { outDir: "dist", emptyOutDir: true, assetsInlineLimit: 0 },
   server: {
+    // the web app reuses pure helpers from src/core (sentence edges)
+    fs: { allow: [".."] },
     proxy: {
       "/api": { target: core, changeOrigin: false },
       "/media": { target: core, changeOrigin: false },

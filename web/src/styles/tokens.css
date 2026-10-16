@@ -27,6 +27,14 @@
   --surround: #1d2126;
   --focus: #2f5fd0;
   --shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 1px 2px rgba(29, 33, 38, 0.08);
+  /* The slate: a black board written in chalk, the same in both themes. */
+  --slate: #16191c;
+  --slate-rule: rgba(232, 237, 235, 0.16);
+  --chalk: #e8edeb;
+  --chalk-2: #a3adb2;
+  --slate-red: #ff8a78;
+  --page: #fbfcfc; /* the script page */
+  --r-card: 16px;
 
   --mono: "Paper Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --sans: "Atkinson Hyperlegible Next", -apple-system, "Segoe UI", system-ui, sans-serif;
@@ -64,6 +72,8 @@
     --surround: #121518;
     --focus: #86a7f3;
     --shadow: none;
+    --slate: #0e1013;
+    --page: #23282e;
     color-scheme: dark;
   }
 }
@@ -88,5 +98,7 @@
   --surround: #121518;
   --focus: #86a7f3;
   --shadow: none;
+  --slate: #0e1013;
+  --page: #23282e;
   color-scheme: dark;
 }

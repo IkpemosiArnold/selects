@@ -9,7 +9,7 @@ import { cueAt, isEdited } from "../lib/cues.js";
 import { copyText } from "../lib/hooks.js";
 import { Masthead } from "../App.jsx";
 import CaptionEditor, { useCaptions } from "./CaptionEditor.jsx";
-import LanguageQuality from "./LanguageQuality.jsx";
+import { languageName } from "../lib/languages.js";
 import { BlurOverlay, BlurPanel, useBlurDraft, useContentBox, trackLabelsFor, blurSummary } from "./Blur.jsx";
 
 function naturalSize(job) {
@@ -118,6 +118,24 @@ function StudioPreview({ job, player, items, blur, faces, blurEditing, armed, on
   );
 }
 
+const VERDICT = { good: "transcript good", shaky: "transcript shaky, check the grey words", unreliable: "transcript unreliable" };
+
+// Which language whisper listened in, and a way to say it was wrong.
+function LanguageLine({ job }) {
+  const used = job.language?.used || job.settings?.language;
+  const q = job.transcriptQuality;
+  if (!used && !q) return null;
+  return (
+    <p className="lang-line">
+      <span>
+        {used ? languageName(used === "auto" ? "en" : used) : "Language unknown"}
+        {q?.verdict ? `, ${VERDICT[q.verdict] || q.verdict}` : ""}.
+      </span>
+      <a href={`#/job/${job.id}/language`}>Wrong language?</a>
+    </p>
+  );
+}
+
 function LiveBlurPanel({ player, ...rest }) {
   const t = usePlayerTime(player);
   return <BlurPanel t={t} {...rest} />;
@@ -202,7 +220,7 @@ function OutputPanel({ job, onRender, busy }) {
   );
 }
 
-export default function CaptionStudio({ job, words, mode, faces, captionsVersion, onJob, refetch, onRetranscribe, onRender }) {
+export default function CaptionStudio({ job, words, mode, faces, captionsVersion, onJob, refetch, onRender }) {
   const player = usePlayer();
   const caps = useCaptions(job.id, captionsVersion);
   const isCaption = mode === "caption";
@@ -308,7 +326,7 @@ export default function CaptionStudio({ job, words, mode, faces, captionsVersion
   return (
     <div className="studio-shell">
       <Masthead job={job} />
-      <LanguageQuality job={job} variant="strip" onRetranscribe={onRetranscribe} />
+      <LanguageLine job={job} />
       <main className="studio">
         <h1 className="sr-only">{isCaption ? "Caption the video" : "Review captions"} for {job.source?.name}</h1>
         <div className="studio-preview">
