@@ -6,7 +6,7 @@ tags: devchallenge, hf26challenge, ai, opensource
 
 *This is a submission for the [Hacktoberfest 2026 Open Source AI Challenge: Side Hustle](https://dev.to/challenges/hf26).*
 
-On the night of 15 October, my 2017 MacBook Pro sat on its 65 W charger and still lost battery, from 18% down to 8%, while Gemma 3 4B read a passage of about 330 words at 0.87 tokens a second. It took 1,437 seconds, nearly 24 minutes, to choose one clip from that passage. It returned valid JSON with real timestamps, and it chose the speaker's introduction, which the prompt had told it to skip.
+On the night of 15 October, my 2017 MacBook Pro sat on its 67 W charger and still lost battery, from 18% down to 8%, while Gemma 3 4B read a passage of about 330 words at 0.87 tokens a second. It took 1,437 seconds, nearly 24 minutes, to choose one clip from that passage. It returned valid JSON with real timestamps, and it chose the speaker's introduction, which the prompt had told it to skip.
 
 The test was the first step of an experiment, and the reason for the experiment was a number. In the week of 9 September, one of the top posts on r/naijaremote was a video clipping gig that paid $0.40 for every 1,000 views. At that rate a clip needs 100,000 views to earn $40. Opus Clip's Starter plan costs $15 a month on its [pricing page](https://www.opus.pro/pricing), so a clipper on that gig would need 37,500 views before the tool paid for itself.
 
