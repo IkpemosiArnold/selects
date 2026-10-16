@@ -13,6 +13,7 @@ export function plainHint(h) {
     .replace(/a bigger model \(--asr-model ([\w.-]+)\)/g, "a bigger speech model ($1)")
     .replace(/--asr-model ([\w.-]+)/g, "the $1 speech model")
     .replace(/set --language to/g, "set the language to")
+    .replace(/set --language (\w+)/g, (_, c) => `set the language to ${languageName(c)}`)
     .replace(/\(--language\)/g, "")
     .replace(/--language/g, "the language")
     .replace(/\s+\./g, ".");
@@ -114,7 +115,9 @@ export default function LanguageQuality({ job, onRetranscribe, onForce, variant 
   const det = lang?.detected;
   const warn = lang?.warning && !dismissed ? lang.warning : null;
   const isClips = job.settings?.mode !== "caption";
-  const stopped = job.stage === "error" && job.error?.stage === "transcribe" && q?.verdict === "unreliable";
+  const stopped = job.stage === "error" && ["language", "transcribe"].includes(job.error?.stage);
+  // What the core suggests trying next ({ asrModel, language, force }), worded as buttons.
+  const suggest = (stopped ? job.error?.suggest : null) || (q?.verdict !== "good" ? q?.suggest : null) || null;
   const consequence = isClips
     ? "This replaces the transcript, your caption edits and the clips found from it."
     : "This replaces the transcript and your caption edits.";
@@ -143,11 +146,20 @@ export default function LanguageQuality({ job, onRetranscribe, onForce, variant 
   };
 
   const quick = [];
-  if (used && used !== "en") quick.push(["en", "It's English"]);
-  if (det && det.code !== used) quick.push([det.code, `Use ${languageName(det.code)}`]);
+  if (suggest && (suggest.asrModel || suggest.language)) {
+    const lang = suggest.language || (used && used !== "auto" ? used : undefined);
+    const label = suggest.asrModel
+      ? `Transcribe again with ${suggest.asrModel}${suggest.language && suggest.language !== used ? `, in ${languageName(suggest.language)}` : ""}`
+      : `Transcribe again in ${languageName(suggest.language)}`;
+    quick.push([`s:${suggest.asrModel || ""}:${lang || ""}`, label, { language: lang || "en", ...(suggest.asrModel ? { asrModel: suggest.asrModel } : {}) }]);
+  }
+  if (used && used !== "en") quick.push(["en", "It's English", { language: "en" }]);
+  if (det && det.code !== used) quick.push([det.code, `Use ${languageName(det.code)}`, { language: det.code }]);
   // The best decode, when it is neither of those.
   const best = lang?.compared?.slice().sort((a, b) => b.meanP - a.meanP)[0];
-  if (best && best.code !== used && !quick.some(([c]) => c === best.code)) quick.push([best.code, `Use ${languageName(best.code)}`]);
+  if (best && best.code !== used && !quick.some(([c]) => c === best.code)) quick.push([best.code, `Use ${languageName(best.code)}`, { language: best.code }]);
+  const langQuick = quick.filter(([k]) => !k.startsWith("s:"));
+  const suggestQuick = quick.filter(([k]) => k.startsWith("s:"));
 
   const loud = !!warn || (q && q.verdict !== "good") || stopped;
   const langLine = used ? (
@@ -199,8 +211,8 @@ export default function LanguageQuality({ job, onRetranscribe, onForce, variant 
             </p>
             <p className="lq-warn-text">{warn}</p>
             <div className="lq-quick">
-              {quick.map(([code, label]) => (
-                <button key={code} type="button" className="btn" disabled={busy} onClick={() => go({ language: code })}>
+              {langQuick.map(([code, label, body]) => (
+                <button key={code} type="button" className="btn" disabled={busy} onClick={() => go(body)}>
                   {label}
                 </button>
               ))}
@@ -217,6 +229,15 @@ export default function LanguageQuality({ job, onRetranscribe, onForce, variant 
       <div className="lq-q">
         {q && <QualityLine q={q} />}
         {q?.hint && <p className="lq-hint">{plainHint(q.hint)}</p>}
+        {suggestQuick.length > 0 && (
+          <div className="lq-quick">
+            {suggestQuick.map(([k, label, body]) => (
+              <button key={k} type="button" className={stopped ? "btn btn-primary" : "btn"} disabled={busy} onClick={() => go(body)}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         {!stopped && (
           <button type="button" className="btn btn-quiet lq-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
             {open ? "Close" : "Another language or speech model"}
@@ -224,7 +245,7 @@ export default function LanguageQuality({ job, onRetranscribe, onForce, variant 
         )}
       </div>
       {stopped ? <OverrideForm job={job} busy={busy} onGo={go} withModel={true} /> : open && <OverrideForm job={job} busy={busy} onGo={go} withModel compact />}
-      {stopped && onForce && (
+      {stopped && onForce && (job.error?.suggest?.force || q?.verdict === "unreliable") && (
         <p className="lq-force">
           <button type="button" className="btn btn-quiet" disabled={busy} onClick={onForce}>
             Find clips in it anyway

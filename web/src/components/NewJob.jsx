@@ -150,7 +150,7 @@ export default function NewJob() {
     if (f) takeFile(f);
   };
 
-  const submit = async (e, mode = "now") => {
+  const submit = async (e, how = "now") => {
     e?.preventDefault?.();
     if (!path.trim()) {
       setError("Add the path to a video first.");
@@ -170,8 +170,8 @@ export default function NewJob() {
         ...(license && license !== "other" ? { license } : {}),
         ...(sourceUrl.trim() ? { sourceUrl: sourceUrl.trim() } : {}),
       };
-      const job = await api.createJob(path.trim(), settings, { queueOnly: mode === "queue" });
-      if (mode === "queue") {
+      const job = await api.createJob(path.trim(), settings, { queueOnly: how === "queue" });
+      if (how === "queue") {
         setNotice(`Queued ${job.source?.name}. It starts when the jobs ahead of it finish.`);
         setPath("");
         setBusy(false);

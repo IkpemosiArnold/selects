@@ -189,6 +189,7 @@ function JobView({ jobId, view }) {
         facesEvent(data);
       } else if (type === "captions") {
         setCaptionsVersion((v) => v + 1);
+        refetch().catch(() => {}); // rendered clips or output may now be stale
       } else if (type === "error" && data) {
         setJob((j) => (j ? { ...j, stage: "error", error: data } : j));
       }

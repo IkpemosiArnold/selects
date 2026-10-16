@@ -380,6 +380,7 @@ export default function CaptionStudio({ job, words, mode, faces, captionsVersion
                   onClick={async () => {
                     setConfirmReset(false);
                     await caps.reset();
+                    refetch?.().catch(() => {});
                     flash("Back to whisper's words.");
                   }}
                 >

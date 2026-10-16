@@ -112,7 +112,7 @@ export function createMockApi(params) {
     for (const k of ["candidates", "judge"]) bad.stages[k] = { status: "pending", startedAt: null, endedAt: null, progress: 0, etaSec: null, note: null };
     bad.language = langInfo("auto", "yo", { code: "yo", p: 0.88 }, true);
     bad.transcriptQuality = quality(bad._words, "unreliable");
-    bad.error = { stage: "transcribe", message: "The transcript is too unsure to pick clips from.", hint: bad.transcriptQuality.hint };
+    bad.error = { stage: "transcribe", message: "The transcript is too unsure to pick clips from.", hint: bad.transcriptQuality.hint, suggest: bad.transcriptQuality.suggest };
     bad._emitted = null;
     jobs.set(bad.id, bad);
   }
@@ -169,7 +169,8 @@ export function createMockApi(params) {
         ? `Whisper was unsure of ${pc(lowShare)} of the words (mean confidence ${meanP.toFixed(2)}). Check the captions before posting; a bigger model (--asr-model small.en) usually helps with accents.`
         : `Whisper was unsure of ${pc(lowShare)} of the words (mean confidence ${meanP.toFixed(2)}), so clips picked from this transcript would be guesses. Try --asr-model small.en, or set --language to the language spoken.`;
     const score = verdict === "good" ? 0.84 : verdict === "shaky" ? 0.66 : 0.41;
-    return { score, meanP: +meanP.toFixed(3), lowShare: +lowShare.toFixed(3), repeatShare: 0.01, compression: 1.6, words: ws.length, verdict, hint };
+    const suggest = verdict === "good" ? null : { asrModel: "small.en", language: "en", force: verdict === "unreliable" };
+    return { score, meanP: +meanP.toFixed(3), lowShare: +lowShare.toFixed(3), repeatShare: 0.01, compression: 1.6, words: ws.length, verdict, hint, suggest };
   }
 
   function wordsOf(job) {
