@@ -217,11 +217,15 @@ export function iou(a, b) {
 
 /**
  * The second stage's input: pick at most n windows for the judge (default 8, because the
- * judge is the slow step). First the best window in each of n/3 equal time buckets (so one
- * strong stretch cannot crowd out the rest of the video), then the best remaining by
- * pre-score, never keeping two windows that overlap by more than `maxIou`.
+ * judge is the slow step). First the best window in each of `segments` equal stretches of
+ * the timeline (so one strong stretch cannot crowd out the rest of the video), then the best
+ * remaining by pre-score, never keeping two windows that overlap by more than `maxIou`.
+ * Segments: n/3. On inputs over 30 minutes, one per 10 minutes when that is more (never
+ * more than n), and no stretch may hold more than `perSegment` picks (default twice its fair share, at least 3),
+ * so a 2-hour sermon or podcast gets candidates from the whole of it. Up to 30 minutes
+ * the picks are exactly as before (the eval measured those).
  */
-export function shortlist(cands, { n = 8, maxIou = 0.4, duration, minP = 0.45 } = {}) {
+export function shortlist(cands, { n = 8, maxIou = 0.4, duration, minP = 0.45, perSegment } = {}) {
   // drop windows whisper barely heard, as long as enough others are left to choose from
   const heard = cands.filter((c) => c.meanP == null || c.meanP >= minP);
   if (heard.length >= Math.min(n, cands.length) / 2 && heard.length >= 1) cands = heard;
@@ -230,16 +234,29 @@ export function shortlist(cands, { n = 8, maxIou = 0.4, duration, minP = 0.45 } 
   const byScore = cands.slice().sort((a, b) => b.pre - a.pre || a.start - b.start);
   const chosen = [];
   const ok = (c) => chosen.every((x) => iou(x, c) <= maxIou);
-  const buckets = Math.max(1, Math.ceil(n / 3));
-  for (let b = 0; b < buckets; b++) {
-    const lo = (b * dur) / buckets;
-    const hi = ((b + 1) * dur) / buckets;
-    const best = byScore.find((c) => c.start >= lo && c.start < hi && ok(c));
-    if (best) chosen.push(best);
+  const long = dur > LONG_INPUT_SEC;
+  const buckets = Math.max(1, Math.min(n, Math.max(Math.ceil(n / 3), long ? Math.ceil(dur / LONG_SEGMENT_SEC) : 0)));
+  const bucketOf = (c) => Math.min(buckets - 1, Math.floor((c.start / dur) * buckets));
+  const cap = long ? perSegment ?? Math.max(3, Math.ceil((2 * n) / buckets)) : Infinity;
+  const count = new Array(buckets).fill(0);
+  for (let b = 0; b < buckets && chosen.length < n; b++) {
+    const best = byScore.find((c) => bucketOf(c) === b && ok(c));
+    if (best) {
+      chosen.push(best);
+      count[b]++;
+    }
   }
   for (const c of byScore) {
     if (chosen.length >= n) break;
-    if (!chosen.includes(c) && ok(c)) chosen.push(c);
+    if (!chosen.includes(c) && ok(c) && count[bucketOf(c)] < cap) {
+      chosen.push(c);
+      count[bucketOf(c)]++;
+    }
   }
   return chosen.sort((a, b) => a.start - b.start);
 }
+
+/** One segment of the shortlist per 10 minutes of video, at least. */
+export const LONG_SEGMENT_SEC = 600;
+/** Inputs longer than this cap how many picks one stretch of the timeline may hold. */
+export const LONG_INPUT_SEC = 1800;

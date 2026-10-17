@@ -30,6 +30,7 @@ test("selectCandidates drops non-speech words and uses defaults", () => {
   const words = [{ w: "[MUSIC]", s: 0, e: 2, p: 1 }, ...talk().map((w) => ({ ...w, s: w.s + 2, e: w.e + 2 }))];
   const sel = selectCandidates({ words });
   assert.ok(sel.sentences.every((s) => !/MUSIC/.test(s.text)));
-  assert.ok(sel.shortlist.length <= 8);
-  assert.deepEqual(selectCandidates({ words: [] }), { sentences: [], windows: [], shortlist: [] });
+  assert.ok(sel.shortlist.length <= 16, "auto: max(16, 2k) with no measured judge speed");
+  const empty = selectCandidates({ words: [] });
+  assert.deepEqual([empty.sentences, empty.windows, empty.shortlist], [[], [], []]);
 });
