@@ -14,7 +14,7 @@ import { applyProfile } from "./profiles.mjs";
 import { applyMadeFor } from "./madefor.mjs";
 import { transcriptQuality } from "./quality.mjs";
 import { attributionLine, captionWithCredit, mediaReminder, normaliseLicense, OWN_FOOTAGE } from "./attribution.mjs";
-import { makeCandidates, shortlist } from "./candidates.mjs";
+import { selectCandidates } from "./select.mjs";
 import { splitNonSpeech, speechOnly } from "./nonspeech.mjs";
 import { judge as realJudge, listwise as realListwise } from "./judge.mjs";
 import { checkFaithful as realFaithful } from "./faithful.mjs";
@@ -522,12 +522,9 @@ async function runStages(id, { deps = {}, signal } = {}) {
       current = "candidates";
       begin("candidates");
       // sentences and windows are built from speech only; laughter is kept as a pre-score signal
-      const events = loadEvents(dir, words);
-      const speech = speechOnly(words);
-      const sentences = toSentences(speech);
-      const loudness = readJson(path.join(dir, "loudness.json"), null);
-      const all = makeCandidates(sentences, { minLen: job.settings.minLen, maxLen: job.settings.maxLen, stride: job.settings.stride ?? 6, loudness, words: speech, events });
-      short = shortlist(all, { n: job.settings.judgeN ?? 8, duration: job.source.duration });
+      const sel = selectCandidates({ words, events: loadEvents(dir, words), loudness: readJson(path.join(dir, "loudness.json"), null), settings: job.settings, duration: job.source.duration });
+      const { sentences, windows: all } = sel;
+      short = sel.shortlist;
       writeJsonAtomic(candFile, { sentences: sentences.length, windows: all.length, shortlist: short });
       job.candidates = short;
       finish("candidates", `${all.length} windows passed the filter, ${short.length} go to the judge`);

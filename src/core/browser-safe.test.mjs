@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const BROWSER_SAFE = [
-  "sentences.mjs", "nonspeech.mjs", "candidates.mjs", "rank.mjs", "cues.mjs", "layout.mjs",
+  "sentences.mjs", "nonspeech.mjs", "candidates.mjs", "select.mjs", "rank.mjs", "cues.mjs", "layout.mjs",
   "judge-core.mjs", "kit-core.mjs", "faithful-core.mjs", "madefor.mjs", "tasks.mjs", "gemini.mjs", "format.mjs", "attribution.mjs", "langid/ng5.mjs", "langid/cues.mjs",
 ];
 
