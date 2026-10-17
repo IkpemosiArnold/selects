@@ -40,6 +40,24 @@ export function compressionRatio(text) {
  * longer they are, so a single ratio for a long talk is meaningless; whisper itself checks
  * per 30 s segment. Clean talks measured 1.75 to 2.08 here.
  */
+/**
+ * The 80-word chunks whose compression is over 2.4 (whisper looping), as word index ranges
+ * [{ i0, i1, ratio }]. Used to tell one local loop in a long talk from a broken transcript.
+ */
+export function loopedChunks(texts, size = 80, limit = 2.4) {
+  const out = [];
+  for (let i = 0; i < texts.length; i += size) {
+    const chunk = texts.slice(i, i + size);
+    if (chunk.length < size / 2 && i > 0) break;
+    const r = compressionRatio(chunk.join(" "));
+    if (r > limit) out.push({ i0: i, i1: Math.min(texts.length, i + size) - 1, ratio: r });
+  }
+  return out;
+}
+
+/** Above this share of looped words, a transcript's worst loop counts against all of it. */
+export const LOOP_SHARE = 0.02;
+
 export function maxChunkCompression(texts, size = 80) {
   let worst = 1;
   for (let i = 0; i < texts.length; i += size) {
@@ -66,11 +84,19 @@ export function transcriptQuality(words, { duration = null, thresholds = THRESHO
   const lowShare = ps.filter((p) => p < LOW_P).length / n;
   const rep = repeatShare(words.map((w) => w.w));
   const comp = maxChunkCompression(words.map((w) => w.w));
+  // A long talk can have one short stretch where whisper looped ("we're going to take our
+  // data" eight times, 88 minutes into a 2-hour video) while the other 99.7% is clean. Such a
+  // stretch is reported in `loops` (seconds) and kept out of the candidates; only when loops
+  // cover more than LOOP_SHARE of the words does the worst one count against the transcript.
+  const looped = loopedChunks(words.map((w) => w.w));
+  const loopWords = looped.reduce((a, l) => a + l.i1 - l.i0 + 1, 0);
+  const loopShare = loopWords / n;
+  const compForScore = loopShare > LOOP_SHARE ? comp : Math.min(comp, 2.4);
   const span = duration || Math.max(1, words[n - 1].e - words[0].s);
   const wordsPerMin = (n / span) * 60;
   // the share of unsure words separates clean from bad far better than the mean does:
   // clean talks had 0.4% to 4.2% unsure words, the elderly speaker with base.en 20%
-  let score = meanP - Math.max(0, lowShare - 0.05) - 1.5 * Math.max(0, rep - 0.05) - 0.3 * Math.max(0, comp - 2.4);
+  let score = meanP - Math.max(0, lowShare - 0.05) - 1.5 * Math.max(0, rep - 0.05) - 0.3 * Math.max(0, compForScore - 2.4);
   score = Math.max(0, Math.min(1, score));
   let verdict = score >= thresholds.good ? "good" : score >= thresholds.shaky ? "shaky" : "unreliable";
   // a long video with almost no words is suspicious however confident they are
@@ -93,6 +119,8 @@ export function transcriptQuality(words, { duration = null, thresholds = THRESHO
     lowShare: +lowShare.toFixed(3),
     repeatShare: rep,
     compression: comp,
+    loops: looped.map((l) => ({ s: words[l.i0].s, e: words[l.i1].e, ratio: l.ratio })),
+    loopShare: +loopShare.toFixed(4),
     words: n,
     wordsPerMin: +wordsPerMin.toFixed(1),
     verdict,

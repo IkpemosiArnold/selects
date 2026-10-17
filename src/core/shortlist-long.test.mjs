@@ -99,3 +99,41 @@ test("selectCandidates reports the judge count it used", () => {
   assert.equal(sel.judgeN.n, 12);
   assert.ok(sel.shortlist.length <= 12);
 });
+
+test("one stretch where whisper looped does not fail a 2-hour transcript, and never becomes a clip", async () => {
+  const { transcriptQuality } = await import("./quality.mjs");
+  // varied speech: sentences of 6 to 13 words drawn from a few hundred made-up words, 2.5 words a second
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const vocab = Array.from({ length: 400 }, (_, i) => `w${(i * 7919) % 9973}`);
+  const speech = (n) => {
+    const out = [];
+    let left = 0;
+    for (let i = 0; i < n; i++) {
+      if (!left) left = 6 + Math.floor(rnd() * 8);
+      left--;
+      const w = vocab[Math.floor(rnd() * vocab.length)];
+      out.push({ w: (out.length && out[out.length - 1].w.endsWith(".")) || !out.length ? w.toUpperCase() : left ? w : `${w}.`, s: +(i * 0.4).toFixed(2), e: +(i * 0.4 + 0.3).toFixed(2), p: 0.93 });
+    }
+    return out;
+  };
+  const words = speech(18000);
+  // 88 minutes in, whisper repeats one phrase for about 80 words (as on the real 2-hour run)
+  const at = words.findIndex((w) => w.s > 88 * 60);
+  const loop = "And we're going to take our data".split(" ");
+  for (let i = 0; i < 96; i++) words[at + i].w = loop[i % loop.length];
+  const q = transcriptQuality(words, { duration: 7316 });
+  assert.ok(q.compression > 2.4, "the loop is seen");
+  assert.notEqual(q.verdict, "unreliable", `verdict ${q.verdict}, score ${q.score}`);
+  assert.ok(q.loops.length >= 1 && q.loops[0].s > 87 * 60 && q.loops[0].s < 90 * 60);
+  const sel = selectCandidates({ words, settings: { k: 30 }, duration: 7316, exclude: q.loops });
+  assert.ok(sel.shortlist.every((c) => !q.loops.some((x) => c.start < x.e && c.end > x.s)));
+  // in a 10-minute transcript the same loop is 8% of the words, and still counts against it
+  const short = speech(1500);
+  const clean = transcriptQuality(short, { duration: 600 });
+  for (let i = 0; i < 96; i++) short[200 + i].w = loop[i % loop.length];
+  const loopy = transcriptQuality(short, { duration: 600 });
+  assert.equal(clean.verdict, "good");
+  assert.notEqual(loopy.verdict, "good");
+  assert.ok(loopy.score < clean.score - 0.1, `${loopy.score} against ${clean.score}`);
+});

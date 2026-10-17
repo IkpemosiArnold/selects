@@ -46,9 +46,10 @@ export function judgeCount({ k = null, duration = null, judgeN = null, secPerCal
  *           settings?: { minLen?: number, maxLen?: number, stride?: number, judgeN?: number },
  *           duration?: number|null, judge?: { secPerCall?: number|null, budgetSec?: number|null } }} input
  *   judge: the judge's measured seconds per call and the time budget, for an auto judgeN
+ *   exclude: [{ s, e }] stretches to keep out of the shortlist (whisper loops)
  * @returns {{ sentences: object[], windows: object[], shortlist: object[], judgeN: object }}
  */
-export function selectCandidates({ words, events = null, loudness = null, settings = {}, duration = null, judge = {} }) {
+export function selectCandidates({ words, events = null, loudness = null, settings = {}, duration = null, judge = {}, exclude = [] }) {
   const speech = speechOnly(words || []);
   const sentences = toSentences(speech);
   const windows = makeCandidates(sentences, {
@@ -60,6 +61,8 @@ export function selectCandidates({ words, events = null, loudness = null, settin
     events: events || [],
   });
   const count = judgeCount({ k: settings.k ?? null, duration, judgeN: settings.judgeN ?? null, secPerCall: judge.secPerCall ?? null, budgetSec: judge.budgetSec ?? settings.judgeBudgetSec ?? judgeBudgetSec(duration) });
-  const short = shortlist(windows, { n: count.n, duration: duration ?? undefined });
+  // stretches where whisper looped (transcriptQuality's `loops`) never become clips
+  const usable = exclude?.length ? windows.filter((w) => !exclude.some((x) => w.start < x.e && w.end > x.s)) : windows;
+  const short = shortlist(usable, { n: count.n, duration: duration ?? undefined });
   return { sentences, windows, shortlist: short, judgeN: count };
 }
