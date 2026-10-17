@@ -258,6 +258,8 @@ async function evaluate(v, C, P, phase) {
   // model judges on J = shortlists + R
   const J = [...new Map([...NS.flatMap((n) => short[n]), ...R].map((w) => [w.id, w])).values()];
   out.nJudged = J.length;
+  out.rank.prescore.J = rankMetrics(J, (w) => w.pre);
+  out.rank.energy.J = rankMetrics(J, (w) => eById.get(w.id));
   for (const model of [GEMMA4_LABEL, QWEN]) {
     const isGem = model === GEMMA4_LABEL;
     let judged = null;
@@ -276,6 +278,9 @@ async function evaluate(v, C, P, phase) {
     const jt = new Map(judged.map((c) => [c.id, c]));
     const key = isGem ? "gemma4" : "qwen";
     out.rank[key] = { R: rankMetrics(R, (w) => jt.get(w.id)?.judgeTotal), J: rankMetrics(J, (w) => jt.get(w.id)?.judgeTotal) };
+    // exploratory: each rubric dimension alone, and the shipped blend with the pre-score
+    for (const dim of ["hook", "standalone", "payoff", "clarity"]) out.rank[`${key}:${dim}`] = { R: rankMetrics(R, (w) => jt.get(w.id)?.scores?.[dim]) };
+    out.rank[`${key}:blend`] = { R: rankMetrics(R, (w) => jt.get(w.id)?.total), J: rankMetrics(J, (w) => jt.get(w.id)?.total) };
     out.judged[key] = judged.map((c) => ({ id: c.id, judgeTotal: c.judgeTotal, total: c.total, scores: c.scores, reason: c.reason }));
     for (const n of NS) {
       const sj = short[n].map((w) => jt.get(w.id));
@@ -321,7 +326,7 @@ async function evaluate(v, C, P, phase) {
 function aggregate(videos) {
   const A = { n: videos.length, rank: {}, top: {}, tests: {} };
   const col = (f) => videos.map(f).filter((x) => x != null && !Number.isNaN(x));
-  for (const m of ["random", "energy", "prescore", "gemma4", "qwen"]) {
+  for (const m of [...new Set(videos.flatMap((v) => Object.keys(v.rank)))]) {
     for (const set of ["all", "R", "J"]) {
       const a = col((v) => v.rank[m]?.[set]?.auc);
       if (!a.length) continue;
@@ -353,6 +358,11 @@ function aggregate(videos) {
   const adj = holm(prim.map((h) => T[h].p));
   prim.forEach((h, i) => (T[h].pHolm = adj[i]));
   T.H5 = { label: "Gemma 4 minus qwen 0.5B, AUC on R", ...paired("gemma4", "qwen") };
+  // exploratory power check: videos needed for 80% power at the observed paired effect
+  const d = videos.filter((v) => v.rank.gemma4?.R?.auc != null).map((v) => v.rank.gemma4.R.auc - v.rank.prescore.R.auc);
+  const g = videos.filter((v) => v.rank.gemma4?.R?.auc != null).map((v) => v.rank.gemma4.R.auc - 0.5);
+  const need = (xs) => { const m = mean(xs); const sd = Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / Math.max(1, xs.length - 1)); return m ? Math.ceil(((1.96 + 0.84) * sd / Math.abs(m)) ** 2) : null; };
+  A.power = { gemma4VsChance: need(g), gemma4VsPrescore: need(d) };
   const h6 = videos.filter((v) => v.top["shipped@16"] && v.top["prefilter@16"]);
   T.H6 = { label: "Shipped (16) minus prefilter alone (16), hit@3", ...signFlipTest(h6.map((v) => v.top["shipped@16"].hit3 - v.top["prefilter@16"].hit3)) };
   return A;
@@ -439,6 +449,12 @@ export function report(videos, A, { excluded = [], prefer = null, v1 = null } = 
   } else L.push("| H7, H8 | Blind preference test | 0 | waiting for ratings | | | |");
   L.push("", "Effects are mean differences in AUC (H2, H4, H5), AUC minus 0.5 (H1, H3), or hit@3 difference (H6). p is a two-sided sign-flip permutation test over videos; H1 to H4 are Holm-corrected.", "");
 
+  L.push("## Exploratory (not pre-registered)", "");
+  L.push("| Analysis | windows | n | AUC (95% CI) | rho (95% CI) |", "|---|---|---|---|---|");
+  const ex = [["gemma4:hook", "R", "Gemma 4, hook score alone"], ["gemma4:standalone", "R", "Gemma 4, standalone score alone"], ["gemma4:payoff", "R", "Gemma 4, payoff score alone"], ["gemma4:clarity", "R", "Gemma 4, clarity score alone"], ["gemma4:blend", "R", "Gemma 4 blended with the pre-score (what the app ranks by)"], ["gemma4", "J", "Gemma 4 on the shortlist plus R"], ["prescore", "J", "pre-score on the shortlist plus R"], ["qwen:blend", "R", "qwen 0.5B blended with the pre-score"]];
+  for (const [m, set, label] of ex) { const a = A.rank[`${m}|${set}`]; if (a) L.push(`| ${label} | ${set} | ${a.n} | ${ci(a.auc)} | ${ci(a.rho)} |`); }
+  if (A.power) L.push("", `Power: at the effects observed here, about ${A.power.gemma4VsChance ?? "n/a"} videos would give 80% power for Gemma 4 against chance, and about ${A.power.gemma4VsPrescore ?? "n/a"} for Gemma 4 against the pre-score (two-sided, alpha 0.05, normal approximation).`);
+  L.push("");
   L.push("## Top picks against replay peaks (v1 metric)", "");
   L.push("| Method | n | hit@3 (95% CI) | hit@5 | mean best IoU (95% CI) |", "|---|---|---|---|---|");
   const tn = { random: "random", energy: "energy", prescore: "pre-score over all windows", "prefilter@8": "prefilter alone (8)", "prefilter@16": "prefilter alone (16)", "gemma4@8": "Gemma 4 score only (8)", "gemma4@16": "Gemma 4 score only (16)", "gemma4-blend@16": "Gemma 4 blend (16)", "shipped@8": "**Selects as shipped** (8, blend + listwise)", "shipped@16": "**Selects Smart mode** (16, blend + listwise)", "qwen@16": "qwen 0.5B score only (16)", "ceiling@8": "ceiling: best of the 8", "ceiling@16": "ceiling: best of the 16", ceiling: "ceiling: best of all windows" };
