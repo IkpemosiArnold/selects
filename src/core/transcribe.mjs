@@ -126,8 +126,134 @@ export async function runWhisper(wav, { outBase, model, bin, language = "en", pr
   return readJson(`${outBase}.json`);
 }
 
+// Long videos are transcribed in chunks of about CHUNK_SEC (cut at a quiet moment), and each
+// finished chunk is kept on disk, so a crash, a kill or a sleep 90 minutes into a 2-hour
+// talk loses one chunk at most, not the whole transcription.
+export const CHUNK_SEC = 600;
+const chunkSec = () => Number(process.env.SELECTS_CHUNK_SEC) || CHUNK_SEC;
+
+/**
+ * Where to cut a long recording for whisper: about every `chunkSec` seconds, at the quietest
+ * moment `quietest(t0, t1)` finds within `search` seconds of each cut. Recordings up to 1.5
+ * chunks long stay whole. Pure.
+ * @returns {{start:number, end:number}[]}
+ */
+export function planChunks(duration, { chunkSec: len = chunkSec(), quietest = null, search = 15 } = {}) {
+  if (!(duration > 0) || duration <= len * 1.5) return [{ start: 0, end: duration > 0 ? duration : null }];
+  const n = Math.round(duration / len);
+  const cuts = [0];
+  for (let i = 1; i < n; i++) {
+    const t = (i * duration) / n;
+    const q = quietest ? quietest(Math.max(cuts[cuts.length - 1] + 1, t - search), Math.min(duration - 1, t + search)) : t;
+    cuts.push(+(Number.isFinite(q) ? q : t).toFixed(2));
+  }
+  cuts.push(duration);
+  return cuts.slice(0, -1).map((start, i) => ({ start, end: cuts[i + 1] }));
+}
+
+/** Where the samples start in a 16-bit PCM WAV, and its rate. */
+export function wavInfo(file) {
+  const fd = fs.openSync(file, "r");
+  try {
+    const head = Buffer.alloc(44);
+    fs.readSync(fd, head, 0, 44, 0);
+    const rate = head.readUInt32LE(24) || 16000;
+    let off = 12;
+    let dataStart = 44;
+    const hdr = Buffer.alloc(8);
+    for (let i = 0; i < 16; i++) {
+      if (fs.readSync(fd, hdr, 0, 8, off) < 8) break;
+      if (hdr.toString("ascii", 0, 4) === "data") {
+        dataStart = off + 8;
+        break;
+      }
+      const size = hdr.readUInt32LE(4);
+      off += 8 + size + (size % 2);
+    }
+    const bytes = fs.fstatSync(fd).size - dataStart;
+    return { rate, dataStart, seconds: bytes / 2 / rate };
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** The start of the quietest `step`-second stretch between t0 and t1 of a 16-bit mono WAV. */
+export function quietestIn(file, info, t0, t1, { step = 0.2 } = {}) {
+  const per = Math.max(1, Math.round(info.rate * step));
+  const first = Math.max(0, Math.floor(t0 * info.rate));
+  const last = Math.max(first, Math.floor(t1 * info.rate));
+  const buf = Buffer.alloc((last - first + per) * 2);
+  const fd = fs.openSync(file, "r");
+  let n;
+  try {
+    n = fs.readSync(fd, buf, 0, buf.length, info.dataStart + first * 2);
+  } finally {
+    fs.closeSync(fd);
+  }
+  let best = t0;
+  let bestE = Infinity;
+  for (let i = 0; (i + per) * 2 <= n; i += per) {
+    let e = 0;
+    for (let k = i; k < i + per; k++) {
+      const v = buf.readInt16LE(k * 2);
+      e += v * v;
+    }
+    if (e < bestE) {
+      bestE = e;
+      best = (first + i + per / 2) / info.rate;
+    }
+  }
+  return best;
+}
+
+/** Copy start..end seconds of a 16-bit mono WAV into a new WAV. */
+export function writeWavSlice(file, info, start, end, out) {
+  const a = Math.max(0, Math.round(start * info.rate));
+  const b = Math.max(a, Math.round((end ?? info.seconds) * info.rate));
+  const data = Buffer.alloc((b - a) * 2);
+  const fd = fs.openSync(file, "r");
+  let n;
+  try {
+    n = fs.readSync(fd, data, 0, data.length, info.dataStart + a * 2);
+  } finally {
+    fs.closeSync(fd);
+  }
+  const body = data.subarray(0, n - (n % 2));
+  const head = Buffer.alloc(44);
+  head.write("RIFF", 0);
+  head.writeUInt32LE(36 + body.length, 4);
+  head.write("WAVEfmt ", 8);
+  head.writeUInt32LE(16, 16);
+  head.writeUInt16LE(1, 20);
+  head.writeUInt16LE(1, 22);
+  head.writeUInt32LE(info.rate, 24);
+  head.writeUInt32LE(info.rate * 2, 28);
+  head.writeUInt16LE(2, 32);
+  head.writeUInt16LE(16, 34);
+  head.write("data", 36);
+  head.writeUInt32LE(body.length, 40);
+  fs.writeFileSync(out, Buffer.concat([head, body]));
+  return out;
+}
+
+/** Join whisper's -ojf JSON for each chunk into one, moving each chunk's times by its start. */
+export function mergeWhisperJson(parts) {
+  const out = { ...(parts[0]?.json || {}), transcription: [] };
+  for (const { json, start } of parts) {
+    const ms = Math.round(start * 1000);
+    for (const t of json?.transcription || []) {
+      const shift = (o) => (o ? { ...o, from: o.from + ms, to: o.to + ms } : o);
+      out.transcription.push({ ...t, offsets: shift(t.offsets), tokens: (t.tokens || []).map((k) => ({ ...k, ...(k.offsets ? { offsets: shift(k.offsets) } : {}) })) });
+    }
+  }
+  return out;
+}
+
 /**
  * Transcribe a video to words.
+ * Long recordings go through whisper in chunks of about 10 minutes (SELECTS_CHUNK_SEC), and
+ * each finished chunk is saved in <cacheDir>/whisper-chunks, so a resumed job only redoes
+ * the chunk it was in when it stopped.
  * @param {string} videoPath
  * @param {object} opts
  * @param {string} opts.cacheDir where audio.wav (temporary) and whisper.json go
@@ -142,12 +268,14 @@ export async function runWhisper(wav, { outBase, model, bin, language = "en", pr
  * @param {AbortSignal} [opts.signal]
  * @returns {Promise<{w,s,e,p}[]>}
  */
-export async function transcribe(videoPath, { cacheDir, duration, onProgress, onWords, signal, threads, model, bin, language = "en", prompt = null, translate = false, preprocess = "none", audioStream = null } = {}) {
+export async function transcribe(videoPath, { cacheDir, duration, onProgress, onWords, signal, threads, model, bin, language = "en", prompt = null, translate = false, preprocess = "none", audioStream = null, extract = extractAudio } = {}) {
   if (!cacheDir) throw new Error("transcribe needs a cacheDir");
   fs.mkdirSync(cacheDir, { recursive: true });
   const outBase = path.join(cacheDir, "whisper");
   const jsonFile = `${outBase}.json`;
   const metaFile = `${outBase}.meta.json`;
+  const chunkDir = path.join(cacheDir, "whisper-chunks");
+  const planFile = path.join(chunkDir, "plan.json");
   const whisper = bin || whisperBin();
   const modelPath = model || whisperModel();
   const meta = { model: path.basename(modelPath), language, prompt: prompt || null, translate: !!translate, preprocess };
@@ -172,26 +300,57 @@ export async function transcribe(videoPath, { cacheDir, duration, onProgress, on
     throw err;
   }
 
+  // chunks finished by an earlier run with the same settings are kept; anything else starts over
+  const oldPlan = readJson(planFile, null);
+  const resumable = oldPlan && JSON.stringify(oldPlan.meta) === JSON.stringify(meta) && oldPlan.audioStream === audioStream;
+  if (!resumable) fs.rmSync(chunkDir, { recursive: true, force: true });
+  fs.mkdirSync(chunkDir, { recursive: true });
+
+  // the WAV is written under another name and renamed when complete, so a kill mid-extraction
+  // never leaves a short WAV that looks finished
   const wav = path.join(cacheDir, "audio.wav");
-  await extractAudio(videoPath, wav, { stream: audioStream, preprocess, signal });
+  const wavPart = path.join(cacheDir, "audio.part.wav");
+  if (!(resumable && fs.existsSync(wav))) {
+    fs.rmSync(wav, { force: true });
+    await extract(videoPath, wavPart, { stream: audioStream, preprocess, signal });
+    fs.renameSync(wavPart, wav);
+  }
+  const info = wavInfo(wav);
+  const total = duration || info.seconds;
+  const chunks = resumable && oldPlan.chunks?.length ? oldPlan.chunks : planChunks(total, { quietest: (a, b) => quietestIn(wav, info, a, b) });
+  if (!resumable) writeJsonAtomic(planFile, { meta, audioStream, duration: total, chunkSec: chunkSec(), chunks });
+  const chunkJson = (i) => path.join(chunkDir, `${String(i).padStart(3, "0")}.json`);
 
   // Physical cores, not hyperthreads: on a dual-core laptop -t 2 beat -t 4 when measured.
   const nThreads = threads || defaultThreads();
 
   const t0 = Date.now();
-  let processed = 0;
-  let pct = 0;
+  const parts = [];
+  let reusedSec = 0;
+  for (let i = 0; i < chunks.length; i++) {
+    const json = readJson(chunkJson(i), null);
+    if (!json) break;
+    parts.push({ json, start: chunks[i].start });
+    reusedSec += (chunks[i].end ?? total) - chunks[i].start;
+  }
+  const reusedChunks = parts.length;
+  if (parts.length) onWords?.(wordsFromWhisperJson(mergeWhisperJson(parts)));
+  let processed = reusedSec;
+  let pct = 0; // whisper's own percentage for the current chunk
+  let cur = null;
   let pending = "";
   let liveSegs = [];
   let emitted = 0;
   const report = () => {
     const wall = (Date.now() - t0) / 1000;
-    const done = duration ? Math.max(processed / duration, pct) : pct;
-    const audioDone = duration ? done * duration : processed;
-    const speed = wall > 3 && audioDone > 0 ? audioDone / wall : null;
-    const etaSec = speed && duration ? Math.max(0, (duration - audioDone) / speed) : null;
-    const note = speed ? `transcribing at ${speed.toFixed(2)}x real time` : "transcribing";
-    onProgress?.({ progress: Math.min(0.999, done), speed, etaSec: etaSec == null ? null : Math.round(etaSec), note, processed: audioDone });
+    const chunkDone = cur ? cur.start + pct * ((cur.end ?? total) - cur.start) : processed;
+    const audioDone = Math.min(total, Math.max(processed, chunkDone));
+    const fresh = audioDone - reusedSec; // audio transcribed by this run, for an honest speed
+    const speed = wall > 3 && fresh > 0 ? fresh / wall : null;
+    const etaSec = speed && total ? Math.max(0, (total - audioDone) / speed) : null;
+    const of = chunks.length > 1 ? `, part ${Math.min(chunks.length, parts.length + 1)} of ${chunks.length}` : "";
+    const note = speed ? `transcribing at ${speed.toFixed(2)}x real time${of}` : `transcribing${of}`;
+    onProgress?.({ progress: Math.min(0.999, total ? audioDone / total : pct), speed, etaSec: etaSec == null ? null : Math.round(etaSec), note, processed: audioDone });
   };
   const flushWords = () => {
     // hold back the last segment: the next one may glue onto it
@@ -203,60 +362,84 @@ export async function transcribe(videoPath, { cacheDir, duration, onProgress, on
     }
   };
   try {
-    await runWhisper(wav, {
-      outBase,
-      model: modelPath,
-      bin: whisper,
-      language,
-      prompt,
-      translate,
-      threads: nThreads,
-      signal,
-      onStdout: (chunk) => {
-        pending += chunk;
-        const nl = pending.lastIndexOf("\n");
-        if (nl < 0) return;
-        const segs = parseSegmentLines(pending.slice(0, nl));
-        pending = pending.slice(nl + 1);
-        if (segs.length) {
-          liveSegs = liveSegs.concat(segs);
-          processed = Math.max(processed, segs[segs.length - 1].to);
-          flushWords();
-          report();
-        }
-      },
-      onStderr: (chunk) => {
-        const m = chunk.match(/progress\s*=\s*(\d+)%/g);
-        if (m) {
-          pct = Math.max(pct, +m[m.length - 1].match(/(\d+)%/)[1] / 100);
-          report();
-        }
-      },
-    });
+    for (let i = parts.length; i < chunks.length; i++) {
+      if (signal?.aborted) throw signal.reason ?? Object.assign(new Error("aborted"), { name: "AbortError" });
+      cur = chunks[i];
+      pct = 0;
+      liveSegs = [];
+      emitted = 0;
+      pending = "";
+      const whole = chunks.length === 1;
+      const input = whole ? wav : writeWavSlice(wav, info, cur.start, cur.end, path.join(chunkDir, `${String(i).padStart(3, "0")}.wav`));
+      const base = path.join(chunkDir, `${String(i).padStart(3, "0")}.part`);
+      const off = cur.start;
+      try {
+        const json = await runWhisper(input, {
+          outBase: base,
+          model: modelPath,
+          bin: whisper,
+          language,
+          prompt,
+          translate,
+          threads: nThreads,
+          signal,
+          onStdout: (chunk) => {
+            pending += chunk;
+            const nl = pending.lastIndexOf("\n");
+            if (nl < 0) return;
+            const segs = parseSegmentLines(pending.slice(0, nl)).map((s) => ({ ...s, from: s.from + off, to: s.to + off }));
+            pending = pending.slice(nl + 1);
+            if (segs.length) {
+              liveSegs = liveSegs.concat(segs);
+              processed = Math.max(processed, segs[segs.length - 1].to);
+              flushWords();
+              report();
+            }
+          },
+          onStderr: (chunk) => {
+            const m = chunk.match(/progress\s*=\s*(\d+)%/g);
+            if (m) {
+              pct = Math.max(pct, +m[m.length - 1].match(/(\d+)%/)[1] / 100);
+              report();
+            }
+          },
+        });
+        // the chunk is kept only once whisper has finished it
+        writeJsonAtomic(chunkJson(i), json);
+        fs.rmSync(`${base}.json`, { force: true });
+        parts.push({ json, start: cur.start });
+        // send what the live stream held back
+        const words = wordsFromWhisperJson(mergeWhisperJson([{ json, start: cur.start }]));
+        if (words.length > emitted) onWords?.(words.slice(emitted));
+        processed = cur.end ?? total;
+        cur = null;
+        report();
+      } finally {
+        if (!whole) fs.rmSync(input, { force: true });
+      }
+    }
   } catch (e) {
-    fs.rmSync(jsonFile, { force: true });
     if (e.name === "AbortError") throw e;
     const err = new Error(e.code === "ENOENT" ? `whisper-cli was not found at ${whisper}.` : `whisper stopped: ${e.message}`);
     err.hint =
       e.code === "ENOENT"
         ? "Build whisper.cpp (cmake -B build && cmake --build build) and set SELECTS_WHISPER_BIN to build/bin/whisper-cli."
-        : "Check free disk space and memory, then resume the job. Your progress up to this stage is saved.";
+        : `Check free disk space and memory, then resume the job. ${parts.length ? `The ${parts.length} part${parts.length === 1 ? "" : "s"} already transcribed are kept.` : "Your progress up to this stage is saved."}`;
     throw err;
-  } finally {
-    // a loudness track (one value per 0.5 s) feeds the cheap pre-score; then the WAV goes
-    try {
-      if (fs.existsSync(jsonFile)) writeJsonAtomic(path.join(cacheDir, "loudness.json"), loudnessFromWav(wav));
-    } catch {}
-    fs.rmSync(wav, { force: true });
   }
-  if (!fs.existsSync(jsonFile)) throw Object.assign(new Error("whisper finished but wrote no JSON."), { hint: "Run `selects doctor` to check the whisper build." });
+  const merged = mergeWhisperJson(parts);
+  writeJsonAtomic(jsonFile, merged);
+  // a loudness track (one value per 0.5 s) feeds the cheap pre-score; then the WAV and the chunks go
+  try {
+    writeJsonAtomic(path.join(cacheDir, "loudness.json"), loudnessFromWav(wav));
+  } catch {}
   writeJsonAtomic(metaFile, meta);
-  const words = wordsFromWhisperJson(readJson(jsonFile));
-  // send whatever the live stream did not (the held-back tail, or everything if stdout was quiet)
-  if (words.length > emitted) onWords?.(words.slice(emitted));
+  fs.rmSync(wav, { force: true });
+  fs.rmSync(chunkDir, { recursive: true, force: true });
+  const words = wordsFromWhisperJson(merged);
   const wall = (Date.now() - t0) / 1000;
-  const speed = duration ? duration / wall : null;
-  onProgress?.({ progress: 1, speed, etaSec: 0, note: speed ? `transcribed at ${speed.toFixed(2)}x real time` : "transcribed", processed: duration ?? 0, wallSec: +wall.toFixed(1) });
+  const speed = total ? (total - reusedSec) / wall : null;
+  onProgress?.({ progress: 1, speed, etaSec: 0, note: speed ? `transcribed at ${speed.toFixed(2)}x real time` : "transcribed", processed: total ?? 0, wallSec: +wall.toFixed(1), chunks: chunks.length, reusedChunks });
   return words;
 }
 
