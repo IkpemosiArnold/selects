@@ -67,6 +67,8 @@ test("readFaithful reads a parsed answer, a cut-off one, and rejects one with no
   const r = readFaithful({ clip_says: "Lifting weights is risky", speaker_means: "Lifting is — relatively safe", verdict: "check", issue: "turn", extend: "after", note: "x" });
   assert.deepEqual(r.reading, { clip: "Lifting weights is risky", speaker: "Lifting is, relatively safe" });
   assert.deepEqual(faithfulResult(CLIP, { answer: r }).reading, r.reading);
+  const cutOff = readFaithful({ clip_says: "x", speaker_means: "The speaker emphasizes personal motivation to continue weightlifting, countering common fears about,", verdict: "check" });
+  assert.equal(cutOff.reading.speaker, "The speaker emphasizes personal motivation to continue weightlifting, countering common fears");
 });
 
 test("a misleading turn suggests growing to the end of the next sentence, snapped", () => {
@@ -76,7 +78,8 @@ test("a misleading turn suggests growing to the end of the next sentence, snappe
   assert.equal(f.issue, "turn");
   assert.equal(f.by, "model");
   assert.deepEqual(f.fix, { end: S[5].e });
-  assert.equal(f.note, "He goes on to say the pendulum swung too far.");
+  assert.equal(f.note, 'Right after the clip, the speaker says "But the pendulum has swung way out of whack here."');
+  assert.equal(f.meaning, "He goes on to say the pendulum swung too far.");
 });
 
 test("a faithful answer has no issue and no fix; a missing direction falls back by issue", () => {
@@ -85,7 +88,7 @@ test("a faithful answer has no issue and no fix; a missing direction falls back 
   assert.deepEqual([ok.verdict, ok.issue, ok.fix], ["faithful", null, null]);
   const ref = faithfulResult(CLIP, { answer: { verdict: "check", issue: "reference", extend: "none", note: "" }, before, after, words: W });
   assert.deepEqual(ref.fix, { start: S[0].s });
-  assert.match(ref.note, /something said just before/);
+  assert.match(ref.note, /^The clip points back to the sentence before it: "In fact, it's almost uncool/);
 });
 
 test("rules alone never say misleading: a hint is a check, no hint is faithful", () => {
@@ -139,9 +142,9 @@ test("checkFaithful asks once per clip with the hint, caches the answer, and fal
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("the prompt file has the five issues and the three fields to fill", () => {
+test("the prompt file asks the five questions and has the fields to fill", () => {
   const p = loadFaithfulPrompt();
-  for (const k of ["turn =", "quote =", "sarcasm =", "qualifier =", "reference =", "clip_says:", "speaker_means:"]) assert.ok(p.system.includes(k), k);
+  for (const k of ["last_point:", "after:", "reverses =", "limits =", "whose_view:", "sarcastic:", "needs_before:", "note:"]) assert.ok(p.system.includes(k), k);
   for (const k of ["{{before}}", "{{text}}", "{{after}}", "{{hints}}"]) assert.ok(p.user.includes(k), k);
   const m = faithfulMessages(p, { text: "Clip.", before: null, after: null, hints: [] });
   assert.match(m[1].content, /starts at the beginning of the video/);
@@ -153,11 +156,35 @@ test("tasks: the browser and the proxy build and read the faithful task the same
   const task = { kind: "faithful", candidate: CLIP, before: "Before.", after: "But no.", hints: [{ issue: "turn", cue: "c" }] };
   const built = buildTask(task, prompts);
   assert.equal(built.maxTokens, 130);
-  assert.deepEqual(built.schema.required, ["clip_says", "speaker_means", "verdict", "issue", "extend", "note"]);
+  assert.deepEqual(built.schema.required, ["last_point", "after", "whose_view", "sarcastic", "needs_before", "note"]);
   assert.match(built.messages[1].content, /But no\./);
-  assert.equal(readTask(task, { text: '```json\n{"issue":"turn","verdict":"check","extend":"after","note":"Hm."}\n```' }).verdict, "check");
+  assert.equal(readTask(task, { text: '```json\n{"last_point":"x","after":"agrees","whose_view":"others","sarcastic":"no","needs_before":"no","note":"Hm."}\n```' }).verdict, "check", "someone else's view needs a cue such as 'people say' in the words");
   assert.equal(readTask(task, { text: "no idea" }), null);
   assert.equal(checkTaskShape(slimTask(task)), null);
   assert.equal(checkTaskShape({ ...task, after: "x".repeat(2000) }) !== null, true);
   assert.deepEqual(Object.keys(slimTask(task).candidate), ["text", "hook", "start", "end"]);
+});
+
+test("the written rule turns the model's answers into a verdict", async () => {
+  const { faithfulRule } = await import("./faithful-core.mjs");
+  const base = { after: "adds", whose_view: "own", sarcastic: "no", needs_before: "no" };
+  const r = (o, ...issues) => Object.values(faithfulRule({ ...base, ...o }, issues.map((issue) => ({ issue })))).join(" ");
+  assert.equal(r({}), "faithful ");
+  assert.equal(r({ after: "reverses" }, "turn"), "misleading turn");
+  assert.equal(r({ after: "limits" }, "turn"), "misleading turn");
+  assert.equal(r({ after: "reverses" }), "check turn", "the model alone: check");
+  assert.equal(r({}, "turn"), "check turn", "the rules alone: check");
+  assert.equal(r({ whose_view: "others" }, "quote"), "check quote");
+  assert.equal(r({ whose_view: "others" }, "quote", "turn"), "misleading quote");
+  assert.equal(r({ whose_view: "others" }), "faithful ", "'others' without a cue in the words does not count");
+  assert.equal(r({ needs_before: "yes" }), "faithful ", "a reference needs a pointing word at the start");
+  assert.equal(r({ needs_before: "yes" }, "reference"), "check reference");
+  assert.equal(r({ sarcastic: "yes" }), "check sarcasm");
+  assert.equal(r({ after: "limits" }), "check qualifier");
+  const a = readFaithful({ last_point: "Lifting is risky", after: "reverses", whose_view: "own", sarcastic: "no", needs_before: "no", note: "She means lifting is fairly safe" }, [{ issue: "turn" }]);
+  assert.deepEqual([a.verdict, a.issue, a.note], ["misleading", "turn", "She means lifting is fairly safe."]);
+  assert.deepEqual(a.answers, { lastPoint: "Lifting is risky", after: "reverses", whose_view: "own", sarcastic: "no", needs_before: "no" });
+  const cutOff = readFaithful('{"last_point": "Pivots are great", "after": "reverses", "whose_view": "oth', [{ issue: "turn" }]);
+  assert.equal(cutOff.verdict, "misleading");
+  assert.equal(readFaithful({ last_point: "x", after: "sideways" }), null);
 });

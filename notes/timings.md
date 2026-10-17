@@ -401,3 +401,28 @@ From the page through `server-proxy` (17 Oct, 16:05 WAT, the 25-second EMF clip)
 The browser was closed right after transcription, then reopened four times. On reopen the job was listed as not finished and picked up at the judge without choosing the file again (the video had been kept in OPFS, so thumbnails and rendering worked too). An approval survived the next close. Attaching the same file was accepted, a different 1,000-byte file named the same was refused, a 720x1280 preview rendered in 7.8 to 9.6 s, and after another close the rendered clip (4.3 MB) played from storage. The rendered clip kept the source's 25 fps (597 frames for 23.9 s, audio 23.9 s), which confirms the frame-timing fix.
 
 The coordinator saw the free tier fail on the same day (HTTP 500, empty 404s, one answer after 294 s). So every call times out after 25 s and retries once after 2 s on a 5xx, an empty 404 or a timeout; when that fails, the page judges that clip on the device and says so ("Google's free Gemma was slow, so this clip was judged on your device."). The proxy enforces the same timeout and answers 504.
+
+## Transcript reuse (17 Oct, core)
+
+The 6-minute EMF excerpt (`strength-talk-6min.mp4`, 360 s), caption mode through `createJob` and `runJob`, twice in a row with a fresh `SELECTS_HOME`, 17 Oct about 15:50 WAT (load average 200 to 900 from other work on the machine; the numbers are typical, not best case).
+
+| Run | Probe | Language check | Transcribe | Whole run |
+|---|---|---|---|---|
+| 1 (nothing saved) | 1.1 s | 94.6 s | 251.5 s | 347.3 s |
+| 2 (same file) | 3.3 s | 0 s (reused) | 0 s (reused) | 3.3 s |
+
+The second run skipped 346 s of work and got the same 1,232 words. The fingerprint reads at most 8 MB (size, mtime, first and last 4 MB), which is the same cost for a 6-minute or a 2-hour file. On the family video (165 s), whose clip and caption jobs each ran both steps, the language check took 107.3 s and transcription 309.8 s, about 7 minutes that a second job now skips.
+
+## Faithful cuts (16 and 17 Oct, core)
+
+One Ollama call per top pick (Gemma 3 4B, num_predict 130, temperature 0.2), 470 to 700 prompt tokens and 73 to 105 output tokens. The machine was shared with other builders' jobs throughout, so load averages ran from 150 to over 900 and the prompt rate swung from 0.3 to 12.6 tokens a second.
+
+| Run | Windows | Calls | Wall | Per call | Note |
+|---|---|---|---|---|---|
+| Prompt 1, EMF top 3 | 3 | 3 | 482.4 s | 160.8 s | load average 150 to 200; the first call paid a 30.6 s model load |
+| Prompt 2, eval windows | 4 | 4 | 418.8 s | 86 to 126 s | prompt about 11 tok/s, output 1.3 to 4 tok/s |
+| Prompt 3 (shipped), EMF top 3 | 3 | 3 | 629.4 s | 209.8 s | load average 200 to 500 |
+| Prompt 3, Altman lecture | 2 | 2 | 521.7 s | 260.8 s | |
+| Prompt 3, EMF window at 0:23 | 1 | 1 | 2,233.8 s | | prompt read at 0.38 tok/s under heavy load; an outlier |
+
+Expect 1.5 to 3.5 minutes per pick on this laptop, so 5 to 10 minutes for the default 5 picks, on top of about 12 minutes of judging. `--faithful rules` costs under a millisecond per pick. Answers are cached in `judge-cache.json`, so a resumed job does not pay twice.

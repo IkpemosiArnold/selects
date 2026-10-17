@@ -290,10 +290,12 @@ All additive. After ranking, each top pick (about k clips) is checked once more:
 candidate.faithful = {
   verdict: "faithful" | "check" | "misleading",
   issue: "turn" | "quote" | "sarcasm" | "qualifier" | "reference" | null,
-  note: "One plain sentence for the user.",
+  note: "One plain sentence for the user.",   // for check/misleading it quotes the words outside the clip
   fix: { start?: 21.4, end?: 51.2 } | null,   // grow to the nearby sentence boundary (snapTrim); only the edges that move
   by: "model" | "rules",                       // rules only when settings.faithful is "rules" or the model call failed
   hints: ["turn"],                             // what the cheap rule check noticed (the model saw these as a hint)
+  answers?: { lastPoint, after: "agrees" | "adds" | "limits" | "reverses" | "unrelated", whose_view: "own" | "others", sarcastic: "yes" | "no", needs_before: "yes" | "no" },
+  meaning?: "the model's sentence on what the speaker means",   // when the note quotes evidence instead
   context: { before: "sentence before the clip" | null, after: "sentence after" | null },
   error?: "why the model could not check it",
   accepted?: true,                             // the person kept the cut as it is
@@ -306,7 +308,8 @@ candidate.demoted = true                       // only while a misleading cut is
 - `PATCH /api/jobs/:id/candidates/:cid` takes `{ faithful: "accept" | "fix" | "reset" }`. `"fix"` moves start and end to `faithful.fix` (like a trim: `trimmed: true`, the old render is dropped) and sets `applied`. A trim that covers the fix also sets `applied`. Returns the Candidate; the `candidates` event carries the reordered list.
 - `job.faithful = { mode, checked, faithful, check, misleading, asked, cached, failed, sec, secPerCall }`; `job.timings.faithful` is its wall seconds (inside the judge stage, which now reports 0 to 0.8 for the pointwise calls, 0.8 for the listwise round and 0.9 to 1 for this check).
 - `settings.faithful`: `"model"` (default, one call per top pick, cached in `judge-cache.json`, logged in `judge-calls.jsonl` as `kind: "faithful"`), `"rules"` (no model) or `"off"`. CLI `--faithful model|rules|off`. With `--yes`, misleading cuts are left unapproved.
-- Browser: `tasks.mjs` has a `faithful` task: `{ kind: "faithful", candidate, before, after, hints }`, with `prompts.faithful` the text of `prompts/faithful.md`; `readTask` returns `{ verdict, issue, extend, note }` or null. Build the field with `contextFor`, `faithfulHints` and `faithfulResult` from `faithful-core.mjs`, then order with `orderByFaithful`.
+- The model does not give the verdict: it answers five narrow questions (`answers`), and `faithfulRule(answers, hints)` decides. A model answer counts only where the rule check's hints back it up (see `notes/faithful-examples.md`).
+- Browser: `tasks.mjs` has a `faithful` task: `{ kind: "faithful", candidate, before, after, hints }`, with `prompts.faithful` the text of `prompts/faithful.md`; `readTask` returns `{ verdict, issue, extend, note, answers }` (verdict from the rule) or null. Build the field with `contextFor`, `faithfulHints` and `faithfulResult` from `faithful-core.mjs`, then order with `orderByFaithful`.
 
 ## Selects Web: the engine in the browser (16 Oct, browser builder)
 

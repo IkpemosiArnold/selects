@@ -101,7 +101,7 @@ export function readTask(task, { data, text }) {
   }
   if (task.kind === "listwise") return parseListAnswer(obj?.ranking ? obj : String(text ?? ""), lettersFor(task.top));
   if (task.kind === "kit") return cleanKit(obj || {}, { madeFor: task.madeFor });
-  if (task.kind === "faithful") return readFaithful(obj || String(text ?? "")); // null when there is no verdict
+  if (task.kind === "faithful") return readFaithful(obj || String(text ?? ""), task.hints || []); // null when there is no verdict
   if (task.kind === "judgeBatch") {
     // { byLetter: { A: { hook, standalone, payoff, clarity, reason } } }; clips the answer left out are missing
     const letters = lettersFor(task.candidates);

@@ -58,11 +58,11 @@ export async function checkFaithful(candidates, { words, model, mode = "model", 
           let res;
           try {
             res = await ask(messages);
-            answer = readFaithful(res.data ?? res);
+            answer = readFaithful(res.data ?? res, hints);
           } catch (e) {
             if (e.name === "AbortError" || e.content == null) throw e;
             res = { stats: e.stats };
-            answer = readFaithful(e.content); // a cut-off answer may still hold the verdict
+            answer = readFaithful(e.content, hints); // a cut-off answer may still hold the verdict
           }
           const sec = +((Date.now() - started) / 1000).toFixed(2);
           times.push(sec);

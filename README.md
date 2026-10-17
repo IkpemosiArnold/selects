@@ -297,7 +297,15 @@ LISTWISE ROUND, one more call
   total = 0.85 x total + 0.15 x position score
   |
   v
-top k, with overlapping windows removed --> you approve --> render
+top k, with overlapping windows removed
+  |
+  v
+FAITHFUL CUTS, one call per pick
+  the sentence before, the clip, the sentence after
+  does the cut change what the speaker meant?
+  |
+  v
+quality bar --> you approve (and take or leave each fix) --> render
 ```
 
 ### Stage 1: windows and the pre-score
@@ -324,6 +332,18 @@ The rubric score is blended with the pre-score (70% and 30%) because the model's
 ### The listwise round
 
 After the pointwise scores, the 4 best distinct windows go to the model together, as their first and last sentences only, and the model puts them in order with a reason of 10 words or fewer. The first place adds 0.15 to a clip's total and the last adds 0. The prompt is in [`src/core/prompts/listwise.md`](src/core/prompts/listwise.md). Turn the round off with `settings.listwise: false` in the job settings.
+
+### Faithful cuts
+
+Other clippers rank clips for how well they might do. None checks whether the clip still says what the speaker meant. A cut that stops one sentence early can turn "people say you're too old to start, and that's not true" into "you're too old to start". So Selects checks each top pick once more, with the sentence before it and the sentence after it.
+
+1. A rule check reads the words: does the next sentence open like a turn ("But ...", "That's not true"), does the clip report what other people think ("people say", "they think", "we're told"), does it open on "This" or "He" with something before it, is there a known ironic phrase.
+2. The model answers five narrow questions: the clip's last point, what the next sentence does to it (agrees, adds, limits, reverses or changes the subject), whose view it is, whether it is sarcastic, and whether it needs the sentence before.
+3. A short written rule turns both into a verdict: **faithful**, **check** or **misleading**, with the issue (a turn, a quote, sarcasm, a missing qualifier or a reference). A model answer only counts where the words back it up, because a 4B model leans one way on these questions.
+
+The note quotes the words outside the clip, for example: Right after the clip, the speaker says "But the pendulum has swung way out of whack here." Where growing the clip to the next sentence boundary would fix it, Selects suggests the new start or end. Nothing changes until you say so. A misleading clip moves below the others until you keep it as it is or take the fix. With `--yes`, misleading clips are left out.
+
+Real examples, and the two prompts that did not work (one called every clip misleading, the next called every clip "check"), are in [`notes/faithful-examples.md`](notes/faithful-examples.md). The prompt is [`src/core/prompts/faithful.md`](src/core/prompts/faithful.md). It costs one model call per pick: on the 2017 laptop, 86 to 126 s per call when the machine was quiet and about 210 s under heavy load, so 5 to 10 minutes for 5 picks. `--faithful rules` uses the rule check alone (no model), and `--faithful off` skips it.
 
 ### Rendering
 
@@ -382,6 +402,7 @@ selects doctor                 check whisper, Ollama, the judge model and disk
 | `--min <sec>` | 20 (from `--made-for`) | shortest clip |
 | `--max <sec>` | 60 (from `--made-for`) | longest clip |
 | `--judge-n <n>` | 8 | how many pre-scored windows the model reads (more is slower) |
+| `--faithful <m>` | `model` | check each pick still says what the speaker meant: `model` (one call per pick), `rules` (no model) or `off` |
 | `--preview` | off | render fast 720x1280 drafts instead of final 1080x1920 clips |
 | `--plain-kit` | off | skip the model for post titles and use the clip's first line |
 | `--out <dir>` | `./selects-out/<video-name>` | where the clips go |

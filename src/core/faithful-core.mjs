@@ -9,6 +9,7 @@ import { snapTrim, toSentences } from "./sentences.mjs";
 export const FAITHFUL_VERDICTS = ["faithful", "check", "misleading"];
 export const FAITHFUL_ISSUES = ["turn", "quote", "sarcasm", "qualifier", "reference"];
 const EXTENDS = ["none", "before", "after", "both"];
+const AFTER = ["agrees", "adds", "limits", "reverses", "unrelated"];
 
 // The sentence right after the clip turns the point around.
 const TURN_NEXT = /^(but|however|although|though|yet|except|still|that said|having said that|and yet|on the other hand|then again|nevertheless|nonetheless|whereas|in reality|the (truth|reality|problem|catch|irony) is|(and |but )?(that'?s|this is|it'?s|that is) (just |simply |definitely |actually |really )?(not (true|right|the case|how|what)|wrong|a myth|nonsense|rubbish|false))\b/i;
@@ -74,20 +75,45 @@ export function contextFor(sentences, c, { minWords = 6 } = {}) {
   return { before: join(before), after: join(after) };
 }
 
-// Two short summaries first (what the clip says alone, what the speaker means), then the
-// verdict: a small model that names an issue straight away finds one in nearly every clip.
+// The model answers a few narrow questions about the clip; a written rule (faithfulRule)
+// turns the answers into the verdict. Asked for a verdict straight away, Gemma 3 4B called
+// every test clip "misleading" (first prompt) or "check" (second prompt); narrow questions are
+// easier for a small model, and the rule can be read and tested.
 export const FAITHFUL_SCHEMA = {
   type: "object",
   properties: {
-    clip_says: { type: "string", maxLength: 100 },
-    speaker_means: { type: "string", maxLength: 100 },
-    verdict: { type: "string", enum: FAITHFUL_VERDICTS },
-    issue: { type: "string", enum: ["none", ...FAITHFUL_ISSUES] },
-    extend: { type: "string", enum: EXTENDS },
+    last_point: { type: "string", maxLength: 140 },
+    after: { type: "string", enum: AFTER },
+    whose_view: { type: "string", enum: ["own", "others"] },
+    sarcastic: { type: "string", enum: ["no", "yes"] },
+    needs_before: { type: "string", enum: ["no", "yes"] },
     note: { type: "string", maxLength: 160 },
   },
-  required: ["clip_says", "speaker_means", "verdict", "issue", "extend", "note"],
+  required: ["last_point", "after", "whose_view", "sarcastic", "needs_before", "note"],
 };
+
+/**
+ * The written rule: the model's answers count only where the words back them up. Gemma 3 4B
+ * answered "others" (someone else's view) and "needs the sentence before" for most clips, so
+ * those two need the matching rule hint ("people say", a pointing word at the start). In order:
+ *   turn: the model says the next sentence reverses the point, or the rules saw a turn
+ *     ("But ...") and the model says it reverses or limits it: misleading. Either one alone: check.
+ *   quote: someone else's view, with a rule hint: misleading when a turn follows, else check.
+ *   sarcasm (the model says so), a limit just after the clip, a backed reference: check.
+ */
+export function faithfulRule(a, hints = []) {
+  const has = (k) => hints.some((h) => h.issue === k);
+  const reverses = a.after === "reverses";
+  const turnNext = reverses || (has("turn") && a.after === "limits");
+  if (has("turn") && turnNext) return { verdict: "misleading", issue: "turn" };
+  if (has("quote") && a.whose_view === "others") return { verdict: turnNext || has("turn") ? "misleading" : "check", issue: "quote" };
+  if (reverses || has("turn")) return { verdict: "check", issue: "turn" };
+  if (a.sarcastic === "yes") return { verdict: "check", issue: "sarcasm" };
+  if (a.after === "limits" || has("qualifier")) return { verdict: "check", issue: "qualifier" };
+  if (has("quote")) return { verdict: "check", issue: "quote" };
+  if (has("reference") && a.needs_before === "yes") return { verdict: "check", issue: "reference" };
+  return { verdict: "faithful", issue: null };
+}
 
 /** The hint line the model gets, or "" when the rules noticed nothing. */
 export function hintLine(hints) {
@@ -123,23 +149,58 @@ const DEFAULT_NOTES = {
  * Read the model's answer (parsed object or raw, maybe cut-off text) into
  * { verdict, issue, extend, note }, or null when there is no verdict in it.
  */
-export function readFaithful(answer) {
+export function readFaithful(answer, hints = []) {
   let d = answer && typeof answer === "object" ? answer : null;
   if (!d) {
     const s = String(answer ?? "");
     const pick = (k) => s.match(new RegExp(`"${k}"\\s*:\\s*"([^"]*)`))?.[1] ?? null;
-    d = { issue: pick("issue"), verdict: pick("verdict"), extend: pick("extend"), note: pick("note"), clip_says: pick("clip_says"), speaker_means: pick("speaker_means") };
+    d = Object.fromEntries(["issue", "verdict", "extend", "note", "last_point", "after", "whose_view", "sarcastic", "needs_before"].map((k) => [k, pick(k)]));
   }
-  const verdict = String(d.verdict || "").toLowerCase().trim();
-  if (!FAITHFUL_VERDICTS.includes(verdict)) return null;
-  let issue = String(d.issue || "").toLowerCase().trim();
+  const low = (x) => String(x ?? "").toLowerCase().trim();
+  let verdict = low(d.verdict);
+  let issue = low(d.issue);
+  let answers = null;
+  if (!FAITHFUL_VERDICTS.includes(verdict)) {
+    // the question form: the rule decides
+    if (!AFTER.includes(low(d.after))) return null;
+    answers = { after: low(d.after), whose_view: low(d.whose_view) === "others" ? "others" : "own", sarcastic: low(d.sarcastic) === "yes" ? "yes" : "no", needs_before: low(d.needs_before) === "yes" ? "yes" : "no" };
+    ({ verdict, issue } = faithfulRule(answers, hints));
+  }
   if (!FAITHFUL_ISSUES.includes(issue)) issue = null;
-  let extend = String(d.extend || "none").toLowerCase().trim();
+  let extend = low(d.extend || "none");
   if (!EXTENDS.includes(extend)) extend = "none";
   const out = { verdict, issue, extend, note: d.note ? tidyReason(d.note) : "" };
-  const clean = (x) => String(x || "").replace(/\s*[\u2014\u2013]\s*/g, ", ").replace(/\s+/g, " ").trim();
+  // the schema caps text at 140 characters, which can cut the last word: drop it
+  const clean = (x) => {
+    let t = String(x || "").replace(/\s*[\u2014\u2013]\s*/g, ", ").replace(/\s+/g, " ").trim();
+    if (t.length >= 95 && !/[.!?]$/.test(t)) t = t.replace(/\s+\S*$/, "").replace(/[,;:]$/, "");
+    return t;
+  };
+  if (answers) out.answers = { lastPoint: clean(d.last_point), ...answers };
   if (d.clip_says || d.speaker_means) out.reading = { clip: clean(d.clip_says), speaker: clean(d.speaker_means) };
   return out;
+}
+
+/** A sentence, shortened to about 18 words, in quotes. */
+const quoteOf = (t, n = 18) => {
+  const ws = String(t || "").trim().split(/\s+/);
+  return `"${ws.slice(0, n).join(" ")}${ws.length > n ? " ..." : ""}"`;
+};
+
+/** A plain note that quotes the words outside the clip that change its meaning, or null. */
+export function evidenceNote(issue, { before, after, hints = [] } = {}) {
+  const a = after?.text ?? after;
+  const b = before?.text ?? before;
+  const cue = (k) => hints.find((h) => h.issue === k)?.cue;
+  if (issue === "turn" && a) return `Right after the clip, the speaker says ${quoteOf(a)}`;
+  if (issue === "quote") {
+    const said = cue("quote")?.replace(/^the clip says /, "") ?? null;
+    if (said && a && hints.some((h) => h.issue === "turn")) return `The clip ends on what others think (${said}), and the speaker answers it next: ${quoteOf(a)}`;
+    if (said) return `The speaker may be describing what others think (${said}), not their own view.`;
+  }
+  if (issue === "qualifier" && a) return `Right after the clip, the speaker adds ${quoteOf(a)}`;
+  if (issue === "reference" && b) return `The clip points back to the sentence before it: ${quoteOf(b)}`;
+  return null;
 }
 
 /** Which side to grow when the model gave no direction: a turn or a limit comes after, setup before. */
@@ -181,10 +242,12 @@ export function faithfulResult(c, { hints = [], answer = null, before = null, af
   let note;
   let by;
   let reading = null;
+  let answers = null;
   if (answer) {
     by = "model";
     ({ verdict, issue, extend, note } = answer);
     reading = answer.reading ?? null;
+    answers = answer.answers ?? null;
     if (verdict === "faithful") {
       issue = null;
       extend = "none";
@@ -197,6 +260,16 @@ export function faithfulResult(c, { hints = [], answer = null, before = null, af
     note = issue ? `${hints[0].cue[0].toUpperCase()}${hints[0].cue.slice(1)}: check the clip still says what the speaker meant.` : "";
   }
   if (verdict !== "faithful" && (!extend || extend === "none")) extend = defaultExtend(issue, { before, after });
+  // For a problem, the note quotes the words that show it, so the person can judge for
+  // themselves; the model's own sentence about what the speaker means is kept as `meaning`.
+  let meaning = null;
+  if (verdict !== "faithful") {
+    const ev = evidenceNote(issue, { before, after, hints });
+    if (ev) {
+      if (note && by === "model") meaning = note;
+      note = ev;
+    }
+  }
   if (verdict !== "faithful" && !note) note = DEFAULT_NOTES[issue] || "Check the clip still says what the speaker meant.";
   const fix = verdict === "faithful" ? null : faithfulFix(c, { extend, before, after, words, sentences, maxLen });
   return {
@@ -206,7 +279,9 @@ export function faithfulResult(c, { hints = [], answer = null, before = null, af
     fix,
     by,
     hints: hints.map((h) => h.issue),
+    ...(meaning ? { meaning } : {}),
     ...(reading ? { reading } : {}),
+    ...(answers ? { answers } : {}),
     ...(error ? { error } : {}),
   };
 }
