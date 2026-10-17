@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:web": "VITE_ENGINE=browser vite build",
+    "dev:web": "VITE_ENGINE=browser vite",
+    "preview:web": "VITE_ENGINE=browser vite preview --outDir ../dist-web",
     "preview": "vite preview",
     "mock": "vite --open /?mock=1"
   },

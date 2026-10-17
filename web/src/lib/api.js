@@ -84,4 +84,38 @@ function createHttpApi() {
 const params = new URLSearchParams(location.search);
 export const isMock = params.has("mock") ? params.get("mock") !== "0" : import.meta.env.VITE_MOCK === "1" || import.meta.env.VITE_MOCK === "true";
 export const debugMode = params.has("debug") || params.has("eval");
-export const api = isMock ? createMockApi(params) : createHttpApi();
+
+// One app, two engines. VITE_ENGINE=browser (the hosted Selects Web) runs the whole
+// pipeline in this tab through src/browser's adapter; the default, server, talks to
+// `selects serve` on this laptop. The flag is replaced at build time, so a server build
+// never bundles the browser engine and its models' runtimes.
+export const ENGINE = import.meta.env.VITE_ENGINE === "browser" ? "browser" : "server";
+
+async function createApi() {
+  if (isMock) return createMockApi(params);
+  if (import.meta.env.VITE_ENGINE === "browser") {
+    const { createBrowserApi } = await import("../../../src/browser/api.js");
+    const saved = readEngineMode();
+    return createBrowserApi(saved ? { mode: saved } : {});
+  }
+  return createHttpApi();
+}
+
+/** Private or Smart, remembered per browser (the Gemini key itself stays in the tab only). */
+export function readEngineMode() {
+  try {
+    const m = localStorage.getItem("selects-engine-mode");
+    return m === "smart" || m === "private" ? m : null;
+  } catch {
+    return null;
+  }
+}
+export function saveEngineMode(m) {
+  try {
+    localStorage.setItem("selects-engine-mode", m);
+  } catch {}
+}
+
+export const api = await createApi();
+/** True when the work runs in this tab (the hosted build). */
+export const inBrowser = !!api.browser;

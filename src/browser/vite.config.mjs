@@ -19,7 +19,7 @@ export default defineConfig({
   base: "./",
   publicDir: path.join(here, "public"),
   build: {
-    outDir: path.resolve(here, "../../dist-web"),
+    outDir: path.resolve(here, "../../dist-engine"), // the engine test page; the hosted site is web/ (npm --prefix web run build:web -> dist-web)
     emptyOutDir: true,
     target: "es2022",
     assetsInlineLimit: 0,
