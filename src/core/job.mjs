@@ -626,7 +626,13 @@ async function runStages(id, { deps = {}, signal } = {}) {
         madeFor: job.settings.madeFor,
         cacheDir: dir,
         signal,
-        onProgress: (p) => progress("judge", { ...p, progress: (p.progress ?? 0) * 0.8 }),
+        // the ETA covers what still follows in this stage: the side-by-side round and one
+        // faithful check per pick, at the speed measured so far (30 picks on a CPU is 30+ minutes)
+        onProgress: (p) => {
+          const per = p.secPerCandidate ?? null;
+          const after = per == null ? 0 : (job.settings.listwise !== false ? 2 * per : 0) + ((job.settings.faithful ?? "model") === "model" ? (job.settings.k ?? 5) * per : 0);
+          progress("judge", { ...p, progress: (p.progress ?? 0) * 0.8, etaSec: p.etaSec == null ? null : Math.round(p.etaSec + after) });
+        },
       });
       const st = judged.stats;
       if (job.settings.listwise !== false && judged.length >= 3) {
