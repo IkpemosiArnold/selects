@@ -25,10 +25,11 @@ const INFO = join(DS, "info");
 const MEDIA = join(EVAL, "media");
 const MANIFEST = join(DS, "manifest.json");
 const BROWSER = process.env.SELECTS_YTDLP_COOKIES_BROWSER || "chrome";
-const MIN_DUR = 10 * 60, MAX_DUR = 45 * 60;
+const MIN_DUR = 10 * 60, MAX_DUR = 90 * 60;
 // Whisper (about 1.6x real time) and Gemma 4B (minutes per window) are slow on this laptop, so
 // videos longer than 20 minutes are evaluated on their first 15 minutes only.
-const LONG = 20 * 60, CLIP_TO = 15 * 60;
+// v2 (17 Oct): every video is evaluated on its first 15 minutes at most.
+const LONG = 15 * 60, CLIP_TO = 15 * 60;
 
 // YouTube offers exactly one Creative Commons option, CC BY 3.0 Unported.
 const YT_CC = { name: "CC BY 3.0", url: "https://creativecommons.org/licenses/by/3.0/" };
@@ -49,7 +50,7 @@ function trimInfo(j) {
   return {
     id: j.id, title: j.title, channel: j.channel, channel_url: j.channel_url, uploader: j.uploader,
     webpage_url: j.webpage_url, duration: j.duration, upload_date: j.upload_date, view_count: j.view_count,
-    license: j.license ?? null, categories: j.categories, tags: (j.tags || []).slice(0, 20),
+    license: j.license ?? null, language: j.language ?? null, categories: j.categories, tags: (j.tags || []).slice(0, 20),
     heatmap: j.heatmap ?? null, fetchedAt: new Date().toISOString(),
   };
 }
@@ -63,7 +64,7 @@ function fetchAll(ids) {
     // Pass 1 output: --print writes the info for every id (even ones the filter rejects), as JSON lines.
     // Audio is downloaded only for ids that pass the match filter.
     const r = ytdlp([
-      "--ignore-errors", "--no-playlist", "--playlist-end", "15", "--sleep-requests", "0.5",
+      "--ignore-errors", "--no-playlist", "--playlist-end", process.env.SELECTS_FETCH_PER_SEARCH || "15", "--sleep-requests", "0.5",
       "--print", "pre_process:%()j",
       "--match-filters", `license~='(?i)creative commons' & heatmap & duration>=${MIN_DUR} & duration<=${MAX_DUR}`,
       "--no-simulate",
