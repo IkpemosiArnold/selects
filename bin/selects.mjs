@@ -32,6 +32,9 @@ Usage
 Options
   --model <name>    Ollama model for the judge (default: gemma3:4b, else a local gemma3 tag)
   --k <n>           how many clips to propose (default 5)
+  --made-for <p>    where the clips go: shorts (default: Shorts, Reels or TikTok, 20 to 60 s),
+                    linkedin (30 to 90 s, subtitles, no hashtag spam), x (15 to 45 s, one short
+                    line), story (60 to 90 s with a setup, a turn and a resolution)
   --min <sec>       shortest clip (default 20)
   --max <sec>       longest clip (default 60)
   --judge-n <n>     how many pre-scored windows the model reads (default 8; more is slower)
@@ -297,6 +300,7 @@ async function cmdClip(video, values) {
     minLen: values.min ? +values.min : undefined,
     maxLen: values.max ? +values.max : undefined,
     judgeN: values["judge-n"] ? +values["judge-n"] : undefined,
+    madeFor: values["made-for"],
     faithful: values.faithful,
     kit: values["plain-kit"] ? "plain" : undefined,
     credit: values.credit,
@@ -305,6 +309,10 @@ async function cmdClip(video, values) {
     ...speechSettings(values),
   };
   if (!checkLicense(values.license)) process.exit(1);
+  if (values["made-for"] && !["shorts", "linkedin", "x", "story"].includes(values["made-for"].toLowerCase())) {
+    say(red(`--made-for takes shorts, linkedin, x or story, not "${values["made-for"]}".`));
+    process.exit(1);
+  }
   if (values.faithful && !["model", "rules", "off"].includes(values.faithful)) {
     say(red(`--faithful takes model, rules or off, not "${values.faithful}".`));
     process.exit(1);
@@ -515,7 +523,7 @@ async function cmdQueue(sub, files, values) {
     const model = values.model || (await resolveModel());
     for (const f of files) {
       try {
-        const job = createJob(f, { model, k: values.k ? +values.k : undefined, judgeN: values["judge-n"] ? +values["judge-n"] : undefined });
+        const job = createJob(f, { model, k: values.k ? +values.k : undefined, judgeN: values["judge-n"] ? +values["judge-n"] : undefined, madeFor: values["made-for"] });
         enqueue({ jobId: job.id });
         say(`Queued ${job.source.name} as ${job.id}`);
       } catch (e) {
@@ -610,6 +618,7 @@ async function main() {
       min: { type: "string" },
       max: { type: "string" },
       "judge-n": { type: "string" },
+      "made-for": { type: "string" },
       faithful: { type: "string" },
       out: { type: "string" },
       port: { type: "string" },

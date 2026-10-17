@@ -5,6 +5,7 @@ import path from "node:path";
 import { ollamaUrl, PROMPTS_DIR, selectsHome } from "./config.mjs";
 import { applyListOrder, blend, clamp, combine, JUDGE_SCHEMA as SCHEMA, judgeMessages, listMessages, listSchema, parseListAnswer, salvageJudge, splitPrompt, tidyReason } from "./judge-core.mjs";
 import { appendJsonLine, readJson, sha1, writeJsonAtomic } from "./util.mjs";
+import { MADE_FOR, madeForBlock } from "./madefor.mjs";
 
 // The rubric weights, the blend, the JSON schemas, answer parsing and the listwise maths
 // have no Node imports (judge-core.mjs), so the browser build scores clips the same way.
@@ -14,14 +15,20 @@ let promptCache = null;
 /** Load prompts/judge.md and split it into the system and user parts. */
 export function loadPrompt() {
   if (promptCache) return promptCache;
-  const { system, user } = splitPrompt(fs.readFileSync(path.join(PROMPTS_DIR, "judge.md"), "utf8"), "prompts/judge.md");
+  const md = fs.readFileSync(path.join(PROMPTS_DIR, "judge.md"), "utf8");
+  const { system, user } = splitPrompt(md, "prompts/judge.md");
   // the version covers only what the model sees, so editing the notes above it keeps the cache
-  promptCache = { system, user, version: sha1(`${system}\n---\n${user}`).slice(0, 10) };
+  promptCache = { system, user, md, version: sha1(`${system}\n---\n${user}`).slice(0, 10) };
   return promptCache;
 }
 
-export function buildMessages(candidate) {
-  return judgeMessages(loadPrompt(), candidate);
+/** The extra system line for a "made for" preset ("story" only), or "". */
+export function judgeExtra(madeFor) {
+  return MADE_FOR[madeFor]?.storyJudge ? madeForBlock(loadPrompt().md, madeFor) : "";
+}
+
+export function buildMessages(candidate, { madeFor } = {}) {
+  return judgeMessages(loadPrompt(), candidate, { extra: judgeExtra(madeFor) });
 }
 
 /**
@@ -132,9 +139,10 @@ export async function ollamaJson({ model, messages, schema, timeoutMs = 60 * 60 
  *   `request` replaces the Ollama call (tests use it).
  * @returns {Promise<object[]>} judged candidates, with a non-enumerable `stats` property
  */
-export async function judge(candidates, { model, cacheDir, onProgress, onResult, signal, request } = {}) {
+export async function judge(candidates, { model, cacheDir, onProgress, onResult, signal, request, madeFor } = {}) {
   if (!model) throw new Error("judge needs a model name");
   const prompt = loadPrompt();
+  const extra = judgeExtra(madeFor); // "" except for the story preset, so older caches stay valid
   const cacheFile = cacheDir ? path.join(cacheDir, "judge-cache.json") : null;
   const cache = cacheFile ? readJson(cacheFile, {}) : {};
   const ask = request || ((messages) => ollamaJson({ model, messages, schema: SCHEMA, signal }));
@@ -144,7 +152,7 @@ export async function judge(candidates, { model, cacheDir, onProgress, onResult,
   for (let i = 0; i < candidates.length; i++) {
     if (signal?.aborted) throw signal.reason ?? new Error("aborted");
     const c = candidates[i];
-    const key = sha1(`${model}|${prompt.version}|${c.text.trim()}`);
+    const key = sha1(`${model}|${prompt.version}|${extra ? `${sha1(extra).slice(0, 8)}|` : ""}${c.text.trim()}`);
     let hit = cache[key];
     if (!hit) {
       const started = Date.now();
@@ -154,7 +162,7 @@ export async function judge(candidates, { model, cacheDir, onProgress, onResult,
       };
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          res = await ask(buildMessages(c));
+          res = await ask(buildMessages(c, { madeFor }));
           break;
         } catch (e) {
           const salvaged = e.content != null ? salvageJudge(e.content) : null;

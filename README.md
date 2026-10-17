@@ -150,6 +150,19 @@ selects talk.mp4 --blur-region 0.6,0.05,0.35,0.12@12-30   # blur a box from 0:12
 
 `--blur-faces all` blurs every face; `--blur-faces others` keeps the main speaker (the largest face that is on screen longest) and blurs the rest. Faces are found with Apple's Vision framework by a small Swift tool, so face blur works on macOS only; build it once with `sh tools/faces/build.sh`. On other systems, use `--blur-region`, which works everywhere. A region is `x,y,w,h` as fractions of the upright frame (0,0 is the top left), optionally followed by `@start-end` in seconds, and you can repeat the flag. Typical uses: a phone number on screen, a third-party logo, or a figure under a licence that does not allow adaptations. In the browser you can draw the boxes on the preview and choose which faces to blur.
 
+## Made for: Shorts, LinkedIn, X or a story
+
+Tell Selects where the clips will go with `--made-for` (or `settings.madeFor`). A preset changes only three things: the length range, the caption style, and the posting kit's tone and format. Clip selection stays the same, except for `story`.
+
+| Preset | Clip length | Captions | Posting kit |
+|---|---|---|---|
+| `shorts` (default) | 20 to 60 s | bold, 2 to 4 words, current word in yellow | Shorts, Reels or TikTok: a title under 60 characters, one or two sentences, 3 to 5 topic hashtags |
+| `linkedin` | 30 to 90 s | subtitle, two lines, no highlight | a first sentence under 120 characters that earns the click before "see more", then two or three plain sentences; 0 to 3 hashtags, only ones that name the field |
+| `x` | 15 to 45 s | bold | one or two short sentences under 200 characters; no hashtag, or one |
+| `story` | 60 to 90 s | bold | like `shorts`, but the title and caption set up the story without giving away the ending |
+
+`story` also adds one line to the judge's prompt: score "stands alone" and "payoff" high only when the clip tells a complete story, with a setup, a turn and a resolution. The line is in [`src/core/prompts/judge.md`](src/core/prompts/judge.md), and each preset's kit format is in [`src/core/prompts/kit.md`](src/core/prompts/kit.md). `--min`, `--max` and `--style` still win over a preset. There is no outrage or controversy preset, on purpose.
+
 ## How it fails safely
 
 A clipper that trusts a bad transcript picks bad clips: the windows, the judge, the cuts and the captions all sit on the words. So Selects checks the transcript before it spends any model time on it.
@@ -295,8 +308,9 @@ selects doctor                 check whisper, Ollama, the judge model and disk
 |---|---|---|
 | `--model <name>` | `gemma3:4b`, else a local `gemma3` tag | the Ollama model that judges the clips |
 | `--k <n>` | 5 | how many clips to propose |
-| `--min <sec>` | 20 | shortest clip |
-| `--max <sec>` | 60 | longest clip |
+| `--made-for <p>` | `shorts` | where the clips go: `shorts`, `linkedin`, `x` or `story` (see "Made for" above) |
+| `--min <sec>` | 20 (from `--made-for`) | shortest clip |
+| `--max <sec>` | 60 (from `--made-for`) | longest clip |
 | `--judge-n <n>` | 8 | how many pre-scored windows the model reads (more is slower) |
 | `--preview` | off | render fast 720x1280 drafts instead of final 1080x1920 clips |
 | `--plain-kit` | off | skip the model for post titles and use the clip's first line |
@@ -321,7 +335,7 @@ selects doctor                 check whisper, Ollama, the judge model and disk
 | `--port <n>` | 4317 | port for `selects serve` |
 | `--help`, `-h` | | show the help |
 
-`selects review <job-id>` accepts `--credit`, `--license`, `--source-url`, `--yes`, `--preview`, `--plain-kit`, `--force` and `--out`. Changing the credit on a finished job rewrites the posting kits without rendering again. `selects queue add` accepts `--model`, `--k` and `--judge-n`.
+`selects review <job-id>` accepts `--credit`, `--license`, `--source-url`, `--yes`, `--preview`, `--plain-kit`, `--force` and `--out`. Changing the credit on a finished job rewrites the posting kits without rendering again. `selects queue add` accepts `--model`, `--k`, `--judge-n` and `--made-for`.
 
 Without a terminal to ask in (for example in a script), `selects <video>` stops with exit code 2 after finding the clips, unless you pass `--yes`. The job is saved, and `selects review <job-id>` picks it up. Any other failure exits with code 1 and prints what happened, what to do, and the job id to resume.
 

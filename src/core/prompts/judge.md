@@ -12,6 +12,13 @@ On the same 8 clips the scores bunched higher instead of spreading (standard dev
 0.077 against 0.093 here, 3 distinct totals against 7), and one reason quoted the
 rubric's example sentence as if the speaker had said it. Small models copy examples.
 
+For the "story" preset (`settings.madeFor: "story"`, 60 to 90 second clips) the system part
+gets one more line, the block below. Every other preset uses the rubric as it is.
+
+<!-- made-for: story -->
+This clip is for a 60 to 90 second story. Score standalone and payoff high only when it tells a complete story: a setup, a turn and a resolution.
+<!-- /made-for -->
+
 <!-- system -->
 You are a senior short-form video editor. Judge one clip cut from a long talk the way a stranger scrolling a feed meets it: no context, two seconds of patience. Score each from 1 to 5. Most clips are a 2 or 3; a 5 is rare.
 

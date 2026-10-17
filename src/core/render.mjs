@@ -12,6 +12,7 @@ import { FONT_PATH, FONT_FALLBACK_PATH, jobsDir } from "./config.mjs";
 import { speechOnly } from "./nonspeech.mjs";
 import { captionOptions, captionTimeline, clipWords, motionSize, paintCaption, PRESETS, reframeByShape, reframeFromMotion, workingSize } from "./layout.mjs";
 import { uprightSize } from "./probe.mjs";
+import { clipCaptionStyle } from "./madefor.mjs";
 import { readJson, run } from "./util.mjs";
 
 // presets, caption layout and the reframe decision have no Node imports (layout.mjs), so the
@@ -236,7 +237,7 @@ async function encode({ src, start, dur, graph: graphFor, capList, capY, P, out,
  * @returns {Promise<{path:string, srt:string, absPath:string, absSrt:string, reframe:object, wallSec:number}>}
  *   path and srt are relative to the job folder, as stored in candidate.render.
  */
-export async function render(job, candidate, { preset = "shorts", onProgress, jobDir, words, reframe = "auto", signal, captions, cues, blur, tracks } = {}) {
+export async function render(job, candidate, { preset = "shorts", onProgress, jobDir, words, reframe = "auto", signal, captions, cues, blur, tracks, style } = {}) {
   const P = PRESETS[preset];
   if (!P) throw new Error(`Unknown preset "${preset}". Known: ${Object.keys(PRESETS).join(", ")}`);
   const dir = jobDir || path.join(jobsDir(), job.id);
@@ -258,26 +259,36 @@ export async function render(job, candidate, { preset = "shorts", onProgress, jo
   const partAbs = path.join(clipsDir, `${candidate.id}${suffix}.part.mp4`);
 
   try {
+    // the caption look: bold (2 to 4 words, the current one in yellow) or subtitle (two lines),
+    // from the job's caption style or its "made for" preset (LinkedIn defaults to subtitle)
+    const st = style && style !== "auto" ? style : clipCaptionStyle(job.settings);
     // cues: the reviewed captions.json when there is one, else built from the words
     let all = cues;
+    let edited = !!cues;
     if (!all) {
       const capFile = path.join(dir, "captions.json");
-      if (fs.existsSync(capFile)) all = loadCaptions(dir).cues;
+      if (fs.existsSync(capFile)) {
+        const caps = loadCaptions(dir);
+        all = caps.cues;
+        edited = !!caps.edited;
+      }
     }
-    const clipped = all ? clipCues(all, candidate.start, candidate.end, start) : cuesFromWords(clipWords(words || speechOnly(readJson(path.join(dir, "words.json"))), candidate.start, candidate.end, start), "bold");
+    let clipped = all ? clipCues(all, candidate.start, candidate.end, start) : cuesFromWords(clipWords(words || speechOnly(readJson(path.join(dir, "words.json"))), candidate.start, candidate.end, start), st);
+    // cues grouped for the other look are regrouped, unless a person edited them
+    if (all && !edited && st === "subtitle") clipped = cuesFromWords(clipped.flatMap((c) => c.words), st);
     fs.writeFileSync(path.join(dir, srtRel), toSrt(clipped));
-    const capOpts = { width: P.width, caption: { ...P.caption, style: "bold" } };
+    const capOpts = { width: P.width, caption: st === "subtitle" ? captionOptions(P.width, P.height, "subtitle") : { ...P.caption, style: "bold" } };
     const track = withCaptions ? buildCaptionTrack(clipped, dur, tmp, capOpts) : null;
 
     const rf = reframe === "auto" ? await chooseReframe(src, start, dur) : { mode: reframe };
     const spec = blur ?? candidate.blur ?? job.settings?.blur ?? null;
     const boxes = blurBoxes(spec, { tracks: tracks || loadTracks(dir), offset: start, duration: dur });
     const graph = (gpu) => videoGraph({ src, W: P.width, H: P.height, reframe: rf.mode, blur: boxes, fps: P.fps, vmap: src.videoStream != null ? `0:${src.videoStream}` : "0:v:0", duration: dur, gpu });
-    const capY = Math.round(P.height * P.caption.bottomLimit - P.caption.boxHeight);
+    const capY = Math.round(P.height * capOpts.caption.bottomLimit - capOpts.caption.boxHeight);
     const decode = await encode({ src, start, dur, graph, capList: track?.list, capY, P, out: partAbs, onProgress, signal });
     fs.renameSync(partAbs, outAbs);
     onProgress?.({ progress: 1 });
-    return { path: outRel, srt: srtRel, absPath: outAbs, absSrt: path.join(dir, srtRel), reframe: rf, captions: track ? clipped.length : 0, blurBoxes: boxes.length, decode, wallSec: +((Date.now() - t0) / 1000).toFixed(1) };
+    return { path: outRel, srt: srtRel, absPath: outAbs, absSrt: path.join(dir, srtRel), reframe: rf, captions: track ? clipped.length : 0, captionStyle: st, blurBoxes: boxes.length, decode, wallSec: +((Date.now() - t0) / 1000).toFixed(1) };
   } catch (e) {
     fs.rmSync(partAbs, { force: true });
     if (!e.hint) e.hint = "Check free disk space, then render again. Approved clips stay approved.";

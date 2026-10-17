@@ -87,13 +87,16 @@ export function splitPrompt(md, name = "prompt") {
   return { system, user };
 }
 
-/** The judge's chat messages for one candidate, from the split judge.md. */
-export function judgeMessages(prompt, candidate) {
+/**
+ * The judge's chat messages for one candidate, from the split judge.md. `extra` is one more
+ * line for the system part (the "story" preset's line; empty for every other preset).
+ */
+export function judgeMessages(prompt, candidate, { extra = "" } = {}) {
   const user = prompt.user
     .replace("{{duration}}", String(Math.round(candidate.end - candidate.start)))
     .replace("{{text}}", candidate.text.trim());
   return [
-    { role: "system", content: prompt.system },
+    { role: "system", content: extra ? `${prompt.system}\n\n${extra}` : prompt.system },
     { role: "user", content: user },
   ];
 }

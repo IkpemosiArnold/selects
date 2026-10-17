@@ -10,7 +10,8 @@
 // meant? before/after are the sentences around the clip, hints from faithfulHints).
 // prompts is { judge, listwise, kit, faithful }: the text of the files in src/core/prompts.
 import { JUDGE_SCHEMA, judgeMessages, listMessages, listSchema, parseListAnswer, salvageJudge, splitPrompt } from "./judge-core.mjs";
-import { cleanKit, KIT_SCHEMA, kitMessages } from "./kit-core.mjs";
+import { cleanKit, KIT_SCHEMA, kitMessages, kitSchema } from "./kit-core.mjs";
+import { MADE_FOR, madeForBlock } from "./madefor.mjs";
 import { FAITHFUL_SCHEMA, faithfulMessages, faithfulPrompt, readFaithful } from "./faithful-core.mjs";
 
 /** Output budgets, as on the desktop (num_predict): 80 for a judge call, 40 + 30 per clip for the round, 120 for a kit. */
@@ -26,12 +27,18 @@ export const lettersFor = (top) => top.map((_, i) => String.fromCharCode(65 + i)
 
 /** { messages, schema, maxTokens } for a task. */
 export function buildTask(task, prompts) {
-  if (task.kind === "judge") return { messages: judgeMessages(splitPrompt(prompts.judge, "prompts/judge.md"), task.candidate), schema: JUDGE_SCHEMA, maxTokens: maxTokensFor(task) };
+  if (task.kind === "judge") return { messages: judgeMessages(splitPrompt(prompts.judge, "prompts/judge.md"), task.candidate, { extra: MADE_FOR[task.madeFor]?.storyJudge ? madeForBlock(prompts.judge, task.madeFor) : "" }), schema: JUDGE_SCHEMA, maxTokens: maxTokensFor(task) };
   if (task.kind === "listwise") return { messages: listMessages(splitPrompt(prompts.listwise, "prompts/listwise.md"), task.top), schema: listSchema(lettersFor(task.top)), maxTokens: maxTokensFor(task) };
-  if (task.kind === "kit") return { messages: kitMessages(prompts.kit, task.candidate), schema: KIT_SCHEMA, maxTokens: maxTokensFor(task) };
+  if (task.kind === "kit") return { messages: kitMessages(prompts.kit, task.candidate, { madeFor: task.madeFor }), schema: task.madeFor ? kitSchema(task.madeFor) : KIT_SCHEMA, maxTokens: task.madeFor === "linkedin" ? 200 : maxTokensFor(task) };
   if (task.kind === "faithful") return { messages: faithfulMessages(faithfulPrompt(prompts.faithful), { text: task.candidate.text, before: task.before, after: task.after, hints: task.hints }), schema: FAITHFUL_SCHEMA, maxTokens: maxTokensFor(task) };
-  if (task.kind === "judgeBatch") return { messages: batchMessages(splitPrompt(prompts.judge, "prompts/judge.md"), task.candidates), schema: batchSchema(lettersFor(task.candidates)), maxTokens: maxTokensFor(task) };
+  if (task.kind === "judgeBatch") return { messages: batchMessages(storyPrompt(prompts.judge, task.madeFor), task.candidates), schema: batchSchema(lettersFor(task.candidates)), maxTokens: maxTokensFor(task) };
   throw new Error(`unknown task kind ${task.kind}`);
+}
+
+/** The split judge prompt, with the story preset's extra line added to the system part. */
+function storyPrompt(md, madeFor) {
+  const p = splitPrompt(md, "prompts/judge.md");
+  return MADE_FOR[madeFor]?.storyJudge ? { ...p, system: `${p.system}\n\n${madeForBlock(md, madeFor)}` } : p;
 }
 
 /**
@@ -93,7 +100,7 @@ export function readTask(task, { data, text }) {
     return salvageJudge(text ?? JSON.stringify(data ?? ""));
   }
   if (task.kind === "listwise") return parseListAnswer(obj?.ranking ? obj : String(text ?? ""), lettersFor(task.top));
-  if (task.kind === "kit") return cleanKit(obj || {});
+  if (task.kind === "kit") return cleanKit(obj || {}, { madeFor: task.madeFor });
   if (task.kind === "faithful") return readFaithful(obj || String(text ?? "")); // null when there is no verdict
   if (task.kind === "judgeBatch") {
     // { byLetter: { A: { hook, standalone, payoff, clarity, reason } } }; clips the answer left out are missing
@@ -144,9 +151,9 @@ export function checkTaskShape(task, { maxChars = 3000, maxClips = 6 } = {}) {
 export function slimTask(task) {
   const c = (x) => ({ text: x.text, hook: x.hook, start: x.start, end: x.end });
   if (task.kind === "listwise") return { kind: "listwise", top: task.top.map(c) };
-  if (task.kind === "judgeBatch") return { kind: "judgeBatch", candidates: task.candidates.map(c) };
+  if (task.kind === "judgeBatch") return { kind: "judgeBatch", candidates: task.candidates.map(c), ...(task.madeFor ? { madeFor: task.madeFor } : {}) };
   if (task.kind === "faithful") return { kind: "faithful", candidate: c(task.candidate), before: task.before ?? null, after: task.after ?? null, hints: (task.hints || []).map((h) => ({ issue: h.issue, cue: h.cue })) };
-  return { kind: task.kind, candidate: c(task.candidate) };
+  return { kind: task.kind, candidate: c(task.candidate), ...(task.madeFor ? { madeFor: task.madeFor } : {}) };
 }
 
 /**

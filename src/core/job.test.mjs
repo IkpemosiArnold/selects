@@ -420,3 +420,35 @@ test("faithful cuts: a misleading pick drops to the bottom until accepted, and t
   assert.equal(fixed.rank, 1);
   assert.throws(() => updateCandidate(job.id, firstId, { faithful: "maybe" }), (e) => e.status === 400);
 });
+
+test("made for: the preset sets the length range, the caption style and the kit's platform", async () => {
+  const li = createJob(video, { model: "mock", madeFor: "linkedin", qualityGate: false });
+  assert.deepEqual([li.settings.madeFor, li.settings.minLen, li.settings.maxLen, li.settings.captionStyle], ["linkedin", 30, 90, "subtitle"]);
+  const own = createJob(video, { model: "mock", madeFor: "x", maxLen: 30 });
+  assert.deepEqual([own.settings.minLen, own.settings.maxLen], [15, 30]);
+  assert.equal(createJob(video, { model: "mock" }).settings.madeFor, "shorts");
+  assert.throws(() => createJob(video, { madeFor: "outrage" }), (e) => e.status === 400);
+  const deps = mocks({ probe: 0, transcribe: 0, judge: 0 });
+  let judgedFor = null;
+  const judge = deps.judge;
+  deps.judge = (c, o) => ((judgedFor = o.madeFor), judge(c, o));
+  const ready = await runJob(li.id, { deps });
+  assert.equal(judgedFor, "linkedin");
+  assert.ok(ready.candidates.every((c) => c.end - c.start <= 90 + 1e-6));
+  const c = ready.candidates[0];
+  updateCandidate(li.id, c.id, { status: "approved" });
+  let kitFor = null;
+  await renderJob(li.id, {
+    deps: {
+      render: async (_j, cand, { jobDir: dir }) => {
+        fs.mkdirSync(path.join(dir, "clips"), { recursive: true });
+        fs.writeFileSync(path.join(dir, "clips", `${cand.id}.mp4`), "mp4");
+        return { path: `clips/${cand.id}.mp4`, srt: `clips/${cand.id}.srt`, wallSec: 1 };
+      },
+      postingKit: async (_c, o) => ((kitFor = o.madeFor), { title: "T", caption: "C.", hashtags: [] }),
+    },
+  });
+  assert.equal(kitFor, "linkedin");
+  const kit = JSON.parse(fs.readFileSync(path.join(jobDir(li.id), "clips", `${c.id}.kit.json`), "utf8"));
+  assert.equal(kit.madeFor, "linkedin");
+});

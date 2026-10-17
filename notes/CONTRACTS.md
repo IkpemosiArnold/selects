@@ -307,3 +307,15 @@ candidate.demoted = true                       // only while a misleading cut is
 - `job.faithful = { mode, checked, faithful, check, misleading, asked, cached, failed, sec, secPerCall }`; `job.timings.faithful` is its wall seconds (inside the judge stage, which now reports 0 to 0.8 for the pointwise calls, 0.8 for the listwise round and 0.9 to 1 for this check).
 - `settings.faithful`: `"model"` (default, one call per top pick, cached in `judge-cache.json`, logged in `judge-calls.jsonl` as `kind: "faithful"`), `"rules"` (no model) or `"off"`. CLI `--faithful model|rules|off`. With `--yes`, misleading cuts are left unapproved.
 - Browser: `tasks.mjs` has a `faithful` task: `{ kind: "faithful", candidate, before, after, hints }`, with `prompts.faithful` the text of `prompts/faithful.md`; `readTask` returns `{ verdict, issue, extend, note }` or null. Build the field with `contextFor`, `faithfulHints` and `faithfulResult` from `faithful-core.mjs`, then order with `orderByFaithful`.
+
+## Made for presets (17 Oct, core)
+
+All additive. `src/core/madefor.mjs` (browser-safe) holds the presets.
+
+- `settings.madeFor`: `"shorts"` (default; Shorts, Reels or TikTok), `"linkedin"`, `"x"` or `"story"`. Set when the job is created (`POST /api/jobs` settings, CLI `--made-for`); an unknown name is a 400. It changes only:
+  - the length range, unless `minLen` or `maxLen` were given: shorts 20 to 60 s, linkedin 30 to 90, x 15 to 45, story 60 to 90;
+  - the caption style for clips, unless `captionStyle` was given: `settings.captionStyle` is filled in at creation (linkedin `"subtitle"`, the rest `"bold"`), and clip renders now honour `"subtitle"` (`render.captionStyle` says which was used);
+  - the posting kit: `kit.json` has `madeFor`; the prompt gets that platform's block from `prompts/kit.md`; hashtags are 3 to 5 (shorts, story), 0 to 3 (linkedin) or 0 to 1 (x).
+- `story` adds one line (the `<!-- made-for: story -->` block in `prompts/judge.md`) to the judge's system prompt. Other presets send the rubric unchanged, so their judge cache is shared.
+- Exports: `MADE_FOR`, `madeForPreset(name)`, `applyMadeFor(settings)`, `clipCaptionStyle(settings)`, `madeForBlock(md, key)`; `kitSchema(madeFor)`, `kitMessages(md, c, { madeFor })`, `cleanKit(d, { madeFor })` in `kit-core.mjs`; `judgeMessages(prompt, c, { extra })` in `judge-core.mjs`.
+- Browser tasks: `judge`, `judgeBatch` and `kit` tasks take an optional `madeFor`, kept by `slimTask`.

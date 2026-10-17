@@ -10,6 +10,7 @@ import { detectFaces as realDetectFaces } from "./faces.mjs";
 import { decideLanguage as realDecideLanguage } from "./language.mjs";
 import { accentRoute, nigerianCues } from "./langid/accent.mjs";
 import { applyProfile } from "./profiles.mjs";
+import { applyMadeFor } from "./madefor.mjs";
 import { transcriptQuality } from "./quality.mjs";
 import { attributionLine, captionWithCredit, mediaReminder, normaliseLicense, OWN_FOOTAGE } from "./attribution.mjs";
 import { makeCandidates, shortlist } from "./candidates.mjs";
@@ -71,6 +72,8 @@ export function createJob(videoPath, settings = {}) {
     err.hint = "Check the path, or drag the file into the terminal to paste its full path.";
     throw err;
   }
+  // "made for" fills in the length range and the caption style the person did not set
+  settings = applyMadeFor(stripUndefined(settings));
   const id = newId();
   const job = {
     id,
@@ -508,6 +511,7 @@ async function runStages(id, { deps = {}, signal } = {}) {
       begin("judge");
       let judged = await d.judge(short, {
         model: job.settings.model,
+        madeFor: job.settings.madeFor,
         cacheDir: dir,
         signal,
         onProgress: (p) => progress("judge", { ...p, progress: (p.progress ?? 0) * 0.8 }),
@@ -655,6 +659,7 @@ function writeKit(job, c, k) {
     caption: captionWithCredit(baseCaption, job.settings),
     captionText: baseCaption,
     hashtags: k.hashtags,
+    madeFor: job.settings.madeFor || "shorts",
     attribution: attributionLine(job.settings),
     reminder: mediaReminder(job.settings),
     start: c.start,
@@ -819,7 +824,7 @@ async function renderClips(id, { ids, deps = {}, signal, kit, preset } = {}) {
         let k;
         const k0 = Date.now();
         try {
-          k = kitMode === "model" ? await d.postingKit(kitSource(dir, c), { model: job.settings.model, signal, cacheDir: dir }) : plainKit(kitSource(dir, c));
+          k = kitMode === "model" ? await d.postingKit(kitSource(dir, c), { model: job.settings.model, madeFor: job.settings.madeFor || "shorts", signal, cacheDir: dir }) : plainKit(kitSource(dir, c));
         } catch {
           k = plainKit(kitSource(dir, c));
         }
