@@ -15,6 +15,7 @@ import { Masthead } from "../../App.jsx";
 import Card, { reframeOf } from "./Card.jsx";
 import Slate from "./Slate.jsx";
 import Timeline from "./Timeline.jsx";
+import TopN from "./TopN.jsx";
 import Script from "./Script.jsx";
 import Sheet, { DecisionBar } from "./Sheet.jsx";
 import FaithNote, { fixLabel } from "./FaithNote.jsx";
@@ -386,6 +387,30 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
     [currentId, mode]
   );
 
+  // Approve the best N clips not skipped; the clip on screen moves on if it was one of them.
+  const approveBest = useCallback(
+    async (n) => {
+      let res;
+      try {
+        res = await api.approveTop(job.id, n);
+      } catch (e) {
+        flash(`Those clips were not approved. ${e.message}`, "error");
+        return;
+      }
+      const was = new Map(ranked.map((c) => [c.id, c.status]));
+      const changed = (res?.candidates || []).filter((c) => was.get(c.id) !== c.status);
+      for (const c of changed) onCandidate(c);
+      const ids = new Set(changed.map((c) => c.id));
+      if (cur && ids.has(cur.id)) setCurrentId(ranked.find((c) => c.status === "proposed" && !ids.has(c.id))?.id ?? null);
+      const msg = changed.length ? `Approved ${plural(changed.length, "more clip")}. ${res.approved} approved in all.` : "Those clips were already approved.";
+      flash(msg);
+      setSaid(msg);
+    },
+    [job.id, ranked, cur, onCandidate, flash]
+  );
+  // Only worth a control when there are more clips than one sitting checks comfortably.
+  const topN = api.approveTop && ranked.length > 12 ? <TopN open={ranked.length - skipped.length} onApprove={approveBest} /> : null;
+
   // ---- keys ------------------------------------------------------------------
 
   useEffect(() => {
@@ -712,6 +737,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
                   captionsOn={captionsOn}
                   jobId={job.id}
                   onUndo={undo}
+                  topN={topN}
                 />
               )}
             </div>}
@@ -738,6 +764,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
             jobId={job.id}
             fileName={job.source?.name}
             timeline={timeline}
+            topN={topN}
           />
           <DecisionBar ref={barRef} cur={cur} onDecide={(st) => decide(st)} />
         </>
@@ -790,7 +817,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
   );
 }
 
-function Controls({ cur, mode, waiting, total, onDecide, onNudge, onTrim, onBlur, blurText, captionsOn, jobId, onUndo }) {
+function Controls({ cur, mode, waiting, total, onDecide, onNudge, onTrim, onBlur, blurText, captionsOn, jobId, onUndo, topN }) {
   const decided = cur.status !== "proposed";
   return (
     <section className="controls" aria-label="Decide">
@@ -849,6 +876,7 @@ function Controls({ cur, mode, waiting, total, onDecide, onNudge, onTrim, onBlur
           {captionsOn ? "Fix caption words" : "Captions are off. Turn them on"}
         </a>
       </div>
+      {topN}
       <p className="hint">
         <kbd>Space</kbd> play or pause <button type="button" className="hint-undo" onClick={onUndo}><kbd>Z</kbd> undo</button>
       </p>
@@ -873,7 +901,7 @@ function Done({ job, ranked, approved, rendered, onPick, onRender, rendering, no
             <li key={c.id}>
               <button type="button" className={"done-item is-" + c.status} onClick={() => onPick(c.id)}>
                 <span className="done-thumb" aria-hidden="true">
-                  <img src={thumbAt(job, c.start + 0.4) || undefined} alt="" />
+                  <img src={thumbAt(job, c.start + 0.4) || undefined} alt="" loading="lazy" decoding="async" />
                 </span>
                 <span className="done-n mono">{c.rank ?? "+"}</span>
                 <span className="done-hook">{c.hook}</span>

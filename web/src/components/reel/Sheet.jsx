@@ -33,7 +33,7 @@ export const DecisionBar = forwardRef(function DecisionBar({ cur, onDecide }, re
   );
 });
 
-const Sheet = forwardRef(function Sheet({ clip, line, total, waiting, onNudge, onTrim, onBlur, blurText, captionsOn, jobId, timeline, stickRef, fileName }, ref) {
+const Sheet = forwardRef(function Sheet({ clip, line, total, waiting, onNudge, onTrim, onBlur, blurText, captionsOn, jobId, timeline, stickRef, fileName, topN = null }, ref) {
   const sheetRef = useRef(null);
   const bodyRef = useRef(null);
   const peekRef = useRef(0);
@@ -240,6 +240,7 @@ const Sheet = forwardRef(function Sheet({ clip, line, total, waiting, onNudge, o
           <div className="sheet-where">
             <h3 className="why-h">Where the clips are in {fileName || "the video"}</h3>
             <p className="sheet-left">{waiting ? `${waiting} still to check` : "You've checked every clip"}</p>
+            {topN}
             {timeline}
           </div>
         </div>
