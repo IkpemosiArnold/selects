@@ -33,9 +33,11 @@ Priority issues, in order:
 4. **The footer teaches seven shortcuts as a legend** instead of the one or two that matter, shown where they act.
 5. **Nothing is memorable.** No moment in the flow would make a judge remember it a minute later.
 
+Note, 17 Oct: the review screenshots of these directions showed clip 1 of the EMF talk, whose slide carries a figure under CC BY-NC-ND, so they were removed. The pictures below are of the built app, from clips 2 and 3.
+
 ## Direction 1: the lined script
 
-![Review, light](screens/directions/lined-script-review-light.png)
+![The lined script as it was built: the trim view of the reel](screens/v2/reel-trim-script-dark.png)
 
 **The idea.** A script supervisor marks coverage by drawing vertical lines through the script, one per setup. Here the transcript is the working surface, set like a screenplay page in Paper Mono: the model's clips are blue lines in the margin, yours turn grease-pencil yellow, skipped ones become dashed red, and you make or trim a clip by selecting words.
 
@@ -52,17 +54,13 @@ Priority issues, in order:
 - Selecting text is fiddly on a phone.
 
 **Screens.**
-- `notes/screens/directions/lined-script-review-light.png`
-- `notes/screens/directions/lined-script-review-dark.png`
-- `notes/screens/directions/lined-script-review-select-to-trim.png` (words selected, "Trim clip 1 to this" or "Make a new clip", snapped to 02:35 to 02:54)
-- `notes/screens/directions/lined-script-review-phone.png`
 - `notes/screens/directions/lined-script-language-light.png`
 - `notes/screens/directions/lined-script-language-dark.png`
 - `notes/screens/directions/lined-script-language-no.png` (after "No")
 
 ## Direction 2: the reel
 
-![Review, dark](screens/directions/reel-review-dark.png)
+![The reel as it was built](screens/v2/reel-review-dark.png)
 
 **The idea.** One clip at a time, playing large at 9:16 the way it will be posted, with the captions the render will burn in and the same fit or crop the render chose. Beside it is the slate (clap sticks, clip, in, out, length, the opening line set large, and the model's reason in blue). You decide with one key or a swipe, like culling photos: right or A approves, left or S skips, comma and full stop move the start by a sentence, the square brackets move the end, Z undoes.
 
@@ -79,18 +77,14 @@ Priority issues, in order:
 - Browsers block sound until the first click, so the first clip plays muted with a "Sound is off" button.
 
 **Screens.**
-- `notes/screens/directions/reel-review-dark.png`
-- `notes/screens/directions/reel-review-light.png`
-- `notes/screens/directions/reel-review-throw-motion.png` (110 ms into the throw: clip 1 leaving to the right, clip 2 already playing)
 - `notes/screens/directions/reel-review-done.png` (all three decided: "2 clips to render.")
-- `notes/screens/directions/reel-review-phone.png`
 - `notes/screens/directions/reel-language-dark.png`
 - `notes/screens/directions/reel-language-light.png`
 - `notes/screens/directions/reel-language-no.png` (after N)
 
 ## Direction 3: the contact sheet (from the picture desk)
 
-![Review, light, with the loupe](screens/directions/contact-sheet-review-light.png)
+![The contact sheet, language question](screens/directions/contact-sheet-language-light.png)
 
 **The idea.** Before digital, a photo editor saw a whole roll at once as a contact sheet of small prints, read it through a loupe, and marked it with a china marker. Here the whole video is one sheet made from the stills Selects already extracts; the model's picks are drawn on it as blue loops, the clips you circle turn yellow, and the ones you cross out get a red X. A loupe follows the pointer and shows the frame bigger with the words spoken at that moment.
 
@@ -107,8 +101,6 @@ Priority issues, in order:
 - The marks need careful colour work: blue loops sit on black film, so they use the lighter blue.
 
 **Screens.**
-- `notes/screens/directions/contact-sheet-review-light.png` (clip 2 circled, clip 3 crossed out, loupe over clip 1)
-- `notes/screens/directions/contact-sheet-review-dark.png`
 - `notes/screens/directions/contact-sheet-language-light.png`
 - `notes/screens/directions/contact-sheet-language-dark.png`
 - `notes/screens/directions/contact-sheet-language-phone.png`

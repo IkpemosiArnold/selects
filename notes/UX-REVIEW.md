@@ -89,8 +89,18 @@ The short verdict is that the desktop review screen is strong and specific, and 
 | Re-render 2 clips to apply changes | Render 2 clips again with your changes |
 | Whisper's words, unedited | Not edited yet |
 
-## Not done in this pass
+## What changed, Sat 17 Oct
 
-- The caption editor on a phone still needs on-screen controls for split, merge and next unsure word.
-- The 1100 px tablet layout was checked but not redesigned.
-- Real-hardware checks (sticky hover, safe areas, the keyboard, share sheet) need a phone. Headless Chrome cannot show them.
+- Home has one action, "Choose a video". "Made for" (Shorts, Reels or TikTok, LinkedIn, X, a story) sets the clip lengths, and clip settings and the credit fold behind one-line summaries on every screen size. Started videos that have not finished are listed above the picker.
+- On a phone the review clip fills the screen. The slate is a bottom sheet whose top edge is the clap stick, and pulling it up shows why Gemma picked the clip, its scores and the trims. Skip and Approve sit in a bar at the bottom, and they fill as the card is swiped toward them. The first clip leans once toward Approve to show the swipe, and a toast offers Undo after each decision.
+- The pile and the Render button use one count, so they agree while a card is in the air.
+- A faithful-cut note sits on the card when a cut may change what the speaker meant, with the fix as one button. A video with no strong clips says so once, above the review.
+- The render screen puts the clips first, with Share (the phone's share sheet, with the video file and the caption) and Save video on each one.
+- The language question reads in order on a phone, and processing says how long is left in words, with "Notify me when it's done".
+- Inputs are 16 px on touch, taps do not flash, pull-to-refresh is off, the layout uses dvh and safe-area insets, and keyboard hints are hidden on touch screens.
+
+## Still open
+
+- The caption editor on a phone still needs on-screen controls to split and join lines and to jump to the next unsure word.
+- The tablet layout (681 to 1100 px) was checked but not redesigned.
+- Sticky hover, safe areas, the software keyboard and the share sheet need a real phone. Headless Chrome with touch emulation cannot show them.

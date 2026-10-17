@@ -18,7 +18,7 @@ Selects takes a long video, finds the moments that would work as short clips, an
 
 The name comes from film editing, where "selects" are the best moments an editor pulls from raw footage.
 
-[SCREENSHOT: notes/screens/real-review-07m4-ranking.png. Caption: "The review screen. The blue curve is the model's interest across the talk, and each numbered bracket is a proposed clip. The panel shows why clip 2 earned its place."]
+[SCREENSHOT: notes/screens/v2/reel-review-dark.png. Caption: "The review screen. The clip plays at 9:16 with the captions the render burns in, the slate says why Gemma picked it, and the strip along the bottom shows where each clip sits in the talk."]
 
 Each proposed clip shows its four rubric scores and a one-line reason from the model. On the clip above, Gemma wrote: "The initial 'dangerous' claim is intriguing, but the vague 'data' needs more grounding." Opus Clip gives each clip a single virality score. I wanted a clipper to be able to read why a clip was picked and disagree with it.
 
@@ -43,7 +43,7 @@ A per-minute or per-month bill comes out of every clip before it earns anything,
 
 Selects runs on your own machine, so there is no hosted demo link.
 
-[SCREENSHOT: notes/screens/real-render-credit.png. Caption: "After rendering. The credit line is added to every caption, and the rights reminder sits above the clips."]
+[SCREENSHOT: notes/screens/v2/render-dark.png. Caption: "After rendering. Each clip can be shared or saved, and the credit line is added to every caption."]
 
 ## Code
 
