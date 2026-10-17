@@ -44,7 +44,10 @@ async function load({ model, dtype, wantDevice }) {
   if (!dev || dev === "auto") {
     dev = "wasm";
     try {
-      if (self.navigator?.gpu && (await self.navigator.gpu.requestAdapter())) dev = "webgpu";
+      const adapter = self.navigator?.gpu && (await self.navigator.gpu.requestAdapter());
+      // On an Intel integrated GPU whisper ran 2.4 times slower than on the CPU (2017 MacBook
+      // Pro, notes/timings.md), so "auto" keeps whisper on the CPU there
+      if (adapter && !/intel/i.test(adapter.info?.vendor || "")) dev = "webgpu";
     } catch {}
   }
   const t0 = performance.now();

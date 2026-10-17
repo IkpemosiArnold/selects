@@ -37,7 +37,7 @@ Same as the HTTP client:
 |---|---|
 | `health()`, `models()` | `models()` returns the judge that will run here, with `where: "device" \| "google"` |
 | `listJobs()`, `getJob(id)`, `getWords(id)` | jobs live in memory for the page's life |
-| `createJob(file, settings)` | **takes a File, not a path**. Settings as on the desktop (`k`, `minLen`, `maxLen`, `judgeN`, `listwise`, `credit`, `license`, `sourceUrl`, `captions`, `kit: "model" \| "plain"`), plus `asrDevice: "auto" \| "webgpu" \| "wasm"` |
+| `createJob(file, settings)` | **takes a File, not a path**. Settings as on the desktop (`k`, `minLen`, `maxLen`, `judgeN`, `listwise`, `credit`, `license`, `sourceUrl`, `captions`, `kit: "model" \| "plain"`), plus `asrDevice: "auto" \| "webgpu" \| "wasm"` (auto: WebGPU unless the adapter is Intel, where the CPU measured faster) |
 | `patchCandidate(id, cid, { status?, start?, end? })` | trims snap with the core's `snapTrim`, as the server does |
 | `patchJob(id, { credit?, license?, sourceUrl?, captions?, k?, kit? })` | rewrites existing posting kits, as the server does |
 | `getCaptions`, `putCaptions`, `resetCaptions` | the core's cue logic (`src/core/cues.mjs`) |

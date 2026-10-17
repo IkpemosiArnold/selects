@@ -378,7 +378,7 @@ That first render placed 25 fps frames on a 30 fps grid (the picture ran fast, t
 
 Whisper on WebAssembly (2 threads) transcribed the same 2 minutes at 0.75 times real time (the first windows ran at 1.9x, then the load average climbed past 400 when another builder's Ollama run started), so on this machine the CPU beats the integrated GPU for whisper by about 2.4 times. The Gemma 3 1B judge then loaded, but with the load average at 468 to 675 its first call did not finish in 25 minutes, and the run was stopped. A clean CPU-judge timing still needs a quiet machine. [PENDING: Gemma 3 1B per-call time on a quiet machine.]
 
-Choice that follows: `asrDevice: "auto"` picks WebGPU whenever there is an adapter, which is right on a discrete or Apple GPU and wrong on this Intel iGPU. The UI should offer the choice, and a short self-test could decide.
+Choice that follows: `asrDevice: "auto"` runs whisper on WebGPU when there is an adapter, except an Intel one (the adapter's vendor), where it stays on the CPU. `asrDevice: "webgpu"` or `"wasm"` overrides it. The Gemma judge still uses WebGPU on Intel, since a 2 GB model on 2 CPU threads is far slower.
 
 ## Smart mode (Gemini API, 16 Oct, browser builder)
 
@@ -393,5 +393,11 @@ Real calls with Arnold's free AI Studio key, EMF transcript text only. The API l
 | 1 batch call, the same 8 windows | 26B A4B | 7.6 s | 1,692 / 311 |
 
 Pointwise and batch disagreed. Pointwise spread the scores (judge totals 0.225 to 0.787, hook from 1 to 3) and put c_0036 first; batch bunched them (mostly 3s) and put c_0027 first. Neither matches the desktop's Gemma 3 4B, whose top 3 were c_0014, c_0001 and c_0020; the 26B model gave those totals of 0.55, 0.375 and 0.35. No human labels exist for these windows, so this shows disagreement, not which judge is right. So Smart mode judges pointwise by default, two calls at a time (about 8 s for 8 windows), and `settings.smartBatch` turns batching on for when the free quota is tight: a full run is about 12 requests pointwise (8 judge, 1 listwise, about 3 kits) against about 5 batched, under the free limits of about 30 requests and 15,000 tokens a minute.
+
+From the page through `server-proxy` (17 Oct, 16:05 WAT, the 25-second EMF clip): judge calls took 2.2 and 2.5 s, faithful checks 2.2 and 5.0 s (proxy-measured, about 363 and 395 prompt tokens). In all, about 20 real calls were made with the key for these measurements.
+
+### Resume test (17 Oct, headless Chrome, the 25-second EMF clip, Smart mode)
+
+The browser was closed right after transcription, then reopened four times. On reopen the job was listed as not finished and picked up at the judge without choosing the file again (the video had been kept in OPFS, so thumbnails and rendering worked too). An approval survived the next close. Attaching the same file was accepted, a different 1,000-byte file named the same was refused, a 720x1280 preview rendered in 7.8 to 9.6 s, and after another close the rendered clip (4.3 MB) played from storage. The rendered clip kept the source's 25 fps (597 frames for 23.9 s, audio 23.9 s), which confirms the frame-timing fix.
 
 The coordinator saw the free tier fail on the same day (HTTP 500, empty 404s, one answer after 294 s). So every call times out after 25 s and retries once after 2 s on a 5xx, an empty 404 or a timeout; when that fails, the page judges that clip on the device and says so ("Google's free Gemma was slow, so this clip was judged on your device."). The proxy enforces the same timeout and answers 504.
