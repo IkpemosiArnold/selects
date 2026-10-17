@@ -1,0 +1,26 @@
+/* The review with many clips on a long video: the timeline strip on lanes (Timeline.jsx,
+   marks.js), approve the best N (TopN.jsx), and a list of every clip that scrolls. The base
+   styles are in styles/reel.css. */
+
+.tl-nums { position: absolute; inset: 0; pointer-events: none; }
+.tl-nums .tl-n { bottom: 17px; text-shadow: 0 0 2px var(--table), 0 0 2px var(--table), 0 0 1px var(--table); } /* a halo, so the curve does not run through a number */
+.tl-nums .tl-n.is-current { color: var(--ink); }
+/* On lanes the markers are short: each one's target covers its own lane, the top lane reaches up */
+.tl-clips.is-laned .tl-clip { border-radius: 1.5px; }
+.tl-clips.is-laned .tl-clip::before { inset: -1px -2px; }
+.tl-clips.is-laned .tl-clip.is-top::before { inset: -14px -2px -1px; }
+.tl-clips.is-laned .tl-clip.is-skipped { box-shadow: inset 0 0 0 1px var(--red-ink); }
+.tl-clips.is-laned .tl-clip.is-current { box-shadow: 0 0 0 1.5px var(--table), 0 0 0 3px var(--ink); z-index: 1; }
+
+.topn { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0; margin-top: 4px; font-size: var(--t-13); color: var(--ink-2); }
+.topn label { padding-left: 4px; }
+.topn .btn-chip { margin-left: 2px; }
+.topn small { flex-basis: 100%; padding-left: 4px; font-size: var(--t-13); }
+.sheet-where .topn { margin: 2px 0 6px; }
+
+/* With every clip decided, the list of them scrolls inside the stage instead of running
+   under the strip, where nobody could reach the last ones. */
+@media (min-width: 1101px) {
+  .reel.is-done .reel-stage { overflow-y: auto; }
+}
+.reel.is-done .done { align-self: safe center; }

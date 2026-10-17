@@ -1,9 +1,31 @@
 // A thin strip along the bottom: the whole video, the model's interest curve
 // in blue, and where each clip sits (blue proposed, yellow approved, red
-// outline skipped). Click a clip to look at it again.
-import { useMemo, useRef, useEffect } from "react";
+// outline skipped). Click a clip to look at it again. With many clips on a
+// long video, clips that would touch stack on lanes and only the rank numbers
+// and times that fit are shown (marks.js).
+import { memo, useMemo, useRef, useEffect, useLayoutEffect, useState } from "react";
 import { tc } from "../../lib/time.js";
 import { clipName } from "./util.js";
+import { fitLabels, packLanes, tickTimes } from "./marks.js";
+import "./many.css";
+
+// Marker height and the gap between lanes, in px, for one, two or three lanes.
+const LANE = [null, [14, 0], [6, 2], [4, 1]];
+
+// The strip's width, read once and then from a ResizeObserver, so nothing reads layout per clip.
+function useWidth(ref) {
+  const [w, setW] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    setW(el.clientWidth);
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setW(Math.round(e.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return w;
+}
 
 function curvePath(curve, dur, w, h) {
   if (!curve?.length || !dur) return null;
@@ -30,46 +52,48 @@ function Playhead({ player, dur }) {
   return <span className="tl-head" ref={ref} aria-hidden="true" />;
 }
 
-export default function Timeline({ job, cands, currentId, onPick, player }) {
+function Timeline({ job, cands, currentId, onPick, player }) {
   const dur = job.source?.duration || 1;
   const W = 1000;
   const H = 28;
+  const trackRef = useRef(null);
+  const width = useWidth(trackRef);
   const path = useMemo(() => curvePath(job.curve, dur, W, H), [job.curve, dur]);
-  const ticks = useMemo(() => {
-    const step = dur > 5400 ? 900 : dur > 1800 ? 300 : dur > 600 ? 120 : dur > 120 ? 60 : 10;
-    const out = [];
-    // leave room for the end time, which is always shown
-    for (let t = 0; t <= dur - step * 0.6; t += step) out.push(t);
-    return out;
-  }, [dur]);
+  const ticks = useMemo(() => tickTimes(dur, width), [dur, width]);
+  const { lanes, lane } = useMemo(() => packLanes(cands, dur, width), [cands, dur, width]);
+  const labels = useMemo(() => fitLabels(cands, dur, width, currentId), [cands, dur, width, currentId]);
+  const [mh, gap] = LANE[lanes];
   const pct = (t) => `${(t / dur) * 100}%`;
-  // With many clips the numbers collide: keep the best few, and the current one.
-  const crowded = cands.length > 12;
   return (
     <nav className="timeline" aria-label="Clips in the video">
-      <div className="tl-track">
+      <div className="tl-track" ref={trackRef}>
         {path && (
           <svg className="tl-curve" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
             <path className="tl-area" d={path.area} />
             <path className="tl-line" d={path.line} vectorEffect="non-scaling-stroke" />
           </svg>
         )}
-        <div className="tl-clips">
+        <div className={"tl-clips" + (lanes > 1 ? " is-laned" : "")}>
           {cands.map((c) => (
             <button
               key={c.id}
               type="button"
-              className={"tl-clip is-" + c.status + (c.id === currentId ? " is-current" : "")}
-              style={{ left: pct(c.start), width: pct(c.end - c.start) }}
+              className={"tl-clip is-" + c.status + (c.id === currentId ? " is-current" : "") + (lanes > 1 && lane[c.id] === lanes - 1 ? " is-top" : "")}
+              style={{ left: pct(c.start), width: pct(c.end - c.start), ...(lanes > 1 ? { bottom: lane[c.id] * (mh + gap), height: mh } : null) }}
               onClick={() => onPick(c.id)}
               aria-current={c.id === currentId ? "true" : undefined}
               aria-label={`${clipName(c)}, ${tc(c.start)} to ${tc(c.end)}, ${c.status === "proposed" ? "to check" : c.status}`}
-            >
-              {(!crowded || c.id === currentId || (c.rank && c.rank <= 5)) && (
-                <span className="tl-n" aria-hidden="true">{c.rank ?? "+"}</span>
-              )}
-            </button>
+            />
           ))}
+        </div>
+        <div className="tl-nums" aria-hidden="true">
+          {cands.map((c) =>
+            c.id in labels ? (
+              <span key={c.id} className={"tl-n" + (c.id === currentId ? " is-current" : "")} style={{ left: labels[c.id] }}>
+                {c.rank ?? "+"}
+              </span>
+            ) : null
+          )}
         </div>
         {player && <Playhead player={player} dur={dur} />}
       </div>
@@ -84,3 +108,6 @@ export default function Timeline({ job, cands, currentId, onPick, player }) {
     </nav>
   );
 }
+
+// The strip only changes with the clips or the current one; the playhead moves itself.
+export default memo(Timeline);
