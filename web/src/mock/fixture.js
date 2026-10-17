@@ -122,6 +122,48 @@ export function buildTalk() {
   return cache;
 }
 
+/**
+ * Many clips over a long video, for testing the review at scale (?clips=50&dur=7316).
+ * Clips are 20 to 60 s, snapped to the words, mostly spread out but sometimes only a
+ * second or two apart, as the judge's picks are. Each borrows its scores and reason
+ * from one of the talk's clips; ranks follow a made-up total.
+ */
+export function spreadCandidates({ n, duration, words, base }) {
+  const rand = rng(n * 7919 + Math.round(duration));
+  const lens = Array.from({ length: n }, () => 20 + rand() * 40);
+  const close = Array.from({ length: n }, () => rand() < 0.35);
+  const room = Math.max(0, duration - 20 - lens.reduce((a, b) => a + b, 0));
+  const raw = close.map((c) => (c ? 0 : 0.2 + rand()));
+  const scale = room / Math.max(1e-9, raw.reduce((a, b) => a + b, 0));
+  const out = [];
+  let t = 10;
+  let wi = 0;
+  for (let i = 0; i < n; i++) {
+    t += close[i] ? 0.5 + rand() * 3 : raw[i] * scale * 0.97;
+    while (wi < words.length - 1 && words[wi].s < t) wi++;
+    const i0 = wi;
+    while (wi < words.length - 1 && words[wi].e < words[i0].s + lens[i]) wi++;
+    const ws = words.slice(i0, wi + 1);
+    if (!ws.length || ws[ws.length - 1].e > duration) break;
+    const b = base[i % base.length];
+    const text = ws.map((w) => w.w).join(" ");
+    const { listRank, listReason, ...rest } = b;
+    out.push({
+      ...rest,
+      id: "c_m" + String(i).padStart(3, "0"),
+      start: ws[0].s,
+      end: ws[ws.length - 1].e,
+      text,
+      hook: text.split(/(?<=[.?!])\s/)[0],
+      scores: { ...b.scores },
+      total: r3(0.4 + rand() * 0.5),
+    });
+    t = ws[ws.length - 1].e;
+    wi++;
+  }
+  return out.sort((a, b) => b.total - a.total).map((c, i) => ({ ...c, rank: i + 1 }));
+}
+
 // Measured on the build machine (notes/timings.md, final run): whisper base.en
 // at 2.78x real time, 72.9 s per judged moment plus a 141 s listwise round,
 // renders at about 1.1x the clip length plus about 100 s for each posting kit.

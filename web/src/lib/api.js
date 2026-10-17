@@ -43,6 +43,8 @@ function createHttpApi() {
     getKit: (id, cid) => get(`/api/jobs/${id}/candidates/${cid}/kit`),
     queue: () => get("/api/queue"),
     render: (id, ids) => send("POST", `/api/jobs/${id}/render`, ids ? { ids } : {}),
+    // Approve the best N clips not skipped, and queue their render when asked: { approved, candidates }.
+    approveTop: (id, top, { render = false, preset } = {}) => send("POST", `/api/jobs/${id}/approve`, { top, ...(render ? { render } : {}), ...(preset ? { preset } : {}) }),
     resume: (id, body) => send("POST", `/api/jobs/${id}/resume`, body || {}),
     // Captions, languages and blur (CONTRACTS.md, "Languages, captions, transcript quality and blur").
     asrModels: () => get("/api/asr-models"),

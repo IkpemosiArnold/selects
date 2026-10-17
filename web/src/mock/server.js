@@ -9,7 +9,8 @@
 //   at=0.4                 start the live job part way through transcription
 //   faces=unsupported      the faces endpoint answers as it does on a non-Mac server
 //   lang=yo                a new job's language check disagrees with the setting
-import { buildTalk, makeJob, MEASURED, attributionFor } from "./fixture.js";
+//   clips=50&dur=7316      the demo job has 50 clips over a 2 hour video (either alone works too)
+import { buildTalk, makeJob, MEASURED, attributionFor, spreadCandidates } from "./fixture.js";
 import { frameSvg } from "./frames.js";
 import { cuesFromWords, applyCueEdits, toSrt, toVtt, accentedWords } from "./captions.js";
 import { needsMediaReminder } from "../lib/licences.js";
@@ -33,6 +34,16 @@ export function createMockApi(params) {
     for (let k = 0; k < 6; k++) for (const w of talk.words) out.push({ ...w, s: +(w.s + k * talk.duration).toFixed(2), e: +(w.e + k * talk.duration).toFixed(2) });
     words = out;
     duration = +(talk.duration * 6).toFixed(2);
+  }
+  // Many clips over a long video: the talk again and again, cut at the asked length.
+  const manyN = Math.min(200, Math.max(0, Math.floor(Number(params.get("clips")) || 0)));
+  const manyDur = Number(params.get("dur")) || 0;
+  if (scenario !== "worst" && (manyN || manyDur)) {
+    const want = Math.max(manyDur || talk.duration, 60);
+    const out = [];
+    for (let k = 0; k * talk.duration < want; k++) for (const w of talk.words) out.push({ ...w, s: +(w.s + k * talk.duration).toFixed(2), e: +(w.e + k * talk.duration).toFixed(2) });
+    words = out.filter((w) => w.e < want - 1);
+    duration = want;
   }
   const jobs = new Map();
   const listeners = new Map();
@@ -72,6 +83,7 @@ export function createMockApi(params) {
     for (const c of demo.candidates) c.weak = true;
   }
   if (scenario === "worst") applyWorst(demo);
+  else if (manyN || manyDur) applyMany(demo, manyN || 12);
   if (scenario === "empty") demo.candidates = [];
   if (scenario === "one") demo.candidates = demo.candidates.filter((c) => c.rank === 1);
   if (scenario === "rendered") {
@@ -252,6 +264,19 @@ export function createMockApi(params) {
     for (let x = 0; x <= duration; x += 5) {
       let v = 0.1 + Math.abs(Math.sin(x / 61)) * 0.08;
       for (const c of list) v = Math.max(v, (c.total || 0.5) * Math.exp(-(((x - (c.start + c.end) / 2) / ((c.end - c.start) / 2.2)) ** 2) / 2));
+      job.curve.push({ t: x, v: Math.min(1, v) });
+    }
+  }
+
+  function applyMany(job, n) {
+    job.source.duration = duration;
+    job.thumbs = { count: Math.min(360, Math.ceil(duration / 20)), interval: duration / Math.min(360, Math.ceil(duration / 20)), pattern: job.thumbs.pattern };
+    job.candidates = spreadCandidates({ n, duration, words, base: job.candidates });
+    job.listwise = { ...job.listwise, order: job.candidates.slice(0, 4).map((c) => c.id) };
+    job.curve = [];
+    for (let x = 0; x <= duration; x += 5) {
+      let v = 0.1 + Math.abs(Math.sin(x / 61)) * 0.08;
+      for (const c of job.candidates) v = Math.max(v, c.total * Math.exp(-(((x - (c.start + c.end) / 2) / ((c.end - c.start) / 2.2)) ** 2) / 2));
       job.curve.push({ t: x, v: Math.min(1, v) });
     }
   }
@@ -544,6 +569,22 @@ export function createMockApi(params) {
       const list = ids || job.candidates.filter((c) => c.status === "approved").map((c) => c.id);
       runRender(job, list);
       return null;
+    },
+    async approveTop(id, top, { render = false, preset } = {}) {
+      await wait(160);
+      const job = jobs.get(id);
+      const n = Math.floor(Number(top));
+      if (!(n >= 1)) throw Object.assign(new Error("top must be a whole number of clips, 1 or more."), { status: 400 });
+      let approved = 0;
+      for (const c of [...job.candidates].sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9))) {
+        if (approved >= n) break;
+        if (c.status === "skipped") continue;
+        c.status = "approved";
+        approved++;
+      }
+      const ids = job.candidates.filter((c) => c.status === "approved").map((c) => c.id);
+      if (render && ids.length) runRender(job, ids);
+      return { approved: ids.length, candidates: clone(job.candidates) };
     },
     async resume(id, body = {}) {
       await wait(150);
