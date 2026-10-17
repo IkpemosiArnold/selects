@@ -45,12 +45,33 @@ export function reframeOf(job, c) {
   return w && h && w / h < 1.2 ? "fit" : "crop";
 }
 
+// The still under the play position, where there is no video (the mock). Kept apart
+// so the card itself does not render again on every tick of the player.
+function StillAt({ job, player }) {
+  const t = usePlayerTime(player);
+  return <img className="card-media" src={thumbAt(job, t)} alt="" draggable={false} />;
+}
+
+// How far into the clip the player is: written straight on the bar, without a render.
+// About 15 times a second, as before; every frame would repaint the card 60 times a second.
+function Progress({ player, start, end }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const len = Math.max(0.1, end - start);
+    const draw = () => {
+      if (ref.current) ref.current.style.transform = `scaleX(${Math.min(1, Math.max(0, (player.time - start) / len)).toFixed(4)})`;
+    };
+    draw();
+    return player.subscribe(draw);
+  }, [player, start, end]);
+  return <span className="card-progress" ref={ref} aria-hidden="true" />;
+}
+
 export default function Card({ job, clip, player, cues, captionsOn = true, lowP = null, frameRef, onNatural, children, label }) {
   const videoRef = useRef(null);
   const src = api.sourceUrl(job.id);
   const playing = usePlaying(player);
   const muted = useSyncExternalStore(player.subscribe, () => player.mutedByPolicy);
-  const t = usePlayerTime(player);
   const [missing, setMissing] = useState(false);
   const fit = reframeOf(job, clip) === "fit";
   const poster = thumbAt(job, clip.start + 0.4);
@@ -59,9 +80,6 @@ export default function Card({ job, clip, player, cues, captionsOn = true, lowP 
     if (src) player.attach(videoRef.current);
     return () => player.attach(null);
   }, [player, src]);
-
-  const len = Math.max(0.1, clip.end - clip.start);
-  const into = Math.min(1, Math.max(0, (t - clip.start) / len));
 
   return (
     <div className={"card-frame" + (fit ? " is-fit" : "")} ref={frameRef} role="group" aria-label={label}>
@@ -86,7 +104,7 @@ export default function Card({ job, clip, player, cues, captionsOn = true, lowP 
           <p className="mono">{job.source?.path}</p>
         </div>
       ) : (
-        poster && <img className="card-media" src={thumbAt(job, t)} alt="" draggable={false} />
+        poster && <StillAt job={job} player={player} />
       )}
       {captionsOn && <BurnCaptions cues={cues} start={clip.start} end={clip.end} player={player} lowP={lowP} />}
       {children}
@@ -100,7 +118,7 @@ export default function Card({ job, clip, player, cues, captionsOn = true, lowP 
           </button>
         )}
       </div>
-      <span className="card-progress" style={{ transform: `scaleX(${into})` }} aria-hidden="true" />
+      <Progress player={player} start={clip.start} end={clip.end} />
     </div>
   );
 }
