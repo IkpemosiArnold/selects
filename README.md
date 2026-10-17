@@ -205,12 +205,13 @@ Phones pause background tabs, so Selects Web does not promise to keep working wh
 ### Build and run it locally
 
 ```sh
-npm --prefix src/browser ci
-npm --prefix src/browser run build      # writes dist-web/
-npm --prefix src/browser run preview    # http://localhost:4173 with the right headers
+npm --prefix src/browser ci            # the engine's runtimes (ONNX Runtime Web, wllama, MediaPipe)
+npm --prefix web ci
+npm --prefix web run build:web          # the review app on the browser engine, writes dist-web/
+npm --prefix web run preview:web        # http://localhost:4173 with the right headers
 ```
 
-Open `demo.html` (the engine's test page; the review app integrates it next, see `src/browser/adapter.md`). To try Smart mode without a key, run the stand-in API and the proxy:
+The same React app runs on either engine: `npm --prefix web run build` talks to `selects serve` on a laptop, and `build:web` (`VITE_ENGINE=browser`) runs everything in the tab. The engine's own test page still builds with `npm --prefix src/browser run build` (into `dist-engine/`). To try Smart mode without a key, run the stand-in API and the proxy:
 
 ```sh
 PORT=8788 node server-proxy/mock-gemini.mjs
@@ -228,7 +229,7 @@ Cross-Origin-Embedder-Policy: credentialless
 
 `credentialless` keeps model downloads from Hugging Face's CDN working. `src/browser/public/_headers` sets them on Netlify and Cloudflare Pages.
 
-On Render, `render.yaml` describes both services: the static site `selects-web` (built from `src/browser`, published from `dist-web`, with the headers) and the free web service `selects-smart-proxy` (`node server-proxy/server.mjs`). In the Render dashboard, create a Blueprint from the repository, then set three values: `GEMINI_API_KEY` on the proxy (from Google AI Studio; never commit it), `ALLOWED_ORIGINS` on the proxy (the static site's URL), and `VITE_SELECTS_PROXY_URL` on the static site (the proxy's URL). A free Render web service sleeps after 15 minutes without requests and takes up to about a minute to wake; the page shows "Waking the Smart mode server" while it waits.
+On Render, `render.yaml` describes both services: the static site `selects-web` (the React app in `web/` built on the browser engine, published from `dist-web`, with the headers) and the free web service `selects-smart-proxy` (`node server-proxy/server.mjs`). In the Render dashboard, create a Blueprint from the repository, then set three values: `GEMINI_API_KEY` on the proxy (from Google AI Studio; never commit it), `ALLOWED_ORIGINS` on the proxy (the static site's URL), and `VITE_SELECTS_PROXY_URL` on the static site (the proxy's URL). A free Render web service sleeps after 15 minutes without requests and takes up to about a minute to wake; the page shows "Waking the Smart mode server" while it waits.
 
 ## How it fails safely
 
