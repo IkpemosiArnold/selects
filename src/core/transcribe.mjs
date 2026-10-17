@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { whisperBin, whisperModel } from "./config.mjs";
+import { config, whisperBin, whisperModel } from "./config.mjs";
 import { splitNonSpeech } from "./nonspeech.mjs";
 import { readJson, run, writeJsonAtomic } from "./util.mjs";
 
@@ -102,7 +102,7 @@ export async function extractAudio(input, wav, { stream = null, preprocess = "no
   return wav;
 }
 
-const defaultThreads = () => Number(process.env.SELECTS_WHISPER_THREADS) || Math.max(1, Math.min(8, Math.floor(os.cpus().length / 2)));
+const defaultThreads = () => Number(config().whisperThreads) || Math.max(1, Math.min(8, Math.floor(os.cpus().length / 2)));
 
 /** Whisper's own language guess on the first 30 s of a WAV: { code, p } or null. Needs a multilingual model. */
 export async function detectLanguage(wav, { model, bin, threads, signal } = {}) {
@@ -121,7 +121,7 @@ export async function runWhisper(wav, { outBase, model, bin, language = "en", pr
   if (prompt) args.push("--prompt", prompt);
   if (translate) args.push("-tr");
   args.push(...extraArgs);
-  if (process.env.SELECTS_WHISPER_ARGS) args.push(...process.env.SELECTS_WHISPER_ARGS.split(/\s+/).filter(Boolean));
+  if (config().whisperArgs) args.push(...String(config().whisperArgs).split(/\s+/).filter(Boolean));
   await run(bin || whisperBin(), args, { signal, keepOutput: false, onStdout, onStderr });
   return readJson(`${outBase}.json`);
 }
@@ -130,7 +130,7 @@ export async function runWhisper(wav, { outBase, model, bin, language = "en", pr
 // finished chunk is kept on disk, so a crash, a kill or a sleep 90 minutes into a 2-hour
 // talk loses one chunk at most, not the whole transcription.
 export const CHUNK_SEC = 600;
-const chunkSec = () => Number(process.env.SELECTS_CHUNK_SEC) || CHUNK_SEC;
+const chunkSec = () => Number(config().chunkSec) || CHUNK_SEC;
 
 /**
  * Where to cut a long recording for whisper: about every `chunkSec` seconds, at the quietest

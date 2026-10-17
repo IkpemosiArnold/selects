@@ -43,12 +43,18 @@ cmake -B build
 cmake --build build -j --config Release
 sh ./models/download-ggml-model.sh base.en
 
-export SELECTS_WHISPER_BIN="$PWD/build/bin/whisper-cli"
-export SELECTS_WHISPER_MODEL="$PWD/models/ggml-base.en.bin"
+mkdir -p ~/.selects/models
+mv models/ggml-base.en.bin ~/.selects/models/
 cd ..
 ```
 
-Add the two `export` lines to your shell profile so they survive a new terminal. If `whisper-cli` is already on your PATH, you only need `SELECTS_WHISPER_MODEL`.
+Selects looks for models in `~/.selects/models` and for `whisper-cli` on your PATH. If `whisper-cli` is not on your PATH, tell Selects where it is in `~/.selects/config.json` (or with `SELECTS_WHISPER_BIN`):
+
+```json
+{ "whisperBin": "/full/path/to/whisper.cpp/build/bin/whisper-cli" }
+```
+
+`selects doctor` prints where every path was found.
 
 ### 3. Get a Gemma 3 model
 
@@ -391,7 +397,7 @@ selects queue run              work through the queue, one video at a time
 selects queue                  show the queue
 selects jobs                   list jobs
 selects serve [--port 4317]    start the local review app
-selects doctor                 check whisper, Ollama, the judge model and disk
+selects doctor [--json]        show the resolved config; check whisper, Ollama, the judge model and disk
 ```
 
 | Option | Default | Meaning |
@@ -431,19 +437,22 @@ selects doctor                 check whisper, Ollama, the judge model and disk
 
 Without a terminal to ask in (for example in a script), `selects <video>` stops with exit code 2 after finding the clips, unless you pass `--yes`. The job is saved, and `selects review <job-id>` picks it up. Any other failure exits with code 1 and prints what happened, what to do, and the job id to resume.
 
-### Environment variables
+### Environment variables and the config file
+
+Every value is resolved in this order: the environment variable, then the same setting in `~/.selects/config.json` (camelCase keys: `whisperBin`, `whisperModel`, `modelsDir`, `home`, `ollamaUrl`, `model`, `ffmpeg`, `ffprobe`, `langidDir`, `punctDir`, `accentModelNg`, `facesBin`, `threads`, `whisperThreads`, `whisperArgs`, `chunkSec`, `hwaccel`, `gpuScale`, `reuse`), then the default below. `SELECTS_CONFIG` points at another config file, and `SELECTS_DATA_DIR` moves `~/.selects` (on Windows the default is `%LOCALAPPDATA%\selects`). `selects doctor` prints the resolved values, and `selects doctor --json` prints them as JSON.
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `SELECTS_WHISPER_BIN` | `whisper-cli` on your PATH | path to whisper.cpp's `whisper-cli` |
-| `SELECTS_WHISPER_MODEL` | none you can rely on; set it | path to `ggml-base.en.bin` |
+| `SELECTS_WHISPER_MODEL` | `<models>/ggml-base.en.bin` | path to the English whisper model |
+| `SELECTS_FFMPEG`, `SELECTS_FFPROBE` | on your PATH | paths to ffmpeg and ffprobe (shown by `selects doctor`) |
 | `SELECTS_WHISPER_THREADS` | half the logical CPUs | whisper threads |
 | `SELECTS_WHISPER_ARGS` | none | extra arguments passed to `whisper-cli` |
 | `SELECTS_OLLAMA_URL` | `http://127.0.0.1:11434` | the Ollama server |
 | `SELECTS_MODEL` | see step 3 | the judge model, if `--model` is not given |
 | `SELECTS_THREADS` | Ollama's default | Ollama's `num_thread` for judge calls |
-| `SELECTS_HOME` | `<repo>/.selects` | where jobs, caches and the queue are kept |
-| `SELECTS_MODELS_DIR` | the folder of `SELECTS_WHISPER_MODEL` | where `--asr-model` names are looked up (`ggml-<name>.bin`) |
+| `SELECTS_HOME` | `~/.selects` (an existing `<repo>/.selects` from an older version is still used, with a note) | where jobs, caches and the queue are kept |
+| `SELECTS_MODELS_DIR` | `~/.selects/models`, or the folder of `SELECTS_WHISPER_MODEL` when only that is set | where `--asr-model` names are looked up (`ggml-<name>.bin`) |
 | `SELECTS_HWACCEL` | on (macOS) | set to `0` to stop using Apple's hardware video decoder |
 | `SELECTS_FACES_BIN` | `tools/faces/faces` | the face detector used for face blur |
 | `SELECTS_LANGID_DIR` | `<models>/langid` | the text language models (`lid-lite-608/model.ftz`, `lid-lite-5/lid-lite-5.json`) |

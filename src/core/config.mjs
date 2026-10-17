@@ -1,31 +1,132 @@
-// Paths, binaries and defaults. Every value can be overridden with an env var.
+// Paths, binaries and defaults: one config(), resolved in this order for every value:
+//   1. an environment variable (SELECTS_*),
+//   2. the user's config file (<data dir>/config.json, or the file SELECTS_CONFIG names),
+//   3. a per-user default (models in <data dir>/models) or, for programs, the PATH.
+// The data dir is ~/.selects (%LOCALAPPDATA%\selects on Windows). Nothing here depends on
+// where the repo or the npm package lives, except the old <repo>/.selects job folder, which
+// is still used when it exists (with a one-line note) so older installs keep their jobs.
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-const PIPELINE = "/Users/mac/Documents/DevProjects/road-to-50k/crew/video-weekend/pipeline";
-
-export function whisperBin() {
-  if (process.env.SELECTS_WHISPER_BIN) return process.env.SELECTS_WHISPER_BIN;
-  const local = path.join(PIPELINE, "vendor/whisper.cpp/build/bin/whisper-cli");
-  return fs.existsSync(local) ? local : "whisper-cli";
+/** The per-user folder for config, models and (by default) jobs. */
+export function userDataDir() {
+  if (process.env.SELECTS_DATA_DIR) return expandHome(process.env.SELECTS_DATA_DIR);
+  if (process.platform === "win32" && process.env.LOCALAPPDATA) return path.join(process.env.LOCALAPPDATA, "selects");
+  return path.join(os.homedir(), ".selects");
 }
 
-export function whisperModel() {
-  return process.env.SELECTS_WHISPER_MODEL || path.join(PIPELINE, "models/ggml-base.en.bin");
+const expandHome = (p) => (typeof p === "string" ? p.replace(/^~(?=$|[\\/])/, os.homedir()) : p);
+
+export const configFile = () => expandHome(process.env.SELECTS_CONFIG) || path.join(userDataDir(), "config.json");
+
+let fileCache = { file: null, mtime: 0, data: {} };
+function readConfigFile() {
+  const file = configFile();
+  let st;
+  try {
+    st = fs.statSync(file);
+  } catch {
+    return {};
+  }
+  if (fileCache.file === file && fileCache.mtime === st.mtimeMs) return fileCache.data;
+  let data = {};
+  try {
+    data = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!data || typeof data !== "object" || Array.isArray(data)) data = {};
+  } catch {
+    process.stderr.write(`Selects: ignoring ${file}: it is not a JSON object.\n`);
+  }
+  fileCache = { file, mtime: st.mtimeMs, data };
+  return data;
 }
 
-/** The folder whisper models live in (SELECTS_MODELS_DIR, else the default model's folder). */
-export function modelsDir() {
-  return process.env.SELECTS_MODELS_DIR || path.dirname(whisperModel());
+/** An executable on the PATH, as an absolute path, or null. Cached per PATH. */
+const onPath = new Map();
+export function findOnPath(name) {
+  const key = `${name}\0${process.env.PATH || ""}`;
+  if (!onPath.has(key)) onPath.set(key, searchPath(name));
+  return onPath.get(key);
 }
+function searchPath(name) {
+  const exts = process.platform === "win32" ? ["", ".exe", ".cmd"] : [""];
+  for (const dir of String(process.env.PATH || "").split(path.delimiter)) {
+    if (!dir) continue;
+    for (const ext of exts) {
+      const f = path.join(dir, name + ext);
+      try {
+        fs.accessSync(f, fs.constants.X_OK);
+        if (fs.statSync(f).isFile()) return f;
+      } catch {}
+    }
+  }
+  return null;
+}
+
+let legacyNoted = false;
+function defaultHome() {
+  const legacy = path.join(REPO, ".selects");
+  if (fs.existsSync(legacy)) {
+    if (!legacyNoted) {
+      legacyNoted = true;
+      process.stderr.write(`Selects: using the old job folder ${legacy}. Move it to ${userDataDir()} (or set SELECTS_HOME) to keep jobs outside the install.\n`);
+    }
+    return legacy;
+  }
+  return userDataDir();
+}
+
+/**
+ * The resolved configuration, frozen. Read fresh on each call (env and the config file can
+ * change between tests), so callers should not cache it across jobs.
+ * Config file keys are the same names as below, for example
+ *   { "whisperBin": "/opt/whisper.cpp/build/bin/whisper-cli", "modelsDir": "~/models/whisper" }
+ */
+export function config() {
+  const env = process.env;
+  const file = readConfigFile();
+  const pick = (envKey, fileKey) => (env[envKey] != null && env[envKey] !== "" ? env[envKey] : file[fileKey] ?? null);
+  const pickPath = (envKey, fileKey) => expandHome(pick(envKey, fileKey));
+  const explicitModel = pickPath("SELECTS_WHISPER_MODEL", "whisperModel");
+  const modelsDir = pickPath("SELECTS_MODELS_DIR", "modelsDir") || (explicitModel ? path.dirname(explicitModel) : path.join(userDataDir(), "models"));
+  const prog = (envKey, fileKey, name) => pickPath(envKey, fileKey) || findOnPath(name) || name;
+  return Object.freeze({
+    configFile: configFile(),
+    dataDir: userDataDir(),
+    home: pickPath("SELECTS_HOME", "home") || defaultHome(),
+    modelsDir,
+    whisperModel: explicitModel || path.join(modelsDir, "ggml-base.en.bin"),
+    whisperBin: prog("SELECTS_WHISPER_BIN", "whisperBin", "whisper-cli"),
+    ffmpeg: prog("SELECTS_FFMPEG", "ffmpeg", "ffmpeg"),
+    ffprobe: prog("SELECTS_FFPROBE", "ffprobe", "ffprobe"),
+    langidDir: pickPath("SELECTS_LANGID_DIR", "langidDir") || path.join(modelsDir, "langid"),
+    accentModelNg: pickPath("SELECTS_ACCENT_MODEL_NG", "accentModelNg") || path.join(modelsDir, "ggml-small-nigerian-accent.bin"),
+    punctDir: pickPath("SELECTS_PUNCT_DIR", "punctDir") || path.join(modelsDir, "punct", "sherpa-onnx-online-punct-en-2024-08-06"),
+    facesBin: pickPath("SELECTS_FACES_BIN", "facesBin") || path.join(REPO, "tools/faces/faces"),
+    ollamaUrl: String(pick("SELECTS_OLLAMA_URL", "ollamaUrl") || "http://127.0.0.1:11434").replace(/\/$/, ""),
+    model: pick("SELECTS_MODEL", "model"),
+    // tuning knobs (null means the module's own default)
+    threads: pick("SELECTS_THREADS", "threads"),
+    whisperThreads: pick("SELECTS_WHISPER_THREADS", "whisperThreads"),
+    whisperArgs: pick("SELECTS_WHISPER_ARGS", "whisperArgs"),
+    chunkSec: pick("SELECTS_CHUNK_SEC", "chunkSec"),
+    hwaccel: String(pick("SELECTS_HWACCEL", "hwaccel") ?? "") !== "0",
+    gpuScale: String(pick("SELECTS_GPU_SCALE", "gpuScale") ?? "") !== "0",
+    reuse: String(pick("SELECTS_REUSE", "reuse") ?? "") !== "0",
+  });
+}
+
+export const whisperBin = () => config().whisperBin;
+export const whisperModel = () => config().whisperModel;
+
+/** The folder whisper models live in (SELECTS_MODELS_DIR, else <data dir>/models). */
+export const modelsDir = () => config().modelsDir;
 
 /** Text language-ID models (lid-lite-608, lid-lite-5): SELECTS_LANGID_DIR, else <models>/langid. */
-export function langidDir() {
-  return process.env.SELECTS_LANGID_DIR || path.join(modelsDir(), "langid");
-}
+export const langidDir = () => config().langidDir;
 
 /**
  * Accent fine-tunes of whisper for English, by accent. "ng": Nigerian-accented English
@@ -33,7 +134,7 @@ export function langidDir() {
  * overrides the path.
  */
 export function accentModel(accent) {
-  if (accent === "ng") return process.env.SELECTS_ACCENT_MODEL_NG || path.join(modelsDir(), "ggml-small-nigerian-accent.bin");
+  if (accent === "ng") return config().accentModelNg;
   return null;
 }
 
@@ -62,7 +163,7 @@ export function asrModels() {
  */
 export function resolveAsrModel(requested = "auto", language = "en") {
   if (requested && requested !== "auto") {
-    if (requested.includes("/") || requested.endsWith(".bin")) return path.resolve(requested.replace(/^~(?=\/)/, process.env.HOME || ""));
+    if (requested.includes("/") || requested.endsWith(".bin")) return path.resolve(expandHome(requested));
     return path.join(modelsDir(), `ggml-${requested}.bin`);
   }
   if (language === "en") return whisperModel();
@@ -77,13 +178,10 @@ export function languageCheckModel() {
   return have.get("base") || have.get("small") || have.get("tiny") || [...have.entries()].find(([n]) => !/\.en/.test(n))?.[1] || null;
 }
 
-export function ollamaUrl() {
-  return (process.env.SELECTS_OLLAMA_URL || "http://127.0.0.1:11434").replace(/\/$/, "");
-}
+export const ollamaUrl = () => config().ollamaUrl;
 
-export function selectsHome() {
-  return process.env.SELECTS_HOME || path.join(REPO, ".selects");
-}
+/** Where jobs, queue and caches live: SELECTS_HOME, else <data dir> (or an existing <repo>/.selects). */
+export const selectsHome = () => config().home;
 
 export function jobsDir() {
   return path.join(selectsHome(), "jobs");
@@ -135,7 +233,7 @@ export async function ollamaModels({ timeoutMs = 3000 } = {}) {
 /** Pick the judge model: SELECTS_MODEL, else gemma3:4b, else the first gemma3* tag present. */
 export async function resolveModel(requested) {
   if (requested) return requested;
-  if (process.env.SELECTS_MODEL) return process.env.SELECTS_MODEL;
+  if (config().model) return config().model;
   const names = (await ollamaModels()).map((m) => m.name);
   if (names.includes("gemma3:4b")) return "gemma3:4b";
   const g = names.filter((n) => n.startsWith("gemma3")).sort((a, b) => (/4b/.test(b) ? 1 : 0) - (/4b/.test(a) ? 1 : 0));

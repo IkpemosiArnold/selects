@@ -6,14 +6,14 @@
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { modelsDir } from "./config.mjs";
+import { config } from "./config.mjs";
 
 const require = createRequire(import.meta.url);
 const CHUNK = 150; // words per call; the model is streaming, so chunks keep memory flat
 
 /** The punctuation model folder (SELECTS_PUNCT_DIR overrides), or null if not installed. */
 export function punctModel() {
-  const dir = process.env.SELECTS_PUNCT_DIR || path.join(modelsDir(), "punct", "sherpa-onnx-online-punct-en-2024-08-06");
+  const dir = config().punctDir;
   const onnx = ["model.int8.onnx", "model.onnx"].map((f) => path.join(dir, f)).find((f) => fs.existsSync(f));
   const vocab = path.join(dir, "bpe.vocab");
   return onnx && fs.existsSync(vocab) ? { onnx, vocab, name: path.basename(dir) } : null;

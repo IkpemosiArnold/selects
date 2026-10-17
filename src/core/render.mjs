@@ -8,7 +8,7 @@ import path from "node:path";
 import { createCanvas, GlobalFonts } from "@napi-rs/canvas";
 import { blurBoxes, blurFilter } from "./blur.mjs";
 import { clipCues, cuesFromWords, loadCaptions, toSrt, toVtt } from "./captions.mjs";
-import { FONT_PATH, FONT_FALLBACK_PATH, jobsDir } from "./config.mjs";
+import { config, FONT_PATH, FONT_FALLBACK_PATH, jobsDir } from "./config.mjs";
 import { speechOnly } from "./nonspeech.mjs";
 import { captionOptions, captionTimeline, clipWords, motionSize, paintCaption, PRESETS, reframeByShape, reframeFromMotion, workingSize } from "./layout.mjs";
 import { uprightSize } from "./probe.mjs";
@@ -73,7 +73,7 @@ export const chunksToSrt = (chunks) => toSrt(chunks);
 
 /** Decode flags: Apple's hardware decoder when it can help (HEVC and H.264 on macOS). */
 export function hwaccelArgs(src) {
-  if (process.env.SELECTS_HWACCEL === "0") return [];
+  if (!config().hwaccel) return [];
   if (process.platform !== "darwin") return [];
   if (!["hevc", "h264", "prores"].includes(src.vcodec)) return [];
   return ["-hwaccel", "videotoolbox"];
@@ -86,7 +86,7 @@ export function hwaccelArgs(src) {
  * all on the CPU. 8-bit 4:2:0 sources only (10-bit HDR would need tone mapping).
  */
 export function gpuScaleOk(src) {
-  return hwaccelArgs(src).length > 0 && process.env.SELECTS_GPU_SCALE !== "0" && ["yuv420p", "yuvj420p", "nv12"].includes(src.pixFmt);
+  return hwaccelArgs(src).length > 0 && config().gpuScale && ["yuv420p", "yuvj420p", "nv12"].includes(src.pixFmt);
 }
 // -display_rotation 0 (not -noautorotate): with -noautorotate ffmpeg copies the source's
 // rotation into the output, so a frame we already turned upright would be turned again by

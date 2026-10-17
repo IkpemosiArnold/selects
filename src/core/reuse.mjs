@@ -5,13 +5,13 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { selectsHome } from "./config.mjs";
+import { config, selectsHome } from "./config.mjs";
 import { readJson, sha1, writeJsonAtomic } from "./util.mjs";
 
 const CHUNK = 4 * 1024 * 1024;
 
 /** SELECTS_REUSE=0 turns reuse off everywhere (settings.reuse: false turns it off for one job). */
-export const reuseEnabled = (settings = {}) => settings.reuse !== false && process.env.SELECTS_REUSE !== "0";
+export const reuseEnabled = (settings = {}) => settings.reuse !== false && config().reuse;
 
 export const reuseDir = () => path.join(selectsHome(), "cache");
 

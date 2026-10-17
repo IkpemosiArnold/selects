@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
-import { ollamaUrl, PROMPTS_DIR, selectsHome } from "./config.mjs";
+import { config, ollamaUrl, PROMPTS_DIR, selectsHome } from "./config.mjs";
 import { applyListOrder, blend, clamp, combine, JUDGE_SCHEMA as SCHEMA, judgeMessages, listMessages, listSchema, parseListAnswer, salvageJudge, splitPrompt, tidyReason } from "./judge-core.mjs";
 import { appendJsonLine, readJson, sha1, writeJsonAtomic } from "./util.mjs";
 import { MADE_FOR, madeForBlock } from "./madefor.mjs";
@@ -85,7 +85,7 @@ export function callStats(j, wallSec) {
  */
 export const DEFAULT_THREADS = null;
 export function threadOption() {
-  const env = process.env.SELECTS_THREADS;
+  const env = config().threads;
   if (env === "auto" || env === "0") return {};
   const n = env ? Number(env) : DEFAULT_THREADS;
   return Number.isInteger(n) && n > 0 ? { num_thread: n } : {};

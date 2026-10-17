@@ -2,11 +2,11 @@
 
 Three builders work in parallel: **core** (`src/core`, `bin`, `src/server`), **web** (`web/`), **eval** (`eval/`). This file is the interface between them. If you must change a contract, change it here first and say so in your final report.
 
-Product and design source of truth: `/Users/mac/Documents/DevProjects/road-to-50k/crew/hacktoberfest/DESIGN.md` and `STRATEGY.md`.
+Product and design source of truth: the private `DESIGN.md` and `STRATEGY.md` (kept outside this repo).
 
 ## Rules for everyone
 
-- **New project.** Hacktoberfest rules require a project built during Oct 12 to 18. Do not copy code from `road-to-50k/crew/video-weekend/pipeline/`. You may read it to learn flags, and you may call installed binaries and models it built (whisper-cli, ggml model).
+- **New project.** Hacktoberfest rules require a project built during Oct 12 to 18. Do not copy code from older private pipelines. You may read them to learn flags, and you may call installed binaries and models (whisper-cli, ggml models) through the config (`~/.selects/config.json` or env).
 - Node 23 on this Mac (target Node 20+), ESM `.mjs`, no TypeScript build step for core and eval. Keep dependencies few; prefer the standard library. Tests use `node:test`.
 - Machine: Intel i5-7360U dual-core, 16 GB, no GPU, about 35 GB free. Be kind to disk: no large intermediates, delete temp WAVs, and never write video files into the repo (use `.selects/` or `jobs/`, which are gitignored).
 - ffmpeg 7 at /usr/local/bin has **no libass, no subtitles filter, no drawtext**. Captions must be rendered as images (for example with `@napi-rs/canvas`, which ships prebuilt binaries) and composited with `overlay`. Do not install another ffmpeg.
@@ -20,11 +20,11 @@ Product and design source of truth: `/Users/mac/Documents/DevProjects/road-to-50
 
 | Thing | Default | Env |
 |---|---|---|
-| whisper-cli | `/Users/mac/Documents/DevProjects/road-to-50k/crew/video-weekend/pipeline/vendor/whisper.cpp/build/bin/whisper-cli`, else `whisper-cli` on PATH | `SELECTS_WHISPER_BIN` |
-| whisper model | `.../pipeline/models/ggml-base.en.bin` | `SELECTS_WHISPER_MODEL` |
+| whisper-cli | `whisperBin` in `~/.selects/config.json`, else `whisper-cli` on PATH | `SELECTS_WHISPER_BIN` |
+| whisper model | `~/.selects/models/ggml-base.en.bin` (or `whisperModel` / `modelsDir` in the config file) | `SELECTS_WHISPER_MODEL` |
 | Ollama | `http://127.0.0.1:11434` | `SELECTS_OLLAMA_URL` |
 | Judge model | `gemma3:4b` if pulled, else the first `gemma3*` tag present (`gemma3-4b-hf:latest` is installed) | `SELECTS_MODEL` |
-| Jobs dir | `<repo>/.selects/jobs` | `SELECTS_HOME` |
+| Jobs dir | `~/.selects/jobs` (an existing `<repo>/.selects` is still used) | `SELECTS_HOME` |
 
 whisper flags known to give word-level timestamps on this build: `-ml 1 -sow -ojf -np`.
 

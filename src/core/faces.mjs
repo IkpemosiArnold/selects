@@ -3,7 +3,7 @@
 // IoU matching, fills the gaps by interpolation, and picks the main speaker.
 import fs from "node:fs";
 import path from "node:path";
-import { REPO } from "./config.mjs";
+import { config } from "./config.mjs";
 import { readJson, run, writeJsonAtomic } from "./util.mjs";
 
 export function boxIou(a, b) {
@@ -168,7 +168,7 @@ function mergeSegments(segs, { grow = 1.25 } = {}) {
 
 // ---- running the detector ----------------------------------------------------------
 
-export const FACES_BIN = process.env.SELECTS_FACES_BIN || path.join(REPO, "tools/faces/faces");
+export const FACES_BIN = config().facesBin;
 
 export function facesAvailable() {
   return process.platform === "darwin" && fs.existsSync(FACES_BIN);

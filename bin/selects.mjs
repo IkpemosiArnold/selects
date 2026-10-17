@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline/promises";
 import { parseArgs } from "node:util";
-import { FONT_PATH, ollamaModels, ollamaUrl, resolveModel, selectsHome, whisperBin, whisperModel } from "../src/core/config.mjs";
+import { FONT_PATH, config, ollamaModels, ollamaUrl, resolveModel, selectsHome, whisperBin, whisperModel } from "../src/core/config.mjs";
 import { attributionLine, licenseCheck, mediaReminder, normaliseLicense } from "../src/core/attribution.mjs";
 import { WEIGHTS, measuredSpeeds } from "../src/core/judge.mjs";
 import { createJob, detectJobFaces, jobDir, jobEvents, listJobs, loadJob, renderJob, resumeJob, runJob, updateCandidate, updateJobSettings } from "../src/core/job.mjs";
@@ -28,7 +28,7 @@ Usage
   selects queue                  show the queue
   selects jobs                   list jobs
   selects serve [--port 4317]    start the local review app
-  selects doctor                 check whisper, Ollama, the judge model and disk
+  selects doctor [--json]        show the resolved config; check whisper, Ollama, the judge model and disk
 
 Options
   --model <name>    Ollama model for the judge (default: gemma3:4b, else a local gemma3 tag)
@@ -578,13 +578,17 @@ function cmdJobs() {
   for (const j of jobs) say(`${j.id}  ${j.stage.padEnd(12)} ${String(j.candidateCount).padStart(2)} clips, ${j.approvedCount} approved  ${j.source.name}`);
 }
 
-async function cmdDoctor() {
+async function cmdDoctor({ json = false } = {}) {
+  const cfg = config();
+  if (json) return say(JSON.stringify(cfg, null, 2));
+  say(dim(`Config (env, then ${cfg.configFile}${fs.existsSync(cfg.configFile) ? "" : ", not present"}, then defaults and PATH)`));
+  for (const k of ["home", "modelsDir", "whisperBin", "whisperModel", "ffmpeg", "ffprobe", "ollamaUrl", "model", "langidDir", "punctDir", "accentModelNg", "facesBin"]) say(dim(`  ${k.padEnd(14)} ${cfg[k] ?? "(auto)"}`));
   const checks = [];
   const add = (name, ok, detail, hint) => checks.push({ name, ok, detail, hint });
   const nodeMajor = +process.versions.node.split(".")[0];
   add("Node", nodeMajor >= 20 ? "ok" : "fail", process.versions.node, "Install Node 20 or newer from nodejs.org.");
   try {
-    const r = await run("ffmpeg", ["-hide_banner", "-encoders"]);
+    const r = await run(cfg.ffmpeg, ["-hide_banner", "-encoders"]);
     add("ffmpeg", /libx264/.test(r.stdout) ? "ok" : "fail", /libx264/.test(r.stdout) ? "with libx264" : "no libx264 encoder", "Install ffmpeg with libx264: brew install ffmpeg");
   } catch {
     add("ffmpeg", "fail", "not found", "Install ffmpeg: brew install ffmpeg");
@@ -594,10 +598,10 @@ async function cmdDoctor() {
     await run(wb, ["-h"], { allowFail: true });
     add("whisper-cli", "ok", wb, "");
   } catch {
-    add("whisper-cli", "fail", `not found at ${wb}`, "Build whisper.cpp (cmake -B build && cmake --build build -j) and set SELECTS_WHISPER_BIN to build/bin/whisper-cli.");
+    add("whisper-cli", "fail", `not found at ${wb}`, `Build whisper.cpp (cmake -B build && cmake --build build -j), then put "whisperBin": "<path>/build/bin/whisper-cli" in ${cfg.configFile} or set SELECTS_WHISPER_BIN.`);
   }
   const wm = whisperModel();
-  add("whisper model", fs.existsSync(wm) ? "ok" : "fail", fs.existsSync(wm) ? `${path.basename(wm)}, ${(fs.statSync(wm).size / 1e6).toFixed(0)} MB` : `missing at ${wm}`, "Download ggml-base.en.bin from huggingface.co/ggerganov/whisper.cpp and set SELECTS_WHISPER_MODEL.");
+  add("whisper model", fs.existsSync(wm) ? "ok" : "fail", fs.existsSync(wm) ? `${path.basename(wm)}, ${(fs.statSync(wm).size / 1e6).toFixed(0)} MB` : `missing at ${wm}`, `Download ggml-base.en.bin from huggingface.co/ggerganov/whisper.cpp into ${cfg.modelsDir} (or set SELECTS_WHISPER_MODEL).`);
   let version = null;
   try {
     const r = await fetch(`${ollamaUrl()}/api/version`, { signal: AbortSignal.timeout(3000) });
@@ -666,6 +670,7 @@ async function main() {
       "blur-region": { type: "string", multiple: true },
       profile: { type: "string" },
       "save-profile": { type: "string" },
+      json: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
   });
@@ -677,7 +682,7 @@ async function main() {
     saveProfile(values["save-profile"], sp);
     say(dim(`Saved profile "${values["save-profile"]}". Use it with --profile "${values["save-profile"]}".`));
   }
-  if (cmd === "doctor") return cmdDoctor();
+  if (cmd === "doctor") return cmdDoctor({ json: !!values.json });
   if (cmd === "serve") {
     const { startServer } = await import("../src/server/server.mjs");
     return startServer({ port: values.port ? +values.port : undefined });
