@@ -288,12 +288,8 @@ export async function detectJobFaces(id, { deps = {}, signal, force = false } = 
  * What a render depended on: the captions it showed and the blur it applied. A render whose
  * fingerprint no longer matches is "stale" (edits since then are not in the file yet).
  */
-export function renderFingerprint(job, c = null) {
-  const dir = jobDir(job.id);
-  let cues = [];
-  try {
-    if (fs.existsSync(path.join(dir, "captions.json")) || fs.existsSync(path.join(dir, "words.json"))) cues = loadCaptions(dir).cues;
-  } catch {}
+export function renderFingerprint(job, c = null, cues = null) {
+  cues ??= jobCues(job);
   const shown = c ? clipCues(cues, c.start, c.end) : cues;
   const capText = job.settings.captions === false ? "off" : shown.map((x) => `${x.s}|${x.e}|${x.text}`).join("\n");
   const blur = c ? (c.blur ?? job.settings.blur ?? null) : (job.settings.blur ?? null);
@@ -301,14 +297,25 @@ export function renderFingerprint(job, c = null) {
   return sha1(JSON.stringify({ capText, blur: hasBlur ? blur : null, style: c ? null : job.settings.captionStyle ?? "auto" })).slice(0, 12);
 }
 
+/** The job's caption cues (the reviewed captions, or cues built from the words), or []. */
+function jobCues(job) {
+  const dir = jobDir(job.id);
+  try {
+    if (fs.existsSync(path.join(dir, "captions.json")) || fs.existsSync(path.join(dir, "words.json"))) return loadCaptions(dir).cues;
+  } catch {}
+  return [];
+}
+
 /** Recompute `stale` on every finished render and caption-mode output. Mutates and returns job. */
 export function refreshStale(job) {
+  // the cues are read once, not once per clip: a 2-hour talk has thousands of them
+  const cues = (job.candidates || []).some((c) => c.render?.status === "done") || job.output?.status === "done" ? jobCues(job) : [];
   for (const c of job.candidates || []) {
     if (c.render?.status !== "done") continue;
-    const fp = renderFingerprint(job, c);
+    const fp = renderFingerprint(job, c, cues);
     c.render.stale = c.render.inputs ? c.render.inputs !== fp : false;
   }
-  if (job.output?.status === "done") job.output.stale = job.output.inputs ? job.output.inputs !== renderFingerprint(job) : false;
+  if (job.output?.status === "done") job.output.stale = job.output.inputs ? job.output.inputs !== renderFingerprint(job, null, cues) : false;
   return job;
 }
 
