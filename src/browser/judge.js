@@ -5,14 +5,16 @@ import { applyListOrder, blend, clamp, combine, tidyReason } from "../core/judge
 import { plainKit } from "../core/kit-core.mjs";
 import { curve, rank } from "../core/rank.mjs";
 import { readTask } from "../core/tasks.mjs";
+import { contextFor, faithfulHints, faithfulResult } from "../core/faithful-core.mjs";
+import { toSentences } from "../core/sentences.mjs";
 
 // Answers are cached for the page's life by model + kind + clip text, so a re-run or a
 // changed setting does not pay for the same call twice.
 const memo = new Map();
-const key = (llm, kind, text) => `${llm.id}|${llm.model}|${kind}|${text}`;
+const key = (llm, task, text) => `${llm.id}|${llm.model}|${task.kind}|${task.madeFor || ""}|${text}`;
 
 async function ask(llm, task, cacheText) {
-  const k = key(llm, task.kind, cacheText);
+  const k = key(llm, task, cacheText);
   if (memo.has(k)) return { ...memo.get(k), cached: true };
   let last;
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -48,7 +50,7 @@ function scored(c, d, extra = {}) {
  *   concurrency  parallel calls (Smart mode only; the device runs one at a time)
  *   batch        Smart mode: the whole shortlist in one call first (tasks.mjs judgeBatch)
  */
-export async function judgeShortlist(short, llm, { onProgress, onResult, onFallback, signal, fallback, concurrency = 1, batch = false } = {}) {
+export async function judgeShortlist(short, llm, { onProgress, onResult, onFallback, signal, fallback, concurrency = 1, batch = false, madeFor } = {}) {
   const out = new Array(short.length);
   const calls = [];
   const times = [];
@@ -71,7 +73,7 @@ export async function judgeShortlist(short, llm, { onProgress, onResult, onFallb
   if (batch && llm.where === "google" && short.length > 1) {
     const t0 = performance.now();
     try {
-      const r = await ask(llm, { kind: "judgeBatch", candidates: short }, short.map((c) => c.text.trim()).join("\n---\n"));
+      const r = await ask(llm, { kind: "judgeBatch", candidates: short, madeFor }, short.map((c) => c.text.trim()).join("\n---\n"));
       const sec = +((performance.now() - t0) / 1000).toFixed(2);
       calls.push({ kind: "judgeBatch", clips: short.length, sec, complete: r.parsed.complete, ...(r.stats || {}) });
       short.forEach((c, i) => {
@@ -94,7 +96,7 @@ export async function judgeShortlist(short, llm, { onProgress, onResult, onFallb
     if (signal?.aborted) throw Object.assign(new Error("Stopped before it finished."), { name: "AbortError" });
     const t0 = performance.now();
     try {
-      const r = await ask(llm, { kind: "judge", candidate: c }, c.text.trim());
+      const r = await ask(llm, { kind: "judge", candidate: c, madeFor }, c.text.trim());
       const sec = +((performance.now() - t0) / 1000).toFixed(2);
       if (!r.cached) times.push(sec);
       out[i] = scored(c, r.parsed, { judgedOn: where });
@@ -107,7 +109,7 @@ export async function judgeShortlist(short, llm, { onProgress, onResult, onFallb
           device ??= fallback();
           const dev = await device;
           const t1 = performance.now();
-          const r = await ask(dev, { kind: "judge", candidate: c }, c.text.trim());
+          const r = await ask(dev, { kind: "judge", candidate: c, madeFor }, c.text.trim());
           fallbacks++;
           out[i] = scored(c, r.parsed, { judgedOn: "device", fallbackNote: FALLBACK_NOTE });
           calls.push({ id: c.id, kind: "judge", backend: dev.id, sec: +((performance.now() - t1) / 1000).toFixed(2), fallback: true, ...(r.stats || {}) });
@@ -156,12 +158,50 @@ export function rankAndCurve(judged, { k = 5, duration }) {
 }
 
 /** A posting kit for an approved clip, or the plain one (the hook as the title) with kit: "plain". */
-export async function makeKit(candidate, llm, { plain = false } = {}) {
+export async function makeKit(candidate, llm, { plain = false, madeFor } = {}) {
   if (plain || !llm) return plainKit(candidate);
   try {
-    const r = await ask(llm, { kind: "kit", candidate }, candidate.text.trim());
+    const r = await ask(llm, { kind: "kit", candidate, madeFor }, candidate.text.trim());
     return r.parsed.title ? r.parsed : plainKit(candidate);
   } catch {
     return plainKit(candidate);
   }
+}
+
+/**
+ * Faithful cuts, as checkFaithful in src/core/faithful.mjs: for each top pick, the rule
+ * check, then one model call with the sentence before, the clip and the sentence after.
+ * A failed or unreadable answer falls back to the rule check for that clip.
+ * Returns { candidates (each with .faithful), stats }.
+ */
+export async function faithfulRound(ranked, llm, { words, maxLen = 90, rulesOnly = false, onProgress } = {}) {
+  const t0 = performance.now();
+  const sentences = toSentences(words || []);
+  const out = [];
+  const times = [];
+  let failed = 0;
+  for (let i = 0; i < ranked.length; i++) {
+    const c = ranked[i];
+    const { before, after } = contextFor(sentences, c);
+    const hints = faithfulHints({ text: c.text, before: before?.text, after: after?.text });
+    let answer = null;
+    let error = null;
+    if (!rulesOnly && llm) {
+      const t1 = performance.now();
+      try {
+        const r = await ask(llm, { kind: "faithful", candidate: c, before: before?.text ?? null, after: after?.text ?? null, hints }, `${before?.text}|${c.text}|${after?.text}`);
+        answer = r.parsed;
+        if (!r.cached) times.push((performance.now() - t1) / 1000);
+      } catch (e) {
+        failed++;
+        error = `The model could not check this clip (${String(e.message).slice(0, 80)}), so only the rule check was used.`;
+      }
+    }
+    const faithful = faithfulResult(c, { hints, answer, before, after, words, sentences, maxLen, error });
+    if (before || after) faithful.context = { before: before?.text ?? null, after: after?.text ?? null };
+    out.push({ ...c, faithful });
+    onProgress?.({ progress: (i + 1) / ranked.length, note: `checked ${i + 1} of ${ranked.length} cuts keep what the speaker meant` });
+  }
+  const sec = +((performance.now() - t0) / 1000).toFixed(1);
+  return { candidates: out, stats: { asked: times.length, failed, sec, secPerCall: times.length ? +(times.reduce((a, b) => a + b, 0) / times.length).toFixed(1) : null } };
 }

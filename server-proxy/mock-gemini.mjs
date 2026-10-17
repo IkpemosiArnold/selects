@@ -32,6 +32,8 @@ export function createMockGemini({ refuseJson = true, log = () => {} } = {}) {
     if (/Order every clip/.test(text)) {
       const letters = [...text.matchAll(/^Clip ([A-Z]) \(/gm)].map((m) => m[1]);
       answer = { ranking: letters.reverse().map((l) => ({ clip: l, reason: `Clip ${l} lands its point.` })) };
+    } else if (/Sentence before the clip:/.test(text)) {
+      answer = { clip_says: "Strength training is safe.", speaker_means: "Strength training is safe.", verdict: "faithful", issue: "none", extend: "none", note: "The clip keeps what the speaker meant." };
     } else if (/posting kit/i.test(text)) {
       answer = { title: "A clear point from the talk", caption: "One idea, said plainly.", hashtags: ["talks", "ideas", "learning"] };
     } else {

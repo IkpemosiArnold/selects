@@ -71,3 +71,18 @@ test("limiter windows reset", () => {
   t = 1001;
   assert.equal(l.allow("a", 1, 1000).ok, true);
 });
+
+test("proxy runs the faithful task and survives a request that throws", async () => {
+  const s = await setup();
+  try {
+    const post = (body) => fetch(`${s.url}/v1/task`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const f = await post({ kind: "faithful", candidate: clip, before: "People say lifting is dangerous.", after: "But the data says otherwise.", hints: [{ issue: "turn", cue: "the next sentence opens with But" }] });
+    assert.equal(f.status, 200);
+    assert.match((await f.json()).text, /verdict/);
+    const bad = await post({ kind: "judge", candidate: clip, madeFor: { toString() { throw new Error("x"); } } });
+    assert.ok([200, 400, 500].includes(bad.status));
+    assert.equal((await fetch(`${s.url}/healthz`)).status, 200, "still up");
+  } finally {
+    s.close();
+  }
+});

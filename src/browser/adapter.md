@@ -49,6 +49,42 @@ Same as the HTTP client:
 
 Browser-only additions: `setMode`, `getMode`, `preferBackend`, `capabilities()` (WebGPU, cross-origin isolation, threads, WebCodecs, H.264 encoding), `downloads()` (what Private mode will download on this browser, with sizes, licences and where each is cached), `copy`, and `engine` (the engine itself, for tests).
 
+## Resume, phones and installing
+
+Phones freeze background tabs and stop service workers after seconds, so Selects Web never promises background work. It saves after every stage instead (see `store.js`), keyed by a content hash of the file:
+
+| Saved | When | Resumes without the file? |
+|---|---|---|
+| source, thumbnails count | after probe | yes (thumbnails need the file or the kept copy) |
+| words, events, loudness, 16 kHz audio | after transcribe | yes |
+| shortlist | after candidates (reused only with the same length and judgeN settings) | yes |
+| judged clips, ranking, curve, faithful checks, quality verdict | after judge | yes |
+| approvals, trims, faithful accept or fix, credit | on each change | yes |
+| caption edits, posting kits | on each change | yes |
+| rendered clips (MP4 and SRT) | after each render | yes, they play from storage |
+| the video itself | after probe, in OPFS, when it fits in half the free quota | (it is the file) |
+
+Measured in headless Chrome: closing the browser after transcription and reopening picked the job up at the judge without choosing the file again; approvals survived another close; the rendered clip played after a third reopen; a different file was refused with "This is not the same video file."
+
+| Method | What it does |
+|---|---|
+| `createJob(file, settings)` | if this device has the same file's job saved, it resumes that job (`job.resumed = { from, savedAt }`) |
+| `listSaved()` | `[{ key, id, name, size, savedAt, from, finished }]`, newest first. Show unfinished ones as "Not finished yet" |
+| `openSaved(key, file?)` | reopen a saved job; uses the kept copy of the video when there is no file |
+| `attachFile(id, file)` | give a resumed job its video again (checked by content key; 409 if it is another file) |
+| `forgetSaved(key)` | delete everything saved for that video |
+| `enableNotifications()` | ask once, from a button; resolves true when allowed (on iOS only for an installed app) |
+| `registerApp()` | registers `sw.js` (the app shell only; it never runs models) |
+| `keepOpenLine` | "Keep this tab open to finish faster. If you leave, it continues when you come back." |
+
+While a job runs or renders, the engine holds a screen wake lock (taken again when the tab comes back), shows progress in the title ("42%: Selects"), and notifies when the clips are ready if notifications are allowed and the tab is in the background. When a step needs the video and it is gone, `job.error.needsFile` is true: ask for the same file and call `attachFile`.
+
+The PWA files are `public/manifest.webmanifest` (name Selects, standalone, theme `#1d2126` from the design tokens), `public/icons/` and `public/sw.js`. If the React app becomes the site, copy them into `web/public` and register `sw.js` the same way.
+
+## Faithful cuts, Made for and the quality bar
+
+The browser judge follows the core: `settings.madeFor` (`shorts`, `linkedin`, `x`, `story`) sets the length range through `applyMadeFor`, adds the story line to the judge prompt, shapes the posting kit, and picks the caption look (`clipCaptionStyle`: LinkedIn renders two-line subtitles). After ranking, each top pick gets a faithful check (one model call with the sentences around it, the rule check when the call fails) and `orderByFaithful`; then `applyQualityBar` sets `candidate.weak` and `job.verdict`. `patchCandidate(id, cid, { faithful: "accept" | "fix" | "reset" })` works as on the server. Smart mode sends the faithful task through the same proxy (it accepts `kind: "faithful"` with the sentence before and after).
+
 ## Differences from the server
 
 - `progress` events can carry `download: { loaded, total }` (bytes) while a model downloads. Show it: the first run downloads 140 to 210 MB for whisper and 0.7 or 2.0 GB for the judge.
@@ -58,7 +94,7 @@ Browser-only additions: `setMode`, `getMode`, `preferBackend`, `capabilities()` 
 - No transcript quality gate yet: words have no probability (`p`), so low-confidence underlines and the gate are desktop features.
 - One judge answer that cannot be read does not stop the run: that candidate keeps its first-stage score and says so in `reason`.
 - Not in the browser build (they reject with status 501 and a plain message): `setLanguage`, `detectFaces`, `getFaces`, `resume`, caption mode (whole-video captions), blur, the overnight queue. `queue()` returns an empty queue.
-- Nothing survives a reload. A reload needs the file again; the models stay cached.
+- A reload keeps the job (see "Resume, phones and installing"); the models stay cached.
 
 ## Headers the host must send
 

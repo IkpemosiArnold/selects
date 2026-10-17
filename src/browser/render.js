@@ -11,15 +11,19 @@ let queue = Promise.resolve();
 /**
  * The gain that brings a clip's speech towards -14 LUFS (the shorts preset), measured on
  * the 16 kHz mono audio already decoded for whisper. Capped at +12 dB so near-silence is
- * not blown up.
+ * not blown up. channels: how many the clip will have (the render keeps at most 2).
  */
-export function clipGainDb(pcm16k, start, end, target = -14) {
+export function clipGainDb(pcm16k, start, end, { target = -14, channels = 2 } = {}) {
   if (!pcm16k) return 0;
   const a = Math.max(0, Math.floor(start * 16000));
   const b = Math.min(pcm16k.length, Math.ceil(end * 16000));
   const lufs = integratedLoudness(pcm16k.subarray(a, b), 16000);
   if (lufs <= -60) return 0;
-  return +Math.max(-12, Math.min(12, target - lufs)).toFixed(2);
+  // BS.1770 sums the channels' power, so stereo with the same sound in both channels
+  // measures 3 dB louder than the mono mix measured here (found on the first resumed render:
+  // -11.3 LUFS against the -14 target)
+  const out = lufs + (channels >= 2 ? 10 * Math.log10(2) : 0);
+  return +Math.max(-12, Math.min(12, target - out)).toFixed(2);
 }
 
 /** Render one clip. Resolves { mp4: ArrayBuffer, srt, reframe, frames, wallSec, ... }. */

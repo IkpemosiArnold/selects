@@ -6,8 +6,8 @@ import {
   ALL_FORMATS, AudioSample, AudioSampleSink, AudioSampleSource, BlobSource, BufferTarget, CanvasSink, CanvasSource,
   canEncodeAudio, canEncodeVideo, Input, Mp4OutputFormat, Output,
 } from "mediabunny";
-import { clipCues, toSrt } from "../core/cues.mjs";
-import { captionTimeline, captionTop, motionSize, paintCaption, PRESETS, reframeByShape, reframeFromMotion, workingSize } from "../core/layout.mjs";
+import { clipCues, cuesFromWords, toSrt } from "../core/cues.mjs";
+import { captionOptions, captionTimeline, captionTop, motionSize, paintCaption, PRESETS, reframeByShape, reframeFromMotion, workingSize } from "../core/layout.mjs";
 
 export const FAMILIES = ["Selects Caption", "Selects Caption Fallback"];
 
@@ -56,7 +56,7 @@ async function chooseReframe(track, dispW, dispH, start, dur, samples = 16) {
  *   onProgress  ({ progress }) 0..1
  * @returns {Promise<{ mp4: ArrayBuffer, srt: string, reframe, wallSec, frames, codec, audioCodec }>}
  */
-export async function renderClip({ file, source, candidate, cues, preset = "shorts", gainDb = 0, reframe = "auto", onProgress, signal }) {
+export async function renderClip({ file, source, candidate, cues, preset = "shorts", gainDb = 0, reframe = "auto", style = "bold", edited = false, onProgress, signal }) {
   const P = PRESETS[preset];
   if (!P) throw new Error(`Unknown preset "${preset}".`);
   const t0 = performance.now();
@@ -65,9 +65,12 @@ export async function renderClip({ file, source, candidate, cues, preset = "shor
   const dur = +(end - start).toFixed(3);
   const W = P.width;
   const H = P.height;
-  const cap = { ...P.caption, style: "bold" };
-  const clipped = cues ? clipCues(cues, candidate.start, candidate.end, start) : [];
-  const timeline = captionTimeline(clipped, dur, { perWord: true });
+  // bold (2 to 4 words, the spoken one in yellow) or subtitle (two lines), as the desktop's render
+  const cap = style === "subtitle" ? captionOptions(W, H, "subtitle") : { ...P.caption, style: "bold" };
+  let clipped = cues ? clipCues(cues, candidate.start, candidate.end, start) : [];
+  // cues grouped for the other look are regrouped, unless a person edited them
+  if (clipped.length && !edited && style === "subtitle") clipped = cuesFromWords(clipped.flatMap((c) => c.words), "subtitle");
+  const timeline = captionTimeline(clipped, dur, { perWord: style !== "subtitle" });
 
   const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
   try {
@@ -206,6 +209,7 @@ export async function renderClip({ file, source, candidate, cues, preset = "shor
       mp4: output.target.buffer,
       srt: toSrt(clipped),
       reframe: rf,
+      captionStyle: style,
       frames,
       codec: "avc",
       audioCodec,

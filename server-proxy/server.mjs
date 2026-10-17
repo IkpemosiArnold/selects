@@ -19,7 +19,7 @@ import { geminiGenerate, GEMINI_BASE } from "../src/core/gemini.mjs";
 import { buildTask, checkTaskShape, slimTask } from "../src/core/tasks.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const PROMPTS = Object.fromEntries(["judge", "listwise", "kit"].map((k) => [k, fs.readFileSync(path.join(here, "../src/core/prompts", `${k}.md`), "utf8")]));
+const PROMPTS = Object.fromEntries(["judge", "listwise", "kit", "faithful"].map((k) => [k, fs.readFileSync(path.join(here, "../src/core/prompts", `${k}.md`), "utf8")]));
 
 export const LIMITS = {
   perIpPerMinute: 20, // a full Selects run is 8 judge calls, 1 listwise call and a kit per rendered clip
@@ -76,7 +76,18 @@ export function createProxy({
     res.end(JSON.stringify(body));
   };
 
-  return http.createServer(async (req, res) => {
+  // one bad request must never take the service down: any error becomes a 500
+  const server = http.createServer((req, res) => {
+    handle(req, res).catch((e) => {
+      counts.failed++;
+      log(JSON.stringify({ at: new Date().toISOString(), error: String(e?.message || e).slice(0, 120) }));
+      if (!res.headersSent) send(res, 500, { error: "The proxy failed on this request.", hint: "Try again, or switch to Private mode." }, null);
+      else res.end();
+    });
+  });
+  return server;
+
+  async function handle(req, res) {
     const t0 = Date.now();
     const reqOrigin = req.headers.origin || "";
     const origin = origins.includes("*") ? "*" : origins.includes(reqOrigin) ? reqOrigin : null;
@@ -142,7 +153,7 @@ export function createProxy({
         return send(res, e.status === 429 ? 429 : e.status === 0 ? 504 : 502, { error: e.status === 429 ? "The free Gemma quota is used up for now." : e.status === 0 ? "Gemma did not answer in time." : "Gemma did not answer.", hint: e.hint || "Try again in a minute, or switch to Private mode.", transient: !!e.transient }, origin);
       }
     }
-  });
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

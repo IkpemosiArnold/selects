@@ -7,10 +7,13 @@ import { applyCueEdits, cuesFromWords, toSrt, toVtt } from "../core/cues.mjs";
 import { nigerianCues } from "../core/langid/cues.mjs";
 import { ng5Predict } from "../core/langid/ng5.mjs";
 import { splitNonSpeech } from "../core/nonspeech.mjs";
+import { orderByFaithful } from "../core/faithful-core.mjs";
+import { applyMadeFor, clipCaptionStyle } from "../core/madefor.mjs";
+import { applyQualityBar, qualityVerdict } from "../core/rank.mjs";
 import { snapTrim, toSentences } from "../core/sentences.mjs";
 import { loadAsr, transcribePcm } from "./asr.js";
 import { cachedFetch } from "./cache.js";
-import { judgeShortlist, listwiseRound, makeKit, rankAndCurve } from "./judge.js";
+import { faithfulRound, judgeShortlist, listwiseRound, makeKit, rankAndCurve } from "./judge.js";
 import { decodeAudio16k, loudnessFromPcm, makeThumbs, probeFile } from "./media.js";
 import { MODELS } from "./models.js";
 import { clipGainDb, renderInWorker } from "./render.js";
@@ -22,7 +25,8 @@ const STAGE_LABEL = { probe: "probing", language: "transcribing", transcribe: "t
 
 /** Desktop defaults (src/core/config.mjs) with the browser's own: judge and kit run on whichever backend is chosen. */
 export const DEFAULT_SETTINGS = {
-  model: null, k: 5, minLen: 20, maxLen: 60, preset: "shorts", judgeN: 8, listwise: true,
+  // minLen and maxLen come from the "made for" preset (src/core/madefor.mjs) unless set
+  model: null, k: 5, madeFor: "shorts", faithful: "model", preset: "shorts", judgeN: 8, listwise: true,
   credit: null, license: null, sourceUrl: null, mode: "clips", language: "en", captions: true, kit: "model",
   asrDevice: "auto", // "auto" (WebGPU when there is an adapter), "webgpu" or "wasm"
 };
@@ -95,7 +99,7 @@ export class Engine {
     const job = {
       id: newId(),
       source: { path: null, name: file?.name || "video", duration: null, width: null, height: null, fps: null },
-      settings: { ...DEFAULT_SETTINGS, ...clean, ...(clean.license ? { license: normaliseLicense(clean.license) ?? clean.license } : {}) },
+      settings: applyMadeFor({ ...DEFAULT_SETTINGS, ...clean, ...(clean.license ? { license: normaliseLicense(clean.license) ?? clean.license } : {}) }),
       stage: "queued",
       stages: Object.fromEntries(STAGES.map((s) => [s, freshStage()])),
       error: null,
@@ -407,14 +411,15 @@ export class Engine {
       fallback,
       concurrency: llm.where === "google" ? 2 : 1,
       batch: llm.where === "google" && !!job.settings.smartBatch,
+      madeFor: job.settings.madeFor,
       onFallback: () => progress("judge", { progress: job.stages.judge.progress, note: "Google's free Gemma was slow, so this clip is being judged on your device" }),
-      onProgress: (p) => progress("judge", { ...p, progress: p.progress * 0.9 }),
+      onProgress: (p) => progress("judge", { ...p, progress: p.progress * 0.8 }),
     });
     let judged = jr.judged;
     Object.assign(job.judge, { fallbacks: jr.fallbacks, calls: jr.calls, secPerCandidate: jr.secPerCandidate });
     if (jr.fallbacks) job.judge.note = `Google's free Gemma was slow, so ${jr.fallbacks} of ${short.length} clips were judged on your device.`;
     if (job.settings.listwise !== false && judged.filter((c) => c.scores).length >= 3) {
-      progress("judge", { progress: 0.9, note: "comparing the best clips side by side" });
+      progress("judge", { progress: 0.8, note: "comparing the best clips side by side" });
       try {
         const lw = await listwiseRound(judged.filter((c) => c.scores), llm, { n: job.settings.listN ?? 4 });
         const byId = new Map(lw.candidates.map((c) => [c.id, c]));
@@ -425,7 +430,21 @@ export class Engine {
       }
     }
     r.judged = judged;
-    const { ranked, curve } = rankAndCurve(judged, { k: job.settings.k, duration: job.source.duration });
+    let { ranked, curve } = rankAndCurve(judged, { k: job.settings.k, duration: job.source.duration });
+    // Faithful cuts: does each top pick still say what the speaker meant? (one call per pick)
+    const fmode = job.settings.faithful ?? "model";
+    if (fmode !== "off" && ranked.length) {
+      progress("judge", { progress: 0.9, note: "checking each pick still says what the speaker meant" });
+      const maxLen = job.settings.maxLen ?? 60;
+      const fr = await faithfulRound(ranked, llm, { words: r.words, maxLen: Math.max(maxLen * 1.5, maxLen + 15), rulesOnly: fmode === "rules", onProgress: (p) => progress("judge", { ...p, progress: 0.9 + 0.1 * p.progress }) });
+      ranked = orderByFaithful(fr.candidates);
+      const count = (v) => ranked.filter((c) => c.faithful?.verdict === v).length;
+      job.faithful = { mode: fmode, checked: ranked.length, faithful: count("faithful"), check: count("check"), misleading: count("misleading"), ...fr.stats };
+    }
+    // the quality bar: say plainly when nothing is strong, and offer only the closest 2
+    const bar = applyQualityBar(ranked);
+    ranked = bar.candidates;
+    job.verdict = bar.verdict;
     // keep any decisions a person made on an earlier run of the same windows
     const prev = new Map((job.candidates || []).map((c) => [c.id, c]));
     job.candidates = ranked.map((c) => (prev.get(c.id)?.status && prev.get(c.id).status !== "proposed" ? { ...c, status: prev.get(c.id).status } : c));
@@ -457,6 +476,20 @@ export class Engine {
     const r = this.rec(id);
     const c = r.job.candidates.find((x) => x.id === cid);
     if (!c) throw Object.assign(new Error(`No candidate ${cid} in job ${id}.`), { status: 404 });
+    // faithful: "accept" keeps the cut (a misleading clip goes back to its place), "fix"
+    // applies the suggested start or end, "reset" takes the acceptance back (as job.mjs)
+    let fixing = false;
+    if (patch.faithful != null) {
+      const bad = (m) => Object.assign(new Error(m), { status: 400 });
+      if (!c.faithful) throw bad("This clip has no faithful check yet.");
+      if (patch.faithful === "accept") c.faithful.accepted = true;
+      else if (patch.faithful === "reset") delete c.faithful.accepted;
+      else if (patch.faithful === "fix") {
+        if (!c.faithful.fix) throw bad("There is no suggested fix for this clip.");
+        patch = { ...patch, start: c.faithful.fix.start ?? c.start, end: c.faithful.fix.end ?? c.end };
+        fixing = true;
+      } else throw bad("faithful must be accept, fix or reset.");
+    }
     if (patch.status) {
       if (!["proposed", "approved", "skipped"].includes(patch.status)) throw Object.assign(new Error("status must be proposed, approved or skipped."), { status: 400 });
       c.status = patch.status;
@@ -472,10 +505,21 @@ export class Engine {
         c.trimmed = true;
         c.render = null;
       }
+      // a trim that takes in the suggested fix counts as applying it
+      const f = c.faithful?.fix;
+      if (f && (fixing || ((f.start == null || c.start <= f.start + 1e-3) && (f.end == null || c.end >= f.end - 1e-3)))) c.faithful.applied = true;
+    }
+    if (c.faithful) {
+      r.job.candidates = orderByFaithful(r.job.candidates);
+      if (r.job.verdict) {
+        const t = r.job.verdict.threshold;
+        for (const x of r.job.candidates) if (typeof x.weak === "boolean") x.weak = !(typeof x.total === "number" && x.total >= t && !x.demoted);
+        r.job.verdict = qualityVerdict(r.job.candidates, { threshold: t });
+      }
     }
     this.emit(id, "candidates", { ranked: true, candidates: structuredClone(r.job.candidates), changed: cid });
     this.save(r, null); // approvals and trims survive a closed tab
-    return structuredClone(c);
+    return structuredClone(r.job.candidates.find((x) => x.id === cid));
   }
 
   patchJob(id, settings = {}) {
@@ -542,7 +586,9 @@ export class Engine {
     const awake = typeof document !== "undefined" ? keepAwake() : null;
     Object.assign(job.stages.render, { status: "running", startedAt: now(), progress: 0 });
     this.emit(id, "stage", { stage: "rendering", name: "render", state: { ...job.stages.render } });
-    const cues = job.settings.captions === false ? null : this.captions(id).cues;
+    const caps = job.settings.captions === false ? null : this.captions(id);
+    const cues = caps?.cues ?? null;
+    const style = clipCaptionStyle(job.settings);
     const llm = job.settings.kit === "plain" || preset === "preview" ? null : await this.getJudge().catch(() => null);
     job.timings[field] ||= [];
     for (const [i, c] of targets.entries()) {
@@ -550,7 +596,7 @@ export class Engine {
       this.emit(id, "render", { id: c.id, preset, ...c[field] });
       try {
         const result = await renderInWorker(
-          { file: r.file, source: job.source, candidate: { id: c.id, start: c.start, end: c.end }, cues, preset, gainDb: clipGainDb(r.pcm, c.start, c.end) },
+          { file: r.file, source: job.source, candidate: { id: c.id, start: c.start, end: c.end }, cues, preset, style, edited: !!caps?.edited, gainDb: clipGainDb(r.pcm, c.start, c.end, { channels: Math.min(2, job.source.audioStreams?.[0]?.channels || 2) }) },
           { onProgress: (p) => {
             c[field].progress = +p.progress.toFixed(3);
             job.stages.render.progress = +((i + p.progress) / targets.length).toFixed(3);
@@ -566,7 +612,7 @@ export class Engine {
         let kitSec = null;
         if (field === "render") {
           const k0 = performance.now();
-          const k = await makeKit(c, llm, { plain: !llm });
+          const k = await makeKit(c, llm, { plain: !llm, madeFor: job.settings.madeFor });
           kitSec = +((performance.now() - k0) / 1000).toFixed(1);
           c.title = k.title;
           r.kits[c.id] = this.kitWithCredit(job, { ...k, captionText: k.caption });
