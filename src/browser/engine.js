@@ -2,8 +2,7 @@
 // candidates, judge, ready, render), with the same Job, Candidate and event shapes
 // (notes/CONTRACTS.md), run entirely in this tab. Jobs live in memory for the page's life.
 import { attributionLine, captionWithCredit, mediaReminder, normaliseLicense } from "../core/attribution.mjs";
-import { makeCandidates, shortlist } from "../core/candidates.mjs";
-import { judgeCount } from "../core/select.mjs";
+import { selectCandidates } from "../core/select.mjs";
 import { applyCueEdits, cuesFromWords, toSrt, toVtt } from "../core/cues.mjs";
 import { nigerianCues } from "../core/langid/cues.mjs";
 import { ng5Predict } from "../core/langid/ng5.mjs";
@@ -340,10 +339,11 @@ export class Engine {
         reuse("candidates", `${short.length} go to the judge`);
       } else {
         begin("candidates");
-        const sentences = toSentences(r.words);
-        const all = makeCandidates(sentences, { minLen: job.settings.minLen, maxLen: job.settings.maxLen, stride: job.settings.stride ?? 6, loudness: job.loudness, words: r.words, events: r.events });
+        // the same selection path as the desktop app and the eval (src/core/select.mjs);
         // never fewer windows than k clips need (30 clips cannot come out of 8 judged windows)
-        short = shortlist(all, { n: judgeCount({ k: job.settings.k, judgeN: job.settings.judgeN ?? 8 }).n, duration: job.source.duration });
+        const sel = selectCandidates({ words: r.words, events: r.events, loudness: job.loudness, settings: { ...job.settings, judgeN: job.settings.judgeN ?? 8 }, duration: job.source.duration });
+        const all = sel.windows;
+        short = sel.shortlist;
         job.windows = all.length;
         finish("candidates", `${all.length} windows passed the filter, ${short.length} go to the judge`);
         await this.save(r, "candidates", { shortlist: short });
