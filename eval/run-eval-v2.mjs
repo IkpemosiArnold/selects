@@ -429,7 +429,7 @@ export function report(videos, A, { excluded = [], prefer = null, v1 = null } = 
   const L = [];
   L.push("# Selects eval results", "");
   L.push(`v2, generated ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC by \`node eval/run-eval-v2.mjs --report\`. The plan, hypotheses and tests were committed before judging: [eval/PLAN.md](../PLAN.md).`, "");
-  L.push(`**n = ${videos.length} videos** (the first 15 minutes of each, ${videos.reduce((s, v) => s + v.nWindows, 0)} candidate windows in total, ${videos.reduce((s, v) => s + v.nR, 0)} in the random sample R that the models judged).${excluded.length ? ` Excluded before judging: ${excluded.map((e) => `${e.id} (${e.reason})`).join("; ")}.` : ""}`, "");
+  L.push(`**n = ${videos.length} videos** (the first 15 minutes of each, ${videos.reduce((s, v) => s + v.nWindows, 0)} candidate windows in total, ${videos.reduce((s, v) => s + v.nR, 0)} in the random sample R that the models judged).${excluded.length ? ` Excluded before judging: ${excluded.map((e) => `${e.id} (${e.reason.replace("whisper's transcript is unreliable", "the app's own transcript-quality gate rated it unreliable, so a real job would stop before judging")})`).join("; ")}.` : ""}`, "");
   L.push("## Headline: does the model rank windows the way viewers replay them?", "");
   L.push("AUC is the chance that a window viewers replayed more than the video's median scores higher than one they replayed less (0.5 is a coin flip). Spearman rho is the rank correlation with replay intensity. Mean over videos, 95% bootstrap interval.", "");
   L.push("| Method | windows | n videos | AUC (95% CI) | Spearman rho (95% CI) |", "|---|---|---|---|---|");

@@ -1,5 +1,8 @@
 # Selects eval
 
+**v2 (current):** pre-registered in [PLAN.md](PLAN.md), run with `node eval/run-eval-v2.mjs`, results in [results/RESULTS.md](results/RESULTS.md). It scores the shipped selection path (`src/core/select.mjs`) on about 20 CC BY videos, with per-window AUC and Spearman rho against replay intensity, sign-flip permutation tests, a blind human preference test (`node eval/prefer.mjs`, instructions in [PREFER.md](PREFER.md)) and a faithful-cut review. The rest of this page describes v1 (n = 6, hit@k), kept in [results/RESULTS-v1.md](results/RESULTS-v1.md).
+
+
 Question: can a free open model on a 2017 laptop pick clips as well as humans do?
 
 This folder measures that. Every method picks its top 5 clips (20 to 60 s) from the **same candidate windows** (built by `src/core/candidates.mjs` from whisper sentence boundaries), and the picks are compared with moments people chose.
