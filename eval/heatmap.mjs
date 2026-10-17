@@ -82,3 +82,13 @@ function round(x, d = 2) {
   const f = 10 ** d;
   return Math.round(x * f) / f;
 }
+
+/** Time-weighted mean heatmap value over [start, end] (v2's per-window replay intensity). */
+export function windowIntensity(heatmap, start, end) {
+  let sum = 0, len = 0;
+  for (const s of heatmap || []) {
+    const o = Math.min(end, s.end_time) - Math.max(start, s.start_time);
+    if (o > 0) { sum += o * s.value; len += o; }
+  }
+  return len ? sum / len : null;
+}

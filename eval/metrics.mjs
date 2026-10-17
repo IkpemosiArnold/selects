@@ -105,3 +105,106 @@ export function pairedBootstrap(a, b, opts = {}) {
   const ci = bootstrapCI(d, opts);
   return { diff: ci.mean, lo: ci.lo, hi: ci.hi, n: ci.n };
 }
+
+// ---------- v2: per-window ranking metrics and tests ----------
+
+/** Average ranks (1-based), ties get the mean rank. */
+export function ranks(xs) {
+  const idx = xs.map((x, i) => [x, i]).sort((a, b) => a[0] - b[0]);
+  const r = new Array(xs.length);
+  for (let i = 0; i < idx.length; ) {
+    let j = i;
+    while (j + 1 < idx.length && idx[j + 1][0] === idx[i][0]) j++;
+    const avg = (i + j) / 2 + 1;
+    for (let k = i; k <= j; k++) r[idx[k][1]] = avg;
+    i = j + 1;
+  }
+  return r;
+}
+
+/**
+ * AUC: probability that a positive scores above a negative (ties count one half), computed
+ * with the Mann-Whitney U statistic. null when either class is empty.
+ */
+export function auc(scores, positive) {
+  const n1 = positive.filter(Boolean).length, n0 = positive.length - n1;
+  if (!n1 || !n0) return null;
+  const r = ranks(scores);
+  let sum = 0;
+  for (let i = 0; i < r.length; i++) if (positive[i]) sum += r[i];
+  return (sum - (n1 * (n1 + 1)) / 2) / (n1 * n0);
+}
+
+/** Spearman rank correlation (Pearson on average ranks). null if either side is constant. */
+export function spearman(x, y) {
+  if (x.length < 3) return null;
+  const rx = ranks(x), ry = ranks(y);
+  const mx = mean(rx), my = mean(ry);
+  let sxy = 0, sxx = 0, syy = 0;
+  for (let i = 0; i < rx.length; i++) {
+    sxy += (rx[i] - mx) * (ry[i] - my);
+    sxx += (rx[i] - mx) ** 2;
+    syy += (ry[i] - my) ** 2;
+  }
+  return sxx && syy ? sxy / Math.sqrt(sxx * syy) : null;
+}
+
+/** Above-median labels within one set (strictly above the median is positive). */
+export function aboveMedian(values) {
+  const s = values.slice().sort((a, b) => a - b);
+  const m = s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
+  return values.map((v) => v > m);
+}
+
+/**
+ * Two-sided sign-flip permutation test for mean(d) = 0 (paired differences, or a one-sample
+ * test of x - mu). Exact over all 2^n sign patterns when n <= 20, else `iters` random flips.
+ */
+export function signFlipTest(d, { iters = 100000, seed = 11 } = {}) {
+  const xs = d.filter((x) => x != null && !Number.isNaN(x));
+  const n = xs.length;
+  if (!n) return { n: 0, mean: null, p: null };
+  const obs = Math.abs(xs.reduce((a, b) => a + b, 0));
+  const eps = 1e-12;
+  let extreme = 0, total = 0;
+  if (n <= 20) {
+    for (let mask = 0; mask < 1 << n; mask++) {
+      let s = 0;
+      for (let i = 0; i < n; i++) s += mask & (1 << i) ? -xs[i] : xs[i];
+      if (Math.abs(s) >= obs - eps) extreme++;
+      total++;
+    }
+  } else {
+    const r = rng(seed);
+    for (let k = 0; k < iters; k++) {
+      let s = 0;
+      for (let i = 0; i < n; i++) s += r() < 0.5 ? -xs[i] : xs[i];
+      if (Math.abs(s) >= obs - eps) extreme++;
+      total++;
+    }
+    extreme++; total++; // count the observed pattern itself
+  }
+  return { n, mean: obs === 0 ? 0 : mean(xs), p: extreme / total };
+}
+
+/** Holm step-down adjustment. Returns adjusted p-values in the input order. */
+export function holm(ps) {
+  const order = ps.map((p, i) => [p, i]).sort((a, b) => a[0] - b[0]);
+  const out = new Array(ps.length);
+  let running = 0;
+  order.forEach(([p, i], k) => {
+    running = Math.max(running, Math.min(1, p * (ps.length - k)));
+    out[i] = running;
+  });
+  return out;
+}
+
+/** Wilson score interval for k successes in n trials. */
+export function wilson(k, n, z = 1.959964) {
+  if (!n) return { p: null, lo: null, hi: null, n: 0 };
+  const p = k / n;
+  const d = 1 + (z * z) / n;
+  const c = p + (z * z) / (2 * n);
+  const h = z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n));
+  return { p, lo: (c - h) / d, hi: (c + h) / d, n };
+}

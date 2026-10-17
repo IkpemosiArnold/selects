@@ -38,6 +38,143 @@
     ]
   },
   {
+    "id": "ASvx-QG6o04",
+    "title": "💥7 POWERFUL Body Language Hacks for Job Interviews",
+    "channel": "The Behavior Panel",
+    "url": "https://www.youtube.com/watch?v=ASvx-QG6o04",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-16)",
+    "localPath": "eval/media/ASvx-QG6o04.webm",
+    "duration": 646,
+    "heatmapPath": "eval/datasets/info/ASvx-QG6o04.json",
+    "labels": [
+      {
+        "start": 77.64,
+        "end": 103.52,
+        "source": "heatmap",
+        "weight": 0.791
+      },
+      {
+        "start": 213.51,
+        "end": 265.27,
+        "source": "heatmap",
+        "weight": 0.984
+      },
+      {
+        "start": 290.86,
+        "end": 310.86,
+        "source": "heatmap",
+        "weight": 0.95
+      },
+      {
+        "start": 355.56,
+        "end": 375.56,
+        "source": "heatmap",
+        "weight": 0.668
+      },
+      {
+        "start": 400.85,
+        "end": 420.85,
+        "source": "heatmap",
+        "weight": 0.739
+      }
+    ]
+  },
+  {
+    "id": "Yiaatr-Noh0",
+    "title": "The Power of Being Alone | Sadhguru Jaggi Vasudev",
+    "channel": "Sadhguru",
+    "url": "https://www.youtube.com/watch?v=Yiaatr-Noh0",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-16)",
+    "localPath": "eval/media/Yiaatr-Noh0.webm",
+    "duration": 722,
+    "heatmapPath": "eval/datasets/info/Yiaatr-Noh0.json",
+    "labels": [
+      {
+        "start": 80.25,
+        "end": 100.25,
+        "source": "heatmap",
+        "weight": 0.35
+      },
+      {
+        "start": 419.59,
+        "end": 439.59,
+        "source": "heatmap",
+        "weight": 0.47
+      },
+      {
+        "start": 448.47,
+        "end": 468.47,
+        "source": "heatmap",
+        "weight": 0.391
+      },
+      {
+        "start": 551.21,
+        "end": 611.21,
+        "source": "heatmap",
+        "weight": 0.339
+      },
+      {
+        "start": 628.14,
+        "end": 685.9,
+        "source": "heatmap",
+        "weight": 0.496
+      }
+    ]
+  },
+  {
+    "id": "Aj0nf3rKG_E",
+    "title": "LIVE NURSING INTERVIEW",
+    "channel": "Ashley Lorena Adkins, MSN, RN, CCRN",
+    "url": "https://www.youtube.com/watch?v=Aj0nf3rKG_E",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-16)",
+    "localPath": "eval/media/Aj0nf3rKG_E.m4a",
+    "duration": 900,
+    "evalRange": [
+      0,
+      900
+    ],
+    "fullDuration": 1030,
+    "heatmapPath": "eval/datasets/info/Aj0nf3rKG_E.json",
+    "labels": [
+      {
+        "start": 288.4,
+        "end": 348.4,
+        "source": "heatmap",
+        "weight": 0.743
+      },
+      {
+        "start": 391.4,
+        "end": 412,
+        "source": "heatmap",
+        "weight": 1
+      },
+      {
+        "start": 453.2,
+        "end": 484.1,
+        "source": "heatmap",
+        "weight": 0.346
+      },
+      {
+        "start": 545.9,
+        "end": 576.8,
+        "source": "heatmap",
+        "weight": 0.427
+      },
+      {
+        "start": 721,
+        "end": 741.6,
+        "source": "heatmap",
+        "weight": 0.387
+      }
+    ]
+  },
+  {
     "id": "CBYhVcO4WgI",
     "title": "Lecture 1 - How to Start a Startup (Sam Altman, Dustin Moskovitz)",
     "channel": "YC Root Access",
@@ -77,6 +214,98 @@
         "end": 842.56,
         "source": "heatmap",
         "weight": 0.44
+      }
+    ]
+  },
+  {
+    "id": "JXm0-ilIknE",
+    "title": "Keynote — Blender Conference 2025",
+    "channel": "Blender",
+    "url": "https://www.youtube.com/watch?v=JXm0-ilIknE",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-16)",
+    "localPath": "eval/media/JXm0-ilIknE.webm",
+    "duration": 900,
+    "evalRange": [
+      0,
+      900
+    ],
+    "fullDuration": 1508,
+    "heatmapPath": "eval/datasets/info/JXm0-ilIknE.json",
+    "labels": [
+      {
+        "start": 90.48,
+        "end": 150.48,
+        "source": "heatmap",
+        "weight": 0.621
+      },
+      {
+        "start": 165.88,
+        "end": 196.04,
+        "source": "heatmap",
+        "weight": 0.472
+      },
+      {
+        "start": 226.2,
+        "end": 271.44,
+        "source": "heatmap",
+        "weight": 0.577
+      },
+      {
+        "start": 329.3,
+        "end": 349.3,
+        "source": "heatmap",
+        "weight": 0.861
+      },
+      {
+        "start": 766.62,
+        "end": 786.62,
+        "source": "heatmap",
+        "weight": 0.325
+      }
+    ]
+  },
+  {
+    "id": "VoRbPxyo2uU",
+    "title": "An Honest Conversation on AI and Humanity | World Economic Forum Annual Meeting 2026",
+    "channel": "World Economic Forum",
+    "url": "https://www.youtube.com/watch?v=VoRbPxyo2uU",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-16)",
+    "localPath": "eval/media/VoRbPxyo2uU.webm",
+    "duration": 900,
+    "evalRange": [
+      0,
+      900
+    ],
+    "fullDuration": 2127,
+    "heatmapPath": "eval/datasets/info/VoRbPxyo2uU.json",
+    "labels": [
+      {
+        "start": 63.84,
+        "end": 85.12,
+        "source": "heatmap",
+        "weight": 1
+      },
+      {
+        "start": 150.88,
+        "end": 210.88,
+        "source": "heatmap",
+        "weight": 0.816
+      },
+      {
+        "start": 595.84,
+        "end": 638.4,
+        "source": "heatmap",
+        "weight": 0.641
+      },
+      {
+        "start": 744.8,
+        "end": 787.36,
+        "source": "heatmap",
+        "weight": 0.632
       }
     ]
   },
@@ -130,6 +359,104 @@
     ]
   },
   {
+    "id": "k4715CJ0Ii8",
+    "title": "IELTS Speaking Test- Perfect Band 9 [+ Free Speaking PDF]",
+    "channel": "IELTS Advantage",
+    "url": "https://www.youtube.com/watch?v=k4715CJ0Ii8",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-16)",
+    "localPath": "eval/media/k4715CJ0Ii8.webm",
+    "duration": 900,
+    "evalRange": [
+      0,
+      900
+    ],
+    "fullDuration": 1045,
+    "heatmapPath": "eval/datasets/info/k4715CJ0Ii8.json",
+    "labels": [
+      {
+        "start": 125.4,
+        "end": 156.75,
+        "source": "heatmap",
+        "weight": 0.508
+      },
+      {
+        "start": 198.55,
+        "end": 229.9,
+        "source": "heatmap",
+        "weight": 0.763
+      },
+      {
+        "start": 329.63,
+        "end": 349.63,
+        "source": "heatmap",
+        "weight": 0.856
+      },
+      {
+        "start": 360.98,
+        "end": 380.98,
+        "source": "heatmap",
+        "weight": 0.754
+      },
+      {
+        "start": 590.88,
+        "end": 610.88,
+        "source": "heatmap",
+        "weight": 0.452
+      }
+    ]
+  },
+  {
+    "id": "o_a-mslVsA0",
+    "title": "Virtual Crafting: Photorealism for Design & Marketing — Blender Conference 2024",
+    "channel": "Blender",
+    "url": "https://www.youtube.com/watch?v=o_a-mslVsA0",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-16)",
+    "localPath": "eval/media/o_a-mslVsA0.webm",
+    "duration": 900,
+    "evalRange": [
+      0,
+      900
+    ],
+    "fullDuration": 1535,
+    "heatmapPath": "eval/datasets/info/o_a-mslVsA0.json",
+    "labels": [
+      {
+        "start": 135.92,
+        "end": 155.92,
+        "source": "heatmap",
+        "weight": 0.517
+      },
+      {
+        "start": 320.24,
+        "end": 340.24,
+        "source": "heatmap",
+        "weight": 0.563
+      },
+      {
+        "start": 350.96,
+        "end": 370.96,
+        "source": "heatmap",
+        "weight": 0.36
+      },
+      {
+        "start": 645.12,
+        "end": 691.2,
+        "source": "heatmap",
+        "weight": 0.372
+      },
+      {
+        "start": 754.08,
+        "end": 814.08,
+        "source": "heatmap",
+        "weight": 0.666
+      }
+    ]
+  },
+  {
     "id": "uFyk5UOyNqI",
     "title": "DEF CON 32 - Inside the FBI’s Secret Encrypted Phone Company ‘Anom’ - Joseph Cox",
     "channel": "DEFCONConference",
@@ -175,94 +502,6 @@
         "end": 732.84,
         "source": "heatmap",
         "weight": 0.445
-      }
-    ]
-  },
-  {
-    "id": "Aj0nf3rKG_E",
-    "title": "LIVE NURSING INTERVIEW",
-    "channel": "Ashley Lorena Adkins, MSN, RN, CCRN",
-    "url": "https://www.youtube.com/watch?v=Aj0nf3rKG_E",
-    "license": "CC BY 3.0",
-    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-16)",
-    "localPath": "eval/media/Aj0nf3rKG_E.m4a",
-    "duration": 1030,
-    "heatmapPath": "eval/datasets/info/Aj0nf3rKG_E.json",
-    "labels": [
-      {
-        "start": 288.4,
-        "end": 348.4,
-        "source": "heatmap",
-        "weight": 0.743
-      },
-      {
-        "start": 391.4,
-        "end": 412,
-        "source": "heatmap",
-        "weight": 1
-      },
-      {
-        "start": 545.9,
-        "end": 576.8,
-        "source": "heatmap",
-        "weight": 0.427
-      },
-      {
-        "start": 885.8,
-        "end": 916.7,
-        "source": "heatmap",
-        "weight": 0.675
-      },
-      {
-        "start": 957.9,
-        "end": 988.8,
-        "source": "heatmap",
-        "weight": 0.413
-      }
-    ]
-  },
-  {
-    "id": "k4715CJ0Ii8",
-    "title": "IELTS Speaking Test- Perfect Band 9 [+ Free Speaking PDF]",
-    "channel": "IELTS Advantage",
-    "url": "https://www.youtube.com/watch?v=k4715CJ0Ii8",
-    "license": "CC BY 3.0",
-    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-16)",
-    "localPath": "eval/media/k4715CJ0Ii8.webm",
-    "duration": 1045,
-    "heatmapPath": "eval/datasets/info/k4715CJ0Ii8.json",
-    "labels": [
-      {
-        "start": 125.4,
-        "end": 156.75,
-        "source": "heatmap",
-        "weight": 0.508
-      },
-      {
-        "start": 198.55,
-        "end": 229.9,
-        "source": "heatmap",
-        "weight": 0.763
-      },
-      {
-        "start": 329.63,
-        "end": 349.63,
-        "source": "heatmap",
-        "weight": 0.856
-      },
-      {
-        "start": 360.98,
-        "end": 380.98,
-        "source": "heatmap",
-        "weight": 0.754
-      },
-      {
-        "start": 992.75,
-        "end": 1013.65,
-        "source": "heatmap",
-        "weight": 0.936
       }
     ]
   }

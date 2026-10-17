@@ -109,3 +109,61 @@ test("heatmapToLabels with rangeEnd keeps labels inside the range", () => {
   assert.ok(labels.every((l) => l.end <= 900));
   assert.ok(labels.some((l) => l.start <= 600 && l.end >= 600));
 });
+
+import { ranks, auc, spearman, aboveMedian, signFlipTest, holm, wilson } from "./metrics.mjs";
+
+test("ranks average ties", () => {
+  assert.deepEqual(ranks([10, 20, 20, 5]), [2, 3.5, 3.5, 1]);
+});
+
+test("auc: perfect, reversed, tied, chance", () => {
+  assert.equal(auc([1, 2, 3, 4], [false, false, true, true]), 1);
+  assert.equal(auc([4, 3, 2, 1], [false, false, true, true]), 0);
+  assert.equal(auc([1, 1, 1, 1], [false, true, false, true]), 0.5);
+  assert.equal(auc([1, 2], [true, true]), null);
+  // one positive at the middle of three negatives
+  assert.equal(auc([1, 3, 2, 4], [false, false, true, false]), 1 / 3);
+});
+
+test("spearman: monotone, reversed, constant", () => {
+  assert.ok(Math.abs(spearman([1, 2, 3, 4], [10, 20, 30, 40]) - 1) < 1e-12);
+  assert.ok(Math.abs(spearman([1, 2, 3, 4], [4, 3, 2, 1]) + 1) < 1e-12);
+  assert.equal(spearman([1, 1, 1], [1, 2, 3]), null);
+});
+
+test("aboveMedian splits strictly above the median", () => {
+  assert.deepEqual(aboveMedian([1, 2, 3, 4]), [false, false, true, true]);
+  assert.deepEqual(aboveMedian([1, 2, 3]), [false, false, true]);
+});
+
+test("signFlipTest: exact p for small n, and a clear effect", () => {
+  // all four positive: only the all-plus and all-minus patterns are as extreme -> 2/16
+  const r = signFlipTest([1, 1, 1, 1]);
+  assert.equal(r.p, 2 / 16);
+  assert.equal(signFlipTest([1, -1, 1, -1]).p, 1);
+  const big = signFlipTest(Array.from({ length: 30 }, () => 0.2), { iters: 2000 });
+  assert.ok(big.p < 0.01);
+  assert.equal(signFlipTest([]).p, null);
+});
+
+test("holm adjusts in step-down order", () => {
+  const adj = holm([0.01, 0.04, 0.03]);
+  assert.ok(Math.abs(adj[0] - 0.03) < 1e-12);
+  assert.ok(Math.abs(adj[2] - 0.06) < 1e-12);
+  assert.ok(Math.abs(adj[1] - 0.06) < 1e-12);
+});
+
+test("wilson interval", () => {
+  const w = wilson(20, 30);
+  assert.ok(w.lo > 0.48 && w.lo < 0.5 && w.hi > 0.8 && w.hi < 0.82, JSON.stringify(w));
+  assert.equal(wilson(0, 0).p, null);
+});
+
+import { windowIntensity } from "./heatmap.mjs";
+test("windowIntensity is the time-weighted mean of overlapping segments", () => {
+  const hm = [{ start_time: 0, end_time: 10, value: 0 }, { start_time: 10, end_time: 20, value: 1 }];
+  assert.equal(windowIntensity(hm, 5, 15), 0.5);
+  assert.equal(windowIntensity(hm, 10, 20), 1);
+  assert.equal(windowIntensity(hm, 7.5, 17.5), 0.75);
+  assert.equal(windowIntensity(hm, 30, 40), null);
+});
