@@ -126,6 +126,87 @@
     ]
   },
   {
+    "id": "Gij3hiWXJ88",
+    "title": "Nigerians Are Better Off Than Kenyans - Tinubu; Ghana President Roasts Nigeria",
+    "channel": "Adeola Fayehun",
+    "url": "https://www.youtube.com/watch?v=Gij3hiWXJ88",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-17)",
+    "localPath": "eval/media/Gij3hiWXJ88.webm",
+    "duration": 764,
+    "heatmapPath": "eval/datasets/info/Gij3hiWXJ88.json",
+    "labels": [
+      {
+        "start": 30.6,
+        "end": 61.2,
+        "source": "heatmap",
+        "weight": 0.204
+      },
+      {
+        "start": 192.73,
+        "end": 212.73,
+        "source": "heatmap",
+        "weight": 1
+      },
+      {
+        "start": 315.13,
+        "end": 335.13,
+        "source": "heatmap",
+        "weight": 0.382
+      },
+      {
+        "start": 414.58,
+        "end": 434.58,
+        "source": "heatmap",
+        "weight": 0.521
+      },
+      {
+        "start": 483.43,
+        "end": 503.43,
+        "source": "heatmap",
+        "weight": 0.095
+      }
+    ]
+  },
+  {
+    "id": "74HTXDSsa-Q",
+    "title": "Scammed R300 000 By Nigerian Girlfriend",
+    "channel": "JUSTIFY ",
+    "url": "https://www.youtube.com/watch?v=74HTXDSsa-Q",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-17)",
+    "localPath": "eval/media/74HTXDSsa-Q.webm",
+    "duration": 900,
+    "evalRange": [
+      0,
+      900
+    ],
+    "fullDuration": 5330,
+    "heatmapPath": "eval/datasets/info/74HTXDSsa-Q.json",
+    "labels": [
+      {
+        "start": 373.1,
+        "end": 426.4,
+        "source": "heatmap",
+        "weight": 0.462
+      },
+      {
+        "start": 533,
+        "end": 586.3,
+        "source": "heatmap",
+        "weight": 0.375
+      },
+      {
+        "start": 739.5,
+        "end": 799.5,
+        "source": "heatmap",
+        "weight": 0.506
+      }
+    ]
+  },
+  {
     "id": "Aj0nf3rKG_E",
     "title": "LIVE NURSING INTERVIEW",
     "channel": "Ashley Lorena Adkins, MSN, RN, CCRN",
@@ -171,6 +252,68 @@
         "end": 741.6,
         "source": "heatmap",
         "weight": 0.387
+      }
+    ]
+  },
+  {
+    "id": "BCiZc0n6COY",
+    "title": "Lecture 1: Introduction to Information Theory",
+    "channel": "Jakob Foerster",
+    "url": "https://www.youtube.com/watch?v=BCiZc0n6COY",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-17)",
+    "localPath": "eval/media/BCiZc0n6COY.webm",
+    "duration": 900,
+    "evalRange": [
+      0,
+      900
+    ],
+    "fullDuration": 3711,
+    "heatmapPath": "eval/datasets/info/BCiZc0n6COY.json",
+    "labels": [
+      {
+        "start": 545.2,
+        "end": 605.2,
+        "source": "heatmap",
+        "weight": 0.718
+      },
+      {
+        "start": 742.2,
+        "end": 802.2,
+        "source": "heatmap",
+        "weight": 0.795
+      }
+    ]
+  },
+  {
+    "id": "C5FzMblXU4M",
+    "title": "Lecture 1: The Keys to Critical Thinking",
+    "channel": "JamesRandiFoundation",
+    "url": "https://www.youtube.com/watch?v=C5FzMblXU4M",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-17)",
+    "localPath": "eval/media/C5FzMblXU4M.webm",
+    "duration": 900,
+    "evalRange": [
+      0,
+      900
+    ],
+    "fullDuration": 3715,
+    "heatmapPath": "eval/datasets/info/C5FzMblXU4M.json",
+    "labels": [
+      {
+        "start": 148.6,
+        "end": 185.75,
+        "source": "heatmap",
+        "weight": 0.28
+      },
+      {
+        "start": 520.1,
+        "end": 557.25,
+        "source": "heatmap",
+        "weight": 0.353
       }
     ]
   },
@@ -267,6 +410,31 @@
     ]
   },
   {
+    "id": "MSgoeuMqUmU",
+    "title": "Lecture 1: Course Overview + Introduction to the Shell",
+    "channel": "Missing Semester",
+    "url": "https://www.youtube.com/watch?v=MSgoeuMqUmU",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-17)",
+    "localPath": "eval/media/MSgoeuMqUmU.webm",
+    "duration": 900,
+    "evalRange": [
+      0,
+      900
+    ],
+    "fullDuration": 4483,
+    "heatmapPath": "eval/datasets/info/MSgoeuMqUmU.json",
+    "labels": [
+      {
+        "start": 567.76,
+        "end": 627.76,
+        "source": "heatmap",
+        "weight": 0.371
+      }
+    ]
+  },
+  {
     "id": "VoRbPxyo2uU",
     "title": "An Honest Conversation on AI and Humanity | World Economic Forum Annual Meeting 2026",
     "channel": "World Economic Forum",
@@ -310,13 +478,62 @@
     ]
   },
   {
+    "id": "_iUeydyJc20",
+    "title": "The97sPodcast Episode 27 - TheRaPy BReaK‼️",
+    "channel": "3MenArmy Kenya",
+    "url": "https://www.youtube.com/watch?v=_iUeydyJc20",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-17)",
+    "localPath": "eval/media/_iUeydyJc20.webm",
+    "duration": 900,
+    "evalRange": [
+      0,
+      900
+    ],
+    "fullDuration": 3397,
+    "heatmapPath": "eval/datasets/info/_iUeydyJc20.json",
+    "labels": [
+      {
+        "start": 203.82,
+        "end": 237.79,
+        "source": "heatmap",
+        "weight": 0.32
+      },
+      {
+        "start": 271.76,
+        "end": 305.73,
+        "source": "heatmap",
+        "weight": 0.527
+      },
+      {
+        "start": 543.52,
+        "end": 577.49,
+        "source": "heatmap",
+        "weight": 0.755
+      },
+      {
+        "start": 679.4,
+        "end": 713.37,
+        "source": "heatmap",
+        "weight": 0.341
+      },
+      {
+        "start": 815.28,
+        "end": 849.25,
+        "source": "heatmap",
+        "weight": 0.436
+      }
+    ]
+  },
+  {
     "id": "iqm-XEqpayc",
     "title": "Sheryl Sandberg Gives UC Berkeley Commencement Keynote Speech",
     "channel": "UC Berkeley",
     "url": "https://www.youtube.com/watch?v=iqm-XEqpayc",
     "license": "CC BY 3.0",
     "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-16)",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-17)",
     "localPath": "eval/media/iqm-XEqpayc.webm",
     "duration": 900,
     "evalRange": [
@@ -408,6 +625,92 @@
     ]
   },
   {
+    "id": "lDDq_HbDpN4",
+    "title": "Why NIGERIANS LIVING IN GHANA \"TALK DOWN\" On NIGERIA || GHANAIANS Must Learn From This || Kamma Dyn",
+    "channel": "Kamma Dyn",
+    "url": "https://www.youtube.com/watch?v=lDDq_HbDpN4",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-17)",
+    "localPath": "eval/media/lDDq_HbDpN4.m4a",
+    "duration": 900,
+    "evalRange": [
+      0,
+      900
+    ],
+    "fullDuration": 959,
+    "heatmapPath": "eval/datasets/info/lDDq_HbDpN4.json",
+    "labels": [
+      {
+        "start": 119.6,
+        "end": 139.6,
+        "source": "heatmap",
+        "weight": 0.6
+      },
+      {
+        "start": 199.2,
+        "end": 259.2,
+        "source": "heatmap",
+        "weight": 0.416
+      },
+      {
+        "start": 330.8,
+        "end": 350.8,
+        "source": "heatmap",
+        "weight": 0.724
+      },
+      {
+        "start": 436.4,
+        "end": 456.4,
+        "source": "heatmap",
+        "weight": 0.368
+      },
+      {
+        "start": 724.4,
+        "end": 744.4,
+        "source": "heatmap",
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "id": "luM2Y4otHUY",
+    "title": "Research Methods S1 - Why We Do Research",
+    "channel": "UG BSU Elearning and PBL",
+    "url": "https://www.youtube.com/watch?v=luM2Y4otHUY",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-17)",
+    "localPath": "eval/media/luM2Y4otHUY.webm",
+    "duration": 900,
+    "evalRange": [
+      0,
+      900
+    ],
+    "fullDuration": 3980,
+    "heatmapPath": "eval/datasets/info/luM2Y4otHUY.json",
+    "labels": [
+      {
+        "start": 139,
+        "end": 199,
+        "source": "heatmap",
+        "weight": 0.575
+      },
+      {
+        "start": 636.8,
+        "end": 696.8,
+        "source": "heatmap",
+        "weight": 0.885
+      },
+      {
+        "start": 706.3,
+        "end": 766.3,
+        "source": "heatmap",
+        "weight": 0.719
+      }
+    ]
+  },
+  {
     "id": "o_a-mslVsA0",
     "title": "Virtual Crafting: Photorealism for Design & Marketing — Blender Conference 2024",
     "channel": "Blender",
@@ -457,6 +760,37 @@
     ]
   },
   {
+    "id": "tExPpuk-UQ8",
+    "title": "Machine Intelligence - Lecture 1 (methods, history, definitions, Turing Test)",
+    "channel": "Kimia Lab",
+    "url": "https://www.youtube.com/watch?v=tExPpuk-UQ8",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-17)",
+    "localPath": "eval/media/tExPpuk-UQ8.webm",
+    "duration": 900,
+    "evalRange": [
+      0,
+      900
+    ],
+    "fullDuration": 4817,
+    "heatmapPath": "eval/datasets/info/tExPpuk-UQ8.json",
+    "labels": [
+      {
+        "start": 144.54,
+        "end": 192.72,
+        "source": "heatmap",
+        "weight": 0.205
+      },
+      {
+        "start": 433.62,
+        "end": 481.8,
+        "source": "heatmap",
+        "weight": 0.219
+      }
+    ]
+  },
+  {
     "id": "uFyk5UOyNqI",
     "title": "DEF CON 32 - Inside the FBI’s Secret Encrypted Phone Company ‘Anom’ - Joseph Cox",
     "channel": "DEFCONConference",
@@ -502,6 +836,135 @@
         "end": 732.84,
         "source": "heatmap",
         "weight": 0.445
+      }
+    ]
+  },
+  {
+    "id": "vRVV1hq9WXE",
+    "title": "Teni The Entertainer On How Her Career Has Evolved - Hello Nigeria",
+    "channel": "Wazobia Max TV",
+    "url": "https://www.youtube.com/watch?v=vRVV1hq9WXE",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-17)",
+    "localPath": "eval/media/vRVV1hq9WXE.m4a",
+    "duration": 900,
+    "evalRange": [
+      0,
+      900
+    ],
+    "fullDuration": 919,
+    "heatmapPath": "eval/datasets/info/vRVV1hq9WXE.json",
+    "labels": [
+      {
+        "start": 55.14,
+        "end": 110.28,
+        "source": "heatmap",
+        "weight": 1
+      },
+      {
+        "start": 202.18,
+        "end": 257.32,
+        "source": "heatmap",
+        "weight": 0.58
+      },
+      {
+        "start": 417.34,
+        "end": 437.34,
+        "source": "heatmap",
+        "weight": 0.527
+      },
+      {
+        "start": 573.57,
+        "end": 593.57,
+        "source": "heatmap",
+        "weight": 0.436
+      },
+      {
+        "start": 775.75,
+        "end": 795.75,
+        "source": "heatmap",
+        "weight": 0.754
+      }
+    ]
+  },
+  {
+    "id": "wBoEsrpnPHA",
+    "title": "Craig Ferguson: The TRUTH about Late Night | FULL EPISODE",
+    "channel": "Neal Brennan",
+    "url": "https://www.youtube.com/watch?v=wBoEsrpnPHA",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-17)",
+    "localPath": "eval/media/wBoEsrpnPHA.webm",
+    "duration": 900,
+    "evalRange": [
+      0,
+      900
+    ],
+    "fullDuration": 5074,
+    "heatmapPath": "eval/datasets/info/wBoEsrpnPHA.json",
+    "labels": [
+      {
+        "start": 203,
+        "end": 253.75,
+        "source": "heatmap",
+        "weight": 0.281
+      },
+      {
+        "start": 507.5,
+        "end": 558.25,
+        "source": "heatmap",
+        "weight": 0.614
+      }
+    ]
+  },
+  {
+    "id": "xlAyUkscaFg",
+    "title": "Living as an Intersex Individual (Hermaphrodite) in Lagos, Nigeria | Doyin's Corner S4E1",
+    "channel": "POPCENTRAL",
+    "url": "https://www.youtube.com/watch?v=xlAyUkscaFg",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "licenseEvidence": "yt-dlp info JSON license field: \"Creative Commons Attribution license (reuse allowed)\" (fetched 2026-10-17)",
+    "localPath": "eval/media/xlAyUkscaFg.webm",
+    "duration": 900,
+    "evalRange": [
+      0,
+      900
+    ],
+    "fullDuration": 1754,
+    "heatmapPath": "eval/datasets/info/xlAyUkscaFg.json",
+    "labels": [
+      {
+        "start": 70.16,
+        "end": 105.24,
+        "source": "heatmap",
+        "weight": 0.406
+      },
+      {
+        "start": 296.95,
+        "end": 316.95,
+        "source": "heatmap",
+        "weight": 0.342
+      },
+      {
+        "start": 508.66,
+        "end": 543.74,
+        "source": "heatmap",
+        "weight": 0.346
+      },
+      {
+        "start": 666.52,
+        "end": 701.6,
+        "source": "heatmap",
+        "weight": 0.563
+      },
+      {
+        "start": 754.22,
+        "end": 806.84,
+        "source": "heatmap",
+        "weight": 0.442
       }
     ]
   }

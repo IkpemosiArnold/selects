@@ -7,8 +7,9 @@
   "webpage_url": "https://www.youtube.com/watch?v=iqm-XEqpayc",
   "duration": 1541,
   "upload_date": "20160516",
-  "view_count": 509456,
+  "view_count": 509508,
   "license": "Creative Commons Attribution license (reuse allowed)",
+  "language": null,
   "categories": [
     "Education"
   ],
@@ -525,5 +526,5 @@
       "value": 0.09538398951287684
     }
   ],
-  "fetchedAt": "2026-10-16T00:05:13.800Z"
+  "fetchedAt": "2026-10-17T16:26:55.783Z"
 }
