@@ -553,7 +553,7 @@ export default function NewJob() {
               </div>
             </details>
           </div>
-          {inBrowser && <p className="laptop-line">{LAPTOP_LINE}</p>}
+          {inBrowser && <p className="laptop-line">{api.copy?.limits?.[0] || "Best for videos up to about 10 to 15 minutes."} {LAPTOP_LINE}</p>}
         </form>
 
         <QueueList queue={queue} jobs={jobs} rates={rates} models={models || []} />
