@@ -337,3 +337,61 @@ VAD helped the pause-heavy phone recording (2.3 times faster, fewer unsure words
 ### Speaker diarization
 
 Not built (stretch goal). Feasible on this machine: sherpa-onnx-node's macOS x64 build includes `OfflineSpeakerDiarization` (pyannote segmentation 3.0, about 6 MB, plus a speaker-embedding model of 25 to 40 MB).
+
+## Browser build (Selects Web, 16 to 17 Oct, browser builder)
+
+Headless Chrome 155 (`--headless=new`) on the same 2017 MacBook Pro (i5-7360U, 2 cores, 4 threads, 16 GB, Intel Iris Plus 640). Headless Chrome on this Mac exposes WebGPU (Metal), so both paths were run. Chrome reports `navigator.hardwareConcurrency = 2`. The page was served by `vite preview` with `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: credentialless`; `crossOriginIsolated` was true and model downloads from Hugging Face's CDN worked under it. Test video: a 2-minute stream-copy cut (60 s to 180 s) of the CC BY-SA 4.0 EMF talk, 720x576 with 64:45 pixels (1024x576 on screen), 25 fps, AAC.
+
+### Downloads (first visit only; 1.9 to 2.2 MB/s here)
+
+| File | Size | Time | Cached in |
+|---|---|---|---|
+| whisper base.en timestamped, WebGPU set (fp32 encoder, q4 decoder) | 209 MB | about 150 s | Cache Storage `transformers-cache` |
+| whisper base.en timestamped, WASM set (fp32 encoder, q8 decoder) | 140 MB | about 70 s | same |
+| Gemma 4 E2B web (`gemma-4-E2B-it-web.task`) | 2,004 MB | 1,063 s | Cache Storage `selects-models` |
+| Gemma 3 1B Q4_0 GGUF | 722 MB | about 360 s | wllama's OPFS cache |
+| ONNX Runtime and llama.cpp WebAssembly | 27 MB and 9 MB | part of the site | the site itself (`dist-web/assets`) |
+
+Storage after the Gemma 4 download: 2.24 GB used of a 13.0 GB quota (`navigator.storage.estimate()`).
+
+### WebGPU path: whisper on WebGPU, Gemma 4 E2B on WebGPU (16 Oct, 19:17 WAT, load average about 40 and falling)
+
+| Stage | Wall time | Notes |
+|---|---|---|
+| Probe and 60 thumbnails | 6.5 s | mediabunny over WebCodecs |
+| Audio to 16 kHz mono | 2.8 s | mediabunny decode, OfflineAudioContext resample |
+| Whisper load (from cache) | 40.7 s | ONNX Runtime Web sessions on WebGPU |
+| Transcribe 120 s | 393 s | 0.31x real time, 441 words, punctuated |
+| Candidates and pre-score | under 0.1 s | 11 windows passed, 3 shortlisted (2 minutes leave room for 3 distinct windows) |
+| Judge load (from cache) | 92 s | MediaPipe LLM Inference, 2.0 GB |
+| Judge calls | 66.0 s, 19.3 s, 18.5 s | about 505 prompt tokens each; the first includes warm-up |
+| Listwise round | 28.5 s | complete, 3 clips |
+| Analysis, file to ranked clips | 670 s | 11.2 minutes for 2 minutes of video |
+| Render one 41 s clip, 1080x1920 | 57.2 s | WebCodecs H.264 and AAC, fit with blurred background |
+| Posting kit | 29.9 s | one Gemma 4 call |
+
+Gemma 4 E2B's scores bunched like Gemma 3 4B's on the desktop: hook 3, standalone 2, payoff 3, clarity 2 or 3 on all three windows, with sensible reasons ("Good data point, but the gym excuse weakens the main message."). The 0.7 / 0.3 blend with the pre-score and the listwise round (which ordered the three cleanly, with a reason each) separate them, as on the desktop. The kit's title was "You can get stronger at any age". The rendered clip looked like the desktop's: the whole frame over a blurred copy, captions of up to 4 words with the spoken word in yellow above the bottom 18%.
+
+That first render placed 25 fps frames on a 30 fps grid (the picture ran fast, then held), so frames now keep their own timestamps; see the resume test below for the re-check.
+
+### WASM path: whisper on the CPU, Gemma 3 1B on the CPU
+
+Whisper on WebAssembly (2 threads) transcribed the same 2 minutes at 0.75 times real time (the first windows ran at 1.9x, then the load average climbed past 400 when another builder's Ollama run started), so on this machine the CPU beats the integrated GPU for whisper by about 2.4 times. The Gemma 3 1B judge then loaded, but with the load average at 468 to 675 its first call did not finish in 25 minutes, and the run was stopped. A clean CPU-judge timing still needs a quiet machine. [PENDING: Gemma 3 1B per-call time on a quiet machine.]
+
+Choice that follows: `asrDevice: "auto"` picks WebGPU whenever there is an adapter, which is right on a discrete or Apple GPU and wrong on this Intel iGPU. The UI should offer the choice, and a short self-test could decide.
+
+## Smart mode (Gemini API, 16 Oct, browser builder)
+
+Real calls with Arnold's free AI Studio key, EMF transcript text only. The API lists only `gemma-4-26b-a4b-it` and `gemma-4-31b-it`. Both accepted a system instruction, JSON mode with a response schema, and `thinkingConfig.thinkingLevel: "minimal"`; Gemma 4 still sends one short thought part first, which the reader skips.
+
+| Call | Model | Wall time | Tokens in / out |
+|---|---|---|---|
+| One judge call (simple prompt) | 26B A4B | 4.8 s | 96 / 64 |
+| One judge call (the real rubric) | 26B A4B | 3.1 s | 309 / 46 |
+| One judge call (the real rubric) | 31B | 62.2 s | 309 / 45 |
+| 8 pointwise judge calls, EMF shortlist | 26B A4B | 1.8 to 2.7 s each, about 16 s in all | 337 to 502 each, about 3,400 in all / 46 to 54 each |
+| 1 batch call, the same 8 windows | 26B A4B | 7.6 s | 1,692 / 311 |
+
+Pointwise and batch disagreed. Pointwise spread the scores (judge totals 0.225 to 0.787, hook from 1 to 3) and put c_0036 first; batch bunched them (mostly 3s) and put c_0027 first. Neither matches the desktop's Gemma 3 4B, whose top 3 were c_0014, c_0001 and c_0020; the 26B model gave those totals of 0.55, 0.375 and 0.35. No human labels exist for these windows, so this shows disagreement, not which judge is right. So Smart mode judges pointwise by default, two calls at a time (about 8 s for 8 windows), and `settings.smartBatch` turns batching on for when the free quota is tight: a full run is about 12 requests pointwise (8 judge, 1 listwise, about 3 kits) against about 5 batched, under the free limits of about 30 requests and 15,000 tokens a minute.
+
+The coordinator saw the free tier fail on the same day (HTTP 500, empty 404s, one answer after 294 s). So every call times out after 25 s and retries once after 2 s on a 5xx, an empty 404 or a timeout; when that fails, the page judges that clip on the device and says so ("Google's free Gemma was slow, so this clip was judged on your device."). The proxy enforces the same timeout and answers 504.

@@ -163,6 +163,73 @@ Tell Selects where the clips will go with `--made-for` (or `settings.madeFor`). 
 
 `story` also adds one line to the judge's prompt: score "stands alone" and "payoff" high only when the clip tells a complete story, with a setup, a turn and a resolution. The line is in [`src/core/prompts/judge.md`](src/core/prompts/judge.md), and each preset's kit format is in [`src/core/prompts/kit.md`](src/core/prompts/kit.md). `--min`, `--max` and `--style` still win over a preset. There is no outrage or controversy preset, on purpose.
 
+## Selects Web: the same clipper in your browser
+
+Selects Web runs the whole pipeline in a browser tab: speech to text, the clip judge and the captioned 9:16 render. The host only serves static files, and in Private mode the video, its audio and its transcript never leave the device. [PENDING: public URL, once Arnold approves publishing.]
+
+### Private mode and Smart mode
+
+| Mode | What runs where | What leaves the device |
+|---|---|---|
+| Private (the default) | Everything in the tab: whisper, Gemma and the render | Nothing. The models are downloaded once and cached by the browser |
+| Smart | Whisper and the render in the tab; the judge is Gemma 4 26B on Google's Gemini API | The transcript text of the 8 shortlisted passages, sent to Google. Never the video or the audio |
+
+Smart mode works with your own free key from Google AI Studio (kept in the tab for the session and sent only to Google), or through a small Selects proxy that holds the project's key. The proxy accepts only Selects judge requests, limits how often each visitor can call it, and does not log the text. If Google's free tier is slow (calls time out after 25 seconds and are tried once more), that clip is judged on your device instead, and the page says so.
+
+### What runs in the browser
+
+| Step | How | Model |
+|---|---|---|
+| Read the video, audio and thumbnails | mediabunny over WebCodecs; WebAudio resamples to 16 kHz mono | none |
+| Speech to text with a time for every word | transformers.js (ONNX Runtime Web) in a worker, WebGPU or WebAssembly | whisper base.en, timestamped export (140 MB for the CPU, 209 MB for WebGPU) |
+| Sentences, windows, pre-score, shortlist, ranking, curve, trims | the same code as the desktop (`src/core`) | none |
+| Judge (WebGPU) | MediaPipe LLM Inference | Gemma 4 E2B (2.0 GB, Apache-2.0) |
+| Judge (no WebGPU) | llama.cpp compiled to WebAssembly (wllama) | Gemma 3 1B Q4_0 (722 MB) |
+| Language check | plain JavaScript | lid-lite-5 (1.1 MB) |
+| Render | each frame drawn on a canvas with the desktop's caption layout, encoded to H.264 and AAC with WebCodecs, muxed to MP4 | none |
+
+The judge reads the same prompt files as the desktop (`src/core/prompts/`), and its answers are scored, blended with the pre-score and put through the listwise round by the same code.
+
+### On a phone
+
+Phones pause background tabs, so Selects Web does not promise to keep working when you leave. It saves after every step instead: the audio, the transcript, the scores, your approvals and trims, caption edits and rendered clips stay on the device (IndexedDB, and the video itself in the browser's private file storage when it fits). Open the page again, or choose the same video again, and it carries on from the last finished step. While it works it keeps the screen awake, shows progress in the tab title, and can notify you when the clips are ready if you allow it. It installs as an app (a web manifest and a service worker that only caches the page itself).
+
+### Limits
+
+- Best for videos up to about 10 to 15 minutes. Longer videos are slow in a tab and can run out of memory.
+- English speech only. For other languages, Nigerian-accented English, face blur, whole-video captions or long videos, use the desktop app.
+- The first run downloads 0.9 GB (CPU) or 2.2 GB (WebGPU) of models once.
+- No transcript quality gate yet: the browser's whisper does not report word confidence.
+- Measured on the 2017 laptop (details in [`notes/timings.md`](notes/timings.md), "Browser build"): 2 minutes of video took 11.2 minutes to analyse on the WebGPU path (whisper at 0.31 times real time on the Intel GPU, Gemma 4 E2B at about 19 seconds a call), and a 41-second clip rendered in 57 seconds. On this machine whisper on the CPU was faster (0.75 times real time).
+
+### Build and run it locally
+
+```sh
+npm --prefix src/browser ci
+npm --prefix src/browser run build      # writes dist-web/
+npm --prefix src/browser run preview    # http://localhost:4173 with the right headers
+```
+
+Open `demo.html` (the engine's test page; the review app integrates it next, see `src/browser/adapter.md`). To try Smart mode without a key, run the stand-in API and the proxy:
+
+```sh
+PORT=8788 node server-proxy/mock-gemini.mjs
+PORT=8787 GEMINI_API_KEY=test GEMINI_BASE=http://127.0.0.1:8788/v1beta ALLOWED_ORIGINS=http://localhost:4173 node server-proxy/server.mjs
+```
+
+### Deploy
+
+Any static host works if it sends two headers on every page, which multithreaded WebAssembly needs:
+
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: credentialless
+```
+
+`credentialless` keeps model downloads from Hugging Face's CDN working. `src/browser/public/_headers` sets them on Netlify and Cloudflare Pages.
+
+On Render, `render.yaml` describes both services: the static site `selects-web` (built from `src/browser`, published from `dist-web`, with the headers) and the free web service `selects-smart-proxy` (`node server-proxy/server.mjs`). In the Render dashboard, create a Blueprint from the repository, then set three values: `GEMINI_API_KEY` on the proxy (from Google AI Studio; never commit it), `ALLOWED_ORIGINS` on the proxy (the static site's URL), and `VITE_SELECTS_PROXY_URL` on the static site (the proxy's URL). A free Render web service sleeps after 15 minutes without requests and takes up to about a minute to wake; the page shows "Waking the Smart mode server" while it waits.
+
 ## How it fails safely
 
 A clipper that trusts a bad transcript picks bad clips: the windows, the judge, the cuts and the captions all sit on the words. So Selects checks the transcript before it spends any model time on it.

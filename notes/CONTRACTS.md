@@ -308,6 +308,47 @@ candidate.demoted = true                       // only while a misleading cut is
 - `settings.faithful`: `"model"` (default, one call per top pick, cached in `judge-cache.json`, logged in `judge-calls.jsonl` as `kind: "faithful"`), `"rules"` (no model) or `"off"`. CLI `--faithful model|rules|off`. With `--yes`, misleading cuts are left unapproved.
 - Browser: `tasks.mjs` has a `faithful` task: `{ kind: "faithful", candidate, before, after, hints }`, with `prompts.faithful` the text of `prompts/faithful.md`; `readTask` returns `{ verdict, issue, extend, note }` or null. Build the field with `contextFor`, `faithfulHints` and `faithfulResult` from `faithful-core.mjs`, then order with `orderByFaithful`.
 
+## Selects Web: the engine in the browser (16 Oct, browser builder)
+
+All additive. The browser build (`src/browser/`) runs the pipeline in the visitor's tab and serves the same Job, Candidate, Word and event shapes as the server. Full interface: `src/browser/adapter.md`.
+
+### Browser-safe core modules
+
+These have no Node imports anywhere in their import graph (checked by `src/core/browser-safe.test.mjs`), and the browser build imports them directly. The original modules import and re-export them, so every existing caller is unchanged.
+
+| Module | Holds | Re-exported by |
+|---|---|---|
+| `format.mjs` | `tc`, `srtTime`, `slugify` | `util.mjs` |
+| `cues.mjs` | `STYLES`, `chunkWords`, `cuesFromWords`, `applyCueEdits`, `toSrt`, `toVtt`, `parseSubtitles`, `clipCues`, `textInRange` | `captions.mjs` |
+| `layout.mjs` | `PRESETS`, `captionOptions`, `layoutCaption`, `paintCaption(ctx, words, highlightIdx, { width, caption, families })`, `captionTimeline(cues, clipDur, { perWord })`, `captionTop`, `workingSize`, `reframeByShape`, `motionSize`, `reframeFromMotion(raw, W, H, dispW, dispH)`, `clipWords`, `captionChunks` | `render.mjs` (which now draws with `paintCaption` and times captions with `captionTimeline`; its ffconcat output is unchanged) |
+| `judge-core.mjs` | `WEIGHTS`, `BLEND`, `LIST_WEIGHT`, `blend`, `combine`, `clamp`, `JUDGE_SCHEMA`, `salvageJudge`, `splitPrompt`, `judgeMessages`, `listMessages`, `listSchema`, `parseListAnswer`, `applyListOrder`, `tidyReason`, `lastSentence` | `judge.mjs` |
+| `kit-core.mjs` | `KIT_SCHEMA`, `plainKit`, `kitMessages(md, candidate)`, `cleanKit` | `kit.mjs` |
+| `tasks.mjs` | model tasks for runtimes other than Ollama: `buildTask(task, prompts) -> { messages, schema, maxTokens }`, `readTask(task, { data, text })`, `extractJson`, `schemaHint`, `withSchemaHint`, `checkTaskShape`, `slimTask`, `batchMessages`, `batchSchema` | (new) |
+| `gemini.mjs` | Gemma through the Gemini API: `geminiGenerate({ key, model, messages, schema, maxTokens, timeoutMs = 25000, retries = 1 })`, `geminiBody`, `toGeminiSchema`, `readGemini`, `refusedFeature` | (new) |
+| `langid/cues.mjs` | `nigerianCues`, `NG_TEXT_SHARE`, `NG_AUDIO_P` | `langid/accent.mjs` |
+
+A task is `{ kind: "judge", candidate }`, `{ kind: "judgeBatch", candidates }` (Smart mode option: the shortlist in one call, each clip scored on its own), `{ kind: "listwise", top }` or `{ kind: "kit", candidate }`. Prompts are always the files in `src/core/prompts/`, so a prompt change reaches the desktop, the browser and the proxy at once.
+
+### Browser job fields
+
+- `job.key`: the content key of the video (`v_` + 32 hex: SHA-256 over size, name, lastModified and the first and last 1 MB).
+- `job.source.path` is `null`; `source.size`, `source.canDecodeVideo` and `audioStreams[].canDecode` are added.
+- `job.asr = { provider: "transformers.js", model, device: "webgpu" | "wasm", decodeSec, loadSec, sec, speed, chunks }`.
+- `job.judge = { backend: "gemma4-webgpu" | "gemma3-wasm" | "gemini-key" | "gemini-proxy", model, where: "device" | "google", loadSec, calls, secPerCandidate, fallbacks, note?, smartError? }`. A judged candidate has `judgedOn: "device" | "google"` and, when Smart mode fell back, `fallbackNote`.
+- `job.language` is the light check (lid-lite-5 on the English text): `{ setting: "en", used: "en", decided: "setting", textLid, accentCues, warning }`.
+- `job.resumed = { from, savedAt, withFile? }` when a saved job was picked up; `job.error.needsFile: true` when a step needs the video again.
+- `settings.asrDevice`: `"auto"` (WebGPU when there is an adapter) or `"webgpu"` or `"wasm"`. `settings.smartBatch`: judge the shortlist in one Smart mode call.
+- Every URL (thumbnails, source, clips, SRT, kit files) is a `blob:` URL.
+- Faithful cuts (`candidate.faithful`, `demoted`, `job.faithful`), `settings.madeFor` (through `applyMadeFor` and `clipCaptionStyle`) and the quality bar (`candidate.weak`, `job.verdict`) work as in `job.mjs`, from the same pure modules; `PATCH { faithful }` is `patchCandidate(id, cid, { faithful })`.
+
+### Saved on the device
+
+IndexedDB database `selects-web`, store `kv`: `job:<key>` (the Job, which stages are done, the candidates settings fingerprint), `part:<key>:<words|events|loudness|shortlist|judged|captions|kits>`, `pcm:<key>` (16 kHz mono Float32Array), `clip:<key>:<cid>:<preset>` (`{ mp4: Blob, srt }`). The video goes to OPFS `videos/<key>` when it is under half of the free quota. Choosing the same file again (same key) resumes that job.
+
+### Smart mode proxy (`server-proxy/`)
+
+`POST /v1/task` with a slim task (only `text`, `hook`, `start`, `end` per clip) returns `{ text, model, promptTokens, outTokens, finish }`; `GET /healthz` returns `{ ok, model, limits, counts }`. 400 for any other body shape, 403 for an origin not in `ALLOWED_ORIGINS`, 429 with `retry-after` over the per-IP or global limits, 504 when Gemma did not answer within the timeout (the page then judges that clip on the device). The proxy builds prompts from `src/core/prompts` itself and never logs clip text.
+
 ## Made for presets (17 Oct, core)
 
 All additive. `src/core/madefor.mjs` (browser-safe) holds the presets.

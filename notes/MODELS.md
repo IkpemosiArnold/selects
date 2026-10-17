@@ -17,6 +17,22 @@ Where each one goes: `<models>/langid/lid-lite-608/model.ftz`, `<models>/langid/
 
 New downloads for the language and punctuation work on 16 Oct: 37.2 MB (lid-lite-608) + 1.1 MB (lid-lite-5) + 30.7 MB (punctuation tarball) + 26.6 MB (VoxLingua107, rejected) + 0.9 MB (Silero VAD) + 3.3 MB (fasttext.wasm.js) + 37 MB (sherpa-onnx-node for macOS x64) + about 70 MB (onnxruntime-node 1.21 in a scratch folder, for the VoxLingua107 test only) = about 207 MB, well under the 1.5 GB budget.
 
+## Selects Web (in the browser)
+
+The browser build downloads its own copies from Hugging Face's CDN on first use and keeps them in the browser's storage (nothing is bundled with the site, nothing is uploaded). Sizes are the bytes the browser fetches.
+
+| Job | Model | Licence | Size | Source | Runs with | Cached in |
+|---|---|---|---|---|---|---|
+| Speech to text with word times | whisper base.en, `onnx-community/whisper-base.en_timestamped` (exports the cross-attentions word timestamps need): fp32 encoder with a q8 decoder on the CPU, or a q4 decoder on WebGPU | MIT (OpenAI Whisper) | 140 MB (CPU) or 209 MB (WebGPU) | https://huggingface.co/onnx-community/whisper-base.en_timestamped | transformers.js 4.3.1 (Apache-2.0) on ONNX Runtime Web (MIT) | Cache Storage `transformers-cache` |
+| Clip judge, WebGPU browsers | Gemma 4 E2B, `gemma-4-E2B-it-web.task` (LiteRT-LM web build, text only) | Apache-2.0 | 2,004 MB | https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm | @mediapipe/tasks-genai 0.10.29 (Apache-2.0), MediaPipe LLM Inference on WebGPU | Cache Storage `selects-models` |
+| Clip judge, no WebGPU | Gemma 3 1B instruct, Q4_0 GGUF | Gemma Terms of Use | 722 MB | https://huggingface.co/unsloth/gemma-3-1b-it-GGUF | @wllama/wllama 3.8.1 (MIT), llama.cpp in WebAssembly | wllama's cache in the origin private file system |
+| Clip judge, Smart mode | Gemma 4 26B A4B instruct (`gemma-4-26b-a4b-it`), falling back to `gemma-4-31b-it` | Apache-2.0 | none on the device | Google's Gemini API (only these two Gemma models were listed on 16 Oct 2026) | `src/core/gemini.mjs`, from the page with the user's key or through `server-proxy` | nothing |
+| Language check | olaverse/lid-lite-5 (as on the desktop) | Apache-2.0 | 1.1 MB | https://huggingface.co/olaverse/lid-lite-5 | `src/core/langid/ng5.mjs` | Cache Storage `selects-models` |
+
+Why these: Google's own web runtime is the natural home for Gemma on the web, and its Gemma 3 1B web files (`litert-community/Gemma3-1B-IT`) are gated behind a Hugging Face login, which a public page cannot use. The Gemma 4 E2B web files are not gated and are Apache-2.0, so the WebGPU judge is Gemma 4 E2B. Google says the MediaPipe route is in maintenance mode and LiteRT-LM is the way forward; its npm package (`@litert-lm/core` 0.18.0) shipped no documentation, and Google's own Gemma 4 web demo uses MediaPipe, so Selects does too. Gemma 4 E2B GGUFs are 2.2 GB and more, over wllama's 2 GB per-file limit and too slow on a CPU in a tab, so the CPU judge stays Gemma 3 1B. The Nigerian-accent whisper, lid-lite-608 and the punctuation model are desktop only.
+
+Downloads on 16 Oct for the browser build: 209 + 140 MB (whisper, both sets), 2,004 MB (Gemma 4 E2B), 722 MB (Gemma 3 1B), 1.1 MB (lid-lite-5), plus about 560 MB of npm packages in `src/browser/node_modules` (transformers.js pulls in onnxruntime-node and sharp for Node use). The test Chrome profile with the cached models is in `.selects/chrome-profile` (gitignored); delete it to free the space.
+
 ## Tried and rejected
 
 | Model | Licence, size | Why not |
