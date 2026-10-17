@@ -17,7 +17,7 @@ import Slate from "./Slate.jsx";
 import Timeline from "./Timeline.jsx";
 import Script from "./Script.jsx";
 import Sheet, { DecisionBar } from "./Sheet.jsx";
-import FaithNote from "./FaithNote.jsx";
+import FaithNote, { fixLabel } from "./FaithNote.jsx";
 import { byRank, clipName, firstLine, thumbAt } from "./util.js";
 import { BlurOverlay, BlurPanel, useBlurDraft, useContentBox, trackLabelsFor, blurSummary, blurIsEmpty } from "../Blur.jsx";
 import { usePlayerTime } from "../../lib/player.js";
@@ -552,7 +552,8 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
   const phoneReview = phone && !!cur && mode === "review";
   const timeline = <Timeline job={job} cands={ranked} currentId={cur?.id} onPick={pick} player={cur ? player : null} />;
 
-  const verdictNote = job.verdict?.note || null;
+  // The quality bar: say so only when none of the clips is strong.
+  const verdictNote = job.verdict?.note && (job.verdict.strong === 0 || job.verdict.strong == null) ? job.verdict.note : null;
 
   return (
     <div className={"reel is-" + mode + (cur ? "" : " is-done") + (phone ? " is-phone" : "") + (verdictNote && cur ? " has-verdict" : "")}>
@@ -646,9 +647,17 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
                   )}
                   <FaithNote
                     clip={cur}
-                    onFix={async (fx) => {
-                      const res = await trim(fx.start ?? cur.start, fx.end ?? cur.end);
-                      if (res) flash(fx.end != null && fx.end > cur.end ? "The clip now ends after the next sentence." : "The clip now uses the suggested cut.");
+                    onFix={async (f) => {
+                      const c = cur;
+                      const fx = f.fix;
+                      const label = fixLabel(c, fx);
+                      history.current.push({ id: c.id, status: c.status, start: c.start, end: c.end });
+                      const res = await patch(c, { faithful: "fix" }, { start: fx.start ?? c.start, end: fx.end ?? c.end, trimmed: true, faithful: { ...f, applied: true } });
+                      if (res) flash(label === "Include the next sentence" ? "The clip now ends after the next sentence." : "The clip now has the sentences it needs.");
+                    }}
+                    onKeep={async (f) => {
+                      const res = await patch(cur, { faithful: "accept" }, { faithful: { ...f, accepted: true } });
+                      if (res) flash("Kept the cut as it is.");
                     }}
                   />
                   <span className="lean is-approve" ref={(el) => (leanRef.current.a = el)} aria-hidden="true">Approve</span>
@@ -876,7 +885,7 @@ function Done({ job, ranked, approved, rendered, onPick, onRender, rendering, no
           </>
         ) : (
           <>
-            <a className="btn btn-primary btn-big" href="#/">Start a new job</a>
+            <a className="btn btn-primary btn-big" href="#/">Choose another video</a>
             <a className="btn btn-quiet" href={`#/job/${job.id}/captions`}>Caption the whole video instead</a>
           </>
         )}

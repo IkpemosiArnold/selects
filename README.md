@@ -2,7 +2,7 @@
 
 Selects finds the best short clips in a long video and renders them as captioned 9:16 videos, using whisper.cpp and a Gemma model on your own computer, with nothing uploaded.
 
-![The Selects review screen. Clip 1 of 3 from a 6-minute talk plays at 9:16 in the middle with the captions the render will burn in. On the left, a clapperboard slate shows the clip number, in point, out point and length, with the opening line written large, the model's reason in blue and its four rubric scores. On the right are the Approve and Skip keys and the sentence trims. The next clip peeks out from behind the card, and a strip along the bottom shows the interest curve and where the three clips sit.](notes/screens/v2/reel-review-dark.png)
+![The Selects review screen. Clip 2 of 3 from a 6-minute talk plays at 9:16 in the middle with the captions the render will burn in. On the left, a clapperboard slate shows the clip number, in point, out point and length, with the opening line written large, Gemma's reason in blue and its four scores. On the right are the Approve and Skip keys and the sentence trims. The next clip peeks out from behind the card, and a strip along the bottom shows the interest curve and where the three clips sit](notes/screens/v2/reel-review-dark.png)
 
 ## Why it exists
 

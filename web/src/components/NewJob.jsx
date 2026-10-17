@@ -59,7 +59,10 @@ function statusLine(j) {
   }
   switch (j.stage) {
     case "ready":
-      return approved ? `${approved} of ${n} approved` : n ? `${plural(n, "clip")} to check` : "Ready to check";
+    {
+      const left = j.candidates ? j.candidates.filter((c) => c.status === "proposed").length : n;
+      return approved ? `${approved} of ${n} approved` : left ? `${plural(left, "clip")} to check` : n ? "Every clip checked" : "Ready to check";
+    }
     case "done":
       return rendered ? `Rendered ${plural(rendered, "clip")}` : approved ? `Rendered ${plural(approved, "clip")}` : "Rendered";
     case "rendering":
@@ -198,7 +201,7 @@ export default function NewJob() {
         language,
         ...(mode === "caption"
           ? {}
-          : { model, k: Number(k), minLen: Number(minLen), maxLen: Number(maxLen), judgeN: Number(judgeN), preset: "shorts", madeFor: ownLengths ? "custom" : madeFor }),
+          : { model, k: Number(k), judgeN: Number(judgeN), preset: "shorts", madeFor, ...(ownLengths ? { minLen: Number(minLen), maxLen: Number(maxLen) } : {}) }),
         ...(credit.trim() ? { credit: credit.trim() } : {}),
         ...(license && license !== "other" ? { license } : {}),
         ...(sourceUrl.trim() ? { sourceUrl: sourceUrl.trim() } : {}),
@@ -374,7 +377,7 @@ export default function NewJob() {
                 ))}
               </div>
               <p className="field-hint">
-                {ownLengths ? `Your own lengths: ${minLen} to ${maxLen} seconds.` : `Clips of ${preset?.minLen} to ${preset?.maxLen} seconds, cut to 9:16 with captions.`}
+                {ownLengths ? `Your own lengths, ${minLen} to ${maxLen} seconds. The captions and the post suit ${preset?.label}.` : preset?.hint}
               </p>
             </fieldset>
           )}
@@ -431,6 +434,11 @@ export default function NewJob() {
                         to
                         <input className="input num mono" type="number" inputMode="numeric" min={10} max={180} value={maxLen} onChange={(e) => { setOwnLengths(true); setMaxLen(e.target.value); }} aria-label="Longest clip in seconds" />
                         seconds long, instead of the lengths for {preset?.label || "the platform"}.
+                        {ownLengths && (
+                          <button type="button" className="linkish inline" onClick={() => { setOwnLengths(false); setMinLen(preset.minLen); setMaxLen(preset.maxLen); }}>
+                            Use the usual lengths
+                          </button>
+                        )}
                       </p>
                     </details>
                     {models ? (

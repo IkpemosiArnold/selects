@@ -440,6 +440,7 @@
 
 /* Phones: brand and Render share the first row, the file name the second. */
 @media (max-width: 560px) {
+  .masthead .mock-flag { display: none; }
   .masthead .btn-render { min-width: 0; padding: 0 14px; }
   .masthead .pile-count { display: none; }
   .masthead-right { gap: 10px; }
@@ -591,3 +592,11 @@
     width: min(calc(100vw - 32px), calc((100dvh - var(--mast-h) - env(safe-area-inset-top, 0px) - var(--peek-h) - var(--bar-h) - env(safe-area-inset-bottom, 0px) - 92px) * 0.5625));
   }
 }
+.faith-acts { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.faith-acts:empty { display: none; }
+.faith-acts .faith-fix { grid-column: auto; }
+.faith-keep {
+  min-height: 36px; padding: 0 4px; border: 0; background: none; color: #c3cbcf; font: 600 var(--t-13)/1 var(--sans);
+  text-decoration: underline; text-decoration-color: rgba(232, 237, 235, 0.35); text-underline-offset: 3px; cursor: pointer; touch-action: manipulation;
+}
+@media (pointer: coarse) { .faith-keep { min-height: 44px; } }
