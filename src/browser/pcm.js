@@ -35,17 +35,19 @@ async function resample(pcm, fromRate) {
 }
 
 /**
- * Where to end a segment: the quietest 0.5 s step (on the global 0.5 s grid) in the last
- * `searchSec` of `pcm`, which starts at `start` seconds. Returns a sample index into pcm.
- * Pure.
+ * Where to end a segment: the quietest 0.5 s step (on the global 0.5 s grid) within
+ * `searchSec` of `target` seconds into `pcm` (default: its end), which starts at `start`
+ * seconds. Returns a sample index into pcm. Pure.
  */
-export function quietCut(pcm, start, { searchSec = 20 } = {}) {
+export function quietCut(pcm, start, { target = null, searchSec = 20 } = {}) {
   const step = Math.round(GRID * RATE);
   const endT = start + pcm.length / RATE;
-  let best = pcm.length;
+  const aim = target == null ? endT : Math.min(endT, start + target);
+  let best = Math.round((aim - start) * RATE);
   let bestE = Infinity;
-  const firstT = Math.max(start + GRID, Math.ceil((endT - searchSec) / GRID) * GRID);
-  for (let t = firstT; t + GRID <= endT + 1e-9; t += GRID) {
+  const firstT = Math.max(start + GRID, Math.ceil((aim - searchSec) / GRID) * GRID);
+  const lastT = Math.min(endT, aim + (target == null ? 0 : searchSec));
+  for (let t = firstT; t + GRID <= lastT + 1e-9; t += GRID) {
     const i = Math.round((t - start) * RATE);
     let e = 0;
     for (let k = i; k < Math.min(pcm.length, i + step); k++) e += pcm[k] * pcm[k];
@@ -113,9 +115,11 @@ export async function* decodeAudioSegments(file, { segmentSec = SEGMENT_SEC, sta
       pendingLen += m.length;
       if (pendingLen >= rate * 60) await resampleBlock();
       onProgress?.(Math.min(1, end / total));
-      if (have >= (segmentSec + 1) * RATE) {
+      // decoded in 60 s blocks: once there is enough for the segment and the search after it,
+      // cut at the quietest moment within 20 s of the segment's length
+      if (have >= (segmentSec + 20) * RATE) {
         const all = join();
-        const cut = quietCut(all, segStart);
+        const cut = quietCut(all, segStart, { target: segmentSec });
         const pcm = all.slice(0, cut);
         const rest = all.slice(cut);
         blocks = [rest];

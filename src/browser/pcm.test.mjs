@@ -70,6 +70,11 @@ test("quietCut ends a segment at the quietest half second on the global grid", (
   const cut = quietCut(pcm, start);
   assert.equal(cut / RATE + start, 1197.5);
   assert.equal(cut % (RATE / 2), 0, "on the 0.5 s grid, so loudness tracks join exactly");
+  // aiming at 590 s into the segment, within 20 s: the same silence at 597.5 s wins
+  assert.equal(quietCut(pcm, start, { target: 590 }) / RATE + start, 1197.5);
+  // aiming at 560 s, the silence is out of reach: the cut stays within 540 to 580 s, on the grid
+  const far = quietCut(pcm, start, { target: 560 }) / RATE;
+  assert.ok(far >= 540 && far <= 580 && (far * 2) % 1 === 0, `cut at ${far}`);
 });
 
 test("the honest limit: phones over 30 minutes are told to use a laptop", () => {
