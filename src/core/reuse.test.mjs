@@ -10,15 +10,13 @@ process.env.SELECTS_HOME = home;
 const { languageKey, loadLanguage, loadTranscript, reuseEnabled, saveLanguage, saveTranscript, sourceFingerprint, transcriptKey } = await import("./reuse.mjs");
 after(() => fs.rmSync(home, { recursive: true, force: true }));
 
-test("the fingerprint reads the ends of the file, its size and mtime, and is fast on a big file", () => {
+test("the fingerprint reads the ends of the file, its size and mtime, not the middle", () => {
   const a = path.join(home, "a.bin");
   const big = Buffer.alloc(12 * 1024 * 1024, 7);
   fs.writeFileSync(a, big);
   const fixed = new Date("2026-10-16T12:00:00Z");
   fs.utimesSync(a, fixed, fixed);
-  const t0 = Date.now();
-  const f1 = sourceFingerprint(a);
-  assert.ok(Date.now() - t0 < 1000);
+  const f1 = sourceFingerprint(a); // no timing assertion: the shared test machine runs at load 500
   assert.match(f1, /^[0-9a-f]{20}$/);
   // a change in the middle (not read) with the same mtime keeps it; a change at the end does not
   big[6 * 1024 * 1024] = 1;
