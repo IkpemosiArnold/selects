@@ -242,6 +242,12 @@ export default function Processing({ job, words, onResume }) {
               {isErr && <p className="slate-mark is-skipped">Stopped</p>}
             </div>
             {sub && <p className="proc-sub">{sub}</p>}
+            {!isErr && job.warning && <p className="proc-sub">{job.warning}</p>}
+            {!isErr && job.estimate?.overnight && (
+              <p className="proc-sub">
+                About {job.estimate.analysisSec < 5400 ? `${Math.round(job.estimate.analysisSec / 60)} minutes` : `${(job.estimate.analysisSec / 3600).toFixed(1)} hours`} on this laptop before the clips are ready. Fine to leave it running overnight: progress is saved after every step.
+              </p>
+            )}
             {needsFile && (
               <>
                 <button className="btn btn-mark btn-big proc-resume" disabled={resuming} onClick={() => fileRef.current?.click()}>
