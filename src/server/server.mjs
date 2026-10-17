@@ -52,6 +52,44 @@ class HttpError extends Error {
   }
 }
 
+/**
+ * DNS rebinding guard. A hostile page can point its own domain at 127.0.0.1, and its
+ * requests then reach this server as same-origin GETs with no Origin header. The browser
+ * still sends the attacker's name in Host, so only loopback names are served. The port must
+ * be ours, or a local front end that proxies to us without rewriting Host (Vite dev 5173 and
+ * preview 4173; SELECTS_DEV_PORTS overrides the list).
+ */
+const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
+function devPorts() {
+  return new Set(String(process.env.SELECTS_DEV_PORTS ?? "5173,4173").split(",").map((s) => Number(s.trim())).filter(Boolean));
+}
+export function hostAllowed(host, port) {
+  const m = /^(\[[^\]]+\]|[^:\[\]]+)(?::(\d+))?$/.exec(String(host || ""));
+  if (!m || !LOOPBACK.has(m[1].toLowerCase())) return false;
+  const p = Number(m[2] || 80);
+  return p === port || devPorts().has(p);
+}
+
+/** Decode a URL path, or 400. Rejects ".." segments (also when encoded) and NUL bytes. */
+function safeDecode(s) {
+  let out;
+  try {
+    out = decodeURIComponent(s);
+  } catch {
+    throw new HttpError(400, "The address has a broken escape (%).");
+  }
+  if (out.includes("\0") || out.split(/[\\/]/).includes("..")) throw new HttpError(400, "The address is not allowed.");
+  return out;
+}
+
+/** file must sit inside dir (after resolving). */
+function inside(dir, file) {
+  const root = path.resolve(dir);
+  const f = path.resolve(root, file);
+  if (f !== root && !f.startsWith(root + path.sep)) throw new HttpError(404, "File not found.");
+  return f;
+}
+
 /** Only local pages (the Vite dev server, or this server) may call the API from a browser. */
 function cors(req, res) {
   const origin = req.headers.origin;
@@ -228,9 +266,9 @@ function serveStatic(req, res, urlPath) {
     res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
     return res.end("Selects API is running. The web app is not built yet: run `npm run build` in web/.\n");
   }
-  const rel = decodeURIComponent(urlPath).replace(/^\/+/, "");
+  const rel = safeDecode(urlPath).replace(/^\/+/, "");
   const file = path.resolve(WEB_DIST, rel);
-  if (!file.startsWith(WEB_DIST)) throw new HttpError(403, "Forbidden.");
+  if (file !== WEB_DIST && !file.startsWith(WEB_DIST + path.sep)) throw new HttpError(404, "File not found.");
   if (rel && fs.existsSync(file) && fs.statSync(file).isFile()) {
     return sendFile(req, res, file, { cache: /\/assets\//.test(file) ? "public, max-age=31536000, immutable" : "no-cache" });
   }
@@ -238,8 +276,17 @@ function serveStatic(req, res, urlPath) {
 }
 
 async function route(req, res) {
-  const url = new URL(req.url, "http://localhost");
+  if (!hostAllowed(req.headers.host, req.socket.localPort)) throw new HttpError(421, "This address is not served here.", "Open Selects at http://127.0.0.1 or http://localhost on its own port.");
+  // the raw path, before URL parsing folds "%2e%2e" and "/../" away
+  safeDecode(String(req.url || "/").split("?")[0]);
+  let url;
+  try {
+    url = new URL(req.url, "http://localhost");
+  } catch {
+    throw new HttpError(400, "The address is not valid.");
+  }
   const p = url.pathname;
+  if (p.startsWith("/media/")) res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
   const m = (re) => p.match(re);
   const method = req.method;
   let r;
@@ -259,6 +306,7 @@ async function route(req, res) {
     const name = url.searchParams.get("name");
     const size = Number(url.searchParams.get("size"));
     if (!name || !Number.isFinite(size)) throw new HttpError(400, "Send name and size.");
+    if (name.length > 255 || /[\\/\0]/.test(name) || name === "." || name === "..") throw new HttpError(400, "name is a file name, not a path.");
     const found = await locate(name, size);
     if (!found) throw new HttpError(404, `Could not find ${name} in the usual folders.`, "Type the full path instead.");
     return sendJson(res, 200, { path: found });
@@ -300,7 +348,7 @@ async function route(req, res) {
     if (!c) throw new HttpError(404, `No clip called ${r[2]} in this job.`);
     let kit = null;
     try {
-      kit = c.render?.kit ? JSON.parse(fs.readFileSync(path.join(jobDir(job.id), c.render.kit), "utf8")) : null;
+      kit = c.render?.kit ? JSON.parse(fs.readFileSync(inside(jobDir(job.id), c.render.kit), "utf8")) : null;
     } catch {}
     if (!kit) throw new HttpError(404, "This clip has no posting kit yet.", "Render it first. The kit is written after the video.");
     const abs = (f) => (f ? (path.isAbsolute(f) ? f : path.join(jobDir(job.id), f)) : null);
@@ -443,7 +491,7 @@ async function route(req, res) {
   if ((r = m(/^\/media\/([^/]+)\/output$/)) && (method === "GET" || method === "HEAD")) {
     const job = getJob(r[1]);
     if (!job.output?.path) throw new HttpError(404, "The captioned video has not been rendered yet.");
-    return sendFile(req, res, path.join(jobDir(job.id), job.output.path));
+    return sendFile(req, res, inside(jobDir(job.id), job.output.path));
   }
   if ((r = m(/^\/media\/([^/]+)\/frame$/)) && (method === "GET" || method === "HEAD")) {
     const job = getJob(r[1]);

@@ -21,7 +21,9 @@ let job;
 
 function req(method, p, { body, headers = {} } = {}) {
   return new Promise((resolve, reject) => {
-    const r = http.request(base + p, { method, headers: { ...(body ? { "content-type": "application/json" } : {}), ...headers } }, (res) => {
+    // host, port and path given apart, so the path goes out raw (a URL string would fold "%2e%2e")
+    const u = new URL(base);
+    const r = http.request({ hostname: u.hostname, port: u.port, path: p, method, headers: { ...(body ? { "content-type": "application/json" } : {}), ...headers } }, (res) => {
       const chunks = [];
       res.on("data", (c) => chunks.push(c));
       res.on("end", () => {
@@ -234,4 +236,39 @@ test("approve top N: the best clips in one call, without rendering unless asked"
   const bad = await req("POST", `/api/jobs/${job.id}/approve`, { body: { top: "lots" } });
   assert.equal(bad.status, 400);
   assert.match(bad.json.hint, /top: 10/);
+});
+
+test("DNS rebinding: a foreign Host gets 421, loopback names on our port pass", async () => {
+  const port = server.address().port;
+  const evil = await req("GET", "/api/jobs", { headers: { host: `evil.example:${port}` } });
+  assert.equal(evil.status, 421);
+  assert.equal((await req("GET", `/media/${job.id}/source`, { headers: { host: `rebind.attacker.test:${port}` } })).status, 421);
+  assert.equal((await req("GET", "/api/jobs", { headers: { host: `127.0.0.1.evil.example:${port}` } })).status, 421);
+  assert.equal((await req("GET", "/api/jobs", { headers: { host: "127.0.0.1:1" } })).status, 421, "a loopback name on another port");
+  for (const host of [`127.0.0.1:${port}`, `localhost:${port}`, `LOCALHOST:${port}`, `[::1]:${port}`, "localhost:5173"]) {
+    assert.equal((await req("GET", "/api/jobs", { headers: { host } })).status, 200, host);
+  }
+});
+
+test("media is same-origin only (CORP)", async () => {
+  const r = await req("GET", `/media/${job.id}/source`, { headers: { range: "bytes=0-1" } });
+  assert.equal(r.headers["cross-origin-resource-policy"], "same-origin");
+});
+
+test("path traversal and broken escapes are refused", async () => {
+  for (const p of ["/..%2f..%2f..%2fetc%2fpasswd", "/%2e%2e/%2e%2e/etc/passwd", "/assets/..%5c..%5cpackage.json", `/media/${job.id}/clips/..%2f..%2fjob`, "/%00"]) {
+    const r = await req("GET", p);
+    assert.ok([400, 404].includes(r.status), `${p} -> ${r.status}`);
+    assert.doesNotMatch(r.text, /root:|"name": "selects"/);
+  }
+  assert.equal((await req("GET", "/%E0%A4%A")).status, 400, "a bad escape is 400, not 500");
+  assert.equal((await req("GET", "/api/locate?name=..%2F..%2Fetc%2Fpasswd&size=1")).status, 400);
+  assert.equal((await req("GET", "/api/locate?name=..&size=1")).status, 400);
+  // a job.json that points its output outside the job folder is not served
+  const j = loadJob(job.id);
+  j.output = { path: "../../../../etc/hosts" };
+  saveJob(j);
+  assert.equal((await req("GET", `/media/${job.id}/output`)).status, 404);
+  delete j.output;
+  saveJob(j);
 });
