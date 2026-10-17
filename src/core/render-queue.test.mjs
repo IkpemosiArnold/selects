@@ -216,3 +216,16 @@ test("an ffmpeg that runs out of disk says so, even when its output is not kept"
   assert.match(err.message, /No space left on device/);
   assert.ok(isDiskFull(err));
 });
+
+test("a preview queue stopped part way resumes as previews, only the ones still to do", async () => {
+  const job = await readyJob(8);
+  approveTop(job.id, 4);
+  const ids = loadJob(job.id).candidates.filter((c) => c.status === "approved").map((c) => c.id);
+  const ctl = new AbortController();
+  await renderJob(job.id, { preset: "preview", ids, signal: ctl.signal, deps: { render: fakeRender({ during: (_c, n) => n === 2 && ctl.abort() }) } });
+  const calls = [];
+  const out = await resumeJob(job.id, { deps: { render: fakeRender({ calls }) } });
+  assert.deepEqual(calls, ids.slice(1));
+  assert.equal(out.candidates.filter((c) => c.preview?.status === "done").length, 4);
+  assert.ok(out.candidates.every((c) => !c.render), "no final renders were started");
+});

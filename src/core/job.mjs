@@ -210,6 +210,9 @@ export function resumeJob(id, opts = {}) {
   saveJob(job);
   const analysed = job.settings.mode === "caption" ? job.stages.transcribe.status === "done" : job.stages.judge.status === "done";
   if (analysed && renderPending) return renderJob(id, opts);
+  // a preview queue that stopped part way carries on with the previews still to do
+  const previews = (job.candidates || []).filter((c) => c.preview && c.preview.status !== "done").map((c) => c.id);
+  if (analysed && previews.length && job.settings.mode !== "caption") return renderJob(id, { ...opts, preset: "preview", ids: previews });
   return runJob(id, opts);
 }
 
