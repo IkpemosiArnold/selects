@@ -124,10 +124,11 @@ export function buildTalk() {
 
 /**
  * Many clips over a long video, for testing the review at scale (?clips=50&dur=7316).
- * Clips are 20 to 60 s, snapped to the words, mostly spread out but sometimes only a
+ * Clips are about 20 to 60 s of whole sentences, mostly spread out but sometimes only a
  * second or two apart, as the judge's picks are. Each borrows its scores and reason
  * from one of the talk's clips; ranks follow a made-up total.
  */
+const END = /[.?!]$/;
 export function spreadCandidates({ n, duration, words, base }) {
   const rand = rng(n * 7919 + Math.round(duration));
   const lens = Array.from({ length: n }, () => 20 + rand() * 40);
@@ -139,12 +140,13 @@ export function spreadCandidates({ n, duration, words, base }) {
   let t = 10;
   let wi = 0;
   for (let i = 0; i < n; i++) {
-    t += close[i] ? 0.5 + rand() * 3 : raw[i] * scale * 0.97;
-    while (wi < words.length - 1 && words[wi].s < t) wi++;
+    t += close[i] ? rand() * 0.3 : raw[i] * scale * 0.85;
+    // start on a sentence's first word, end on a sentence's last, as the core's windows do
+    while (wi < words.length - 1 && (words[wi].s < t || (wi > 0 && !END.test(words[wi - 1].w)))) wi++;
     const i0 = wi;
-    while (wi < words.length - 1 && words[wi].e < words[i0].s + lens[i]) wi++;
+    while (wi < words.length - 1 && (words[wi].e < words[i0].s + lens[i] || !END.test(words[wi].w))) wi++;
     const ws = words.slice(i0, wi + 1);
-    if (!ws.length || ws[ws.length - 1].e > duration) break;
+    if (!ws.length || ws[ws.length - 1].e > duration || ws[ws.length - 1].e - ws[0].s < 15) break;
     const b = base[i % base.length];
     const text = ws.map((w) => w.w).join(" ");
     const { listRank, listReason, ...rest } = b;
