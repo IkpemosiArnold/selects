@@ -377,10 +377,12 @@ function buildPairs(evals, C) {
   const vr = pairs.filter((p) => p.kind === "vs-random");
   const vp = pairs.filter((p) => p.kind === "vs-prescore").map((p) => [g(), p]).sort((x, y) => x[0] - y[0]).map((x) => x[1]);
   const chosen = [...vr, ...vp].slice(0, 30);
-  return chosen.map((p, i) => {
-    const flip = rng(777 + i)() < 0.5; // which side Selects is on
+  return chosen.map((p) => {
+    // stable ids, so ratings stay attached to the right pair if the set is rebuilt
+    const id = `p-${p.video}-${p.kind === "vs-random" ? "r" : "s"}`;
+    const flip = rng(777 + hashInt(id))() < 0.5; // which side Selects is on
     const side = (w) => ({ start: +w.start.toFixed(2), end: +w.end.toFixed(2), text: w.text });
-    return { id: `p${String(i + 1).padStart(2, "0")}`, video: p.video, title: p.title, kind: p.kind, selectsSide: flip ? "B" : "A", A: side(flip ? p.other : p.selects), B: side(flip ? p.selects : p.other) };
+    return { id, video: p.video, title: p.title, kind: p.kind, selectsSide: flip ? "B" : "A", A: side(flip ? p.other : p.selects), B: side(flip ? p.selects : p.other) };
   });
 }
 

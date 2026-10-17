@@ -55,7 +55,7 @@ const server = http.createServer((req, res) => {
   try {
     if (req.method === "GET" && url.pathname === "/") return send(res, 200, PAGE, "text/html; charset=utf-8");
     if (req.method === "GET" && url.pathname === "/api/pairs") return send(res, 200, publicPairs);
-    const am = /^\/audio\/(p\d+)-(A|B)$/.exec(url.pathname);
+    const am = /^\/audio\/(p-[A-Za-z0-9_-]{11}-[rs])-(A|B)$/.exec(url.pathname);
     if (req.method === "GET" && am) {
       const f = join(AUDIO, `${am[1]}-${am[2]}.m4a`);
       return existsSync(f) ? serveAudio(req, res, f) : send(res, 404, { error: "no audio" });
