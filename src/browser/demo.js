@@ -2,6 +2,8 @@
 import { createBrowserApi } from "./api.js";
 import { MODELS, size } from "./models.js";
 import { cachedFetch } from "./cache.js";
+import { judgeShortlist, listwiseRound } from "./judge.js";
+import { privateBackend } from "./llm.js";
 
 const $ = (id) => document.getElementById(id);
 const api = createBrowserApi();
@@ -14,7 +16,7 @@ const say = (s) => {
   console.log("[selects]", line);
 };
 const state = { job: null, candidates: [], stageTimes: {}, renders: {}, done: false, error: null, events: [] };
-window.selectsDemo = { api, state, log, start, renderApproved, approveTop, prefetch, openSaved, listSaved: () => api.listSaved() };
+window.selectsDemo = { api, state, log, judgeOnly, start, renderApproved, approveTop, prefetch, openSaved, listSaved: () => api.listSaved() };
 
 /** Download a judge model into this browser's cache without running anything (for tests). */
 async function prefetch(which) {
@@ -135,3 +137,14 @@ async function renderApproved(preset = $("preset").value) {
 $("notify").onclick = async () => say(`notifications ${(await api.enableNotifications()) ? "on" : "not allowed"}`);
 $("start").onclick = () => start().catch((e) => say(`error: ${e.message}`));
 $("render").onclick = () => renderApproved().catch((e) => say(`error: ${e.message}`));
+
+/** Judge a given shortlist on this device (for comparing judges on the same windows). */
+async function judgeOnly(cands, prefer = "auto", { listwise = true } = {}) {
+  const llm = await privateBackend({ prefer });
+  const t0 = performance.now();
+  await llm.load({ onProgress: () => {} });
+  const loadSec = +((performance.now() - t0) / 1000).toFixed(1);
+  const jr = await judgeShortlist(cands, llm, { onProgress: (p) => say(`judgeOnly: ${p.note}`) });
+  const lw = listwise ? await listwiseRound(jr.judged.filter((c) => c.scores), llm).catch((e) => ({ error: e.message })) : null;
+  return { backend: llm.id, loadSec, calls: jr.calls, judged: jr.judged.map((c) => ({ id: c.id, scores: c.scores, judgeTotal: c.judgeTotal, reason: c.reason })), listwise: lw && { order: lw.order, sec: lw.sec, error: lw.error } };
+}

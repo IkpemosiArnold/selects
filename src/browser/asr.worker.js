@@ -77,6 +77,7 @@ async function transcribe({ pcm, rate }) {
   const wins = planWindows(pcm, rate);
   const t0 = performance.now();
   const all = [];
+  const secs = [];
   for (let i = 0; i < wins.length; i++) {
     const [a, b] = wins[i];
     const t1 = performance.now();
@@ -87,10 +88,11 @@ async function transcribe({ pcm, rate }) {
     const clean = words.filter((w) => w.s >= prevEnd - 0.05).map((w) => ({ ...w, s: Math.max(w.s, prevEnd), e: Math.max(w.e, Math.max(w.s, prevEnd) + 0.02) }));
     all.push(...clean);
     const done = b / rate;
+    secs.push(+((performance.now() - t1) / 1000).toFixed(2));
     const wall = (performance.now() - t0) / 1000;
     post({ type: "chunk", i, n: wins.length, words: clean, processed: +done.toFixed(2), sec: +((performance.now() - t1) / 1000).toFixed(2), wallSec: +wall.toFixed(1) });
   }
-  post({ type: "done", words: all, wallSec: +((performance.now() - t0) / 1000).toFixed(1), device });
+  post({ type: "done", words: all, wallSec: +((performance.now() - t0) / 1000).toFixed(1), device, chunks: secs });
 }
 
 self.onmessage = async (ev) => {
