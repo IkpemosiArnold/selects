@@ -160,7 +160,7 @@ function LanguageLine({ job }) {
         {used ? languageName(used === "auto" ? "en" : used) : "Language unknown"}
         {q?.verdict ? `, ${VERDICT[q.verdict] || q.verdict}` : ""}.
       </span>
-      <a href={`#/job/${job.id}/language`}>Wrong language?</a>
+      {!api.browser && <a href={`#/job/${job.id}/language`}>Wrong language?</a>}
     </p>
   );
 }

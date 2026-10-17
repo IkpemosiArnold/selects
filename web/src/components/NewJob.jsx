@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "../lib/api.js";
+import { api, inBrowser } from "../lib/api.js";
+import EnginePanel, { useEngine, LAPTOP_LINE } from "./EnginePanel.jsx";
 import { tc, plural } from "../lib/time.js";
 import { Masthead, MiddleTruncate, go } from "../App.jsx";
 import ModelControl from "./ModelControl.jsx";
@@ -17,6 +18,13 @@ function modelLabel(name) {
   if (!name) return "Gemma";
   const m = String(name).match(/gemma[-_ ]?(\d+(?:\.\d+)?)\D*?(\d+(?:\.\d+)?)b/i);
   return m ? `Gemma ${m[1]} ${m[2]}B` : name;
+}
+
+// A job saved by the browser engine, in words: where it will carry on from.
+function savedLine(x) {
+  const when = x.savedAt ? new Date(x.savedAt).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "";
+  const at = { probe: "Not started yet", transcribe: "Stopped before transcribing", candidates: "Transcribed", judge: "Transcribed. Gemma has not picked yet", render: "Clips picked", done: "Clips picked" }[x.from];
+  return [x.finished ? "Clips ready to check" : at || "Stopped part way", when].filter(Boolean).join(", ");
 }
 
 function healthIssues(h) {
@@ -113,6 +121,11 @@ export default function NewJob() {
   const [error, setError] = useState(null);
   const [hint, setHint] = useState(null);
   const fileRef = useRef(null);
+  // The browser engine takes the File itself; the server takes a path on this laptop.
+  const [file, setFile] = useState(null);
+  const [saved, setSaved] = useState([]);
+  const engine = inBrowser ? useEngine() : null; // eslint-disable-line react-hooks/rules-of-hooks
+  const smart = engine?.mode?.mode === "smart";
   // The list carries summaries; the stills and clips come from each job (a few small requests).
   const [full, setFull] = useState({});
   useEffect(() => {
@@ -128,7 +141,8 @@ export default function NewJob() {
   const pathRef = useRef(null);
 
   useEffect(() => {
-    api.health().then(setHealth).catch(() => setHealth({ ok: false, unreachable: true }));
+    if (inBrowser) api.listSaved().then(setSaved).catch(() => {});
+    else api.health().then(setHealth).catch(() => setHealth({ ok: false, unreachable: true }));
     api.models().then((ms) => {
       setModels(ms);
       const pref = ms.find((m) => m.name === "gemma3:4b") || ms.find((m) => m.name.startsWith("gemma3")) || ms[0];
@@ -142,6 +156,7 @@ export default function NewJob() {
     let alive = true;
     let lastKey = "";
     const tick = async () => {
+      if (inBrowser) return; // no overnight queue in the browser
       try {
         const q = await api.queue();
         if (!alive) return;
@@ -165,6 +180,10 @@ export default function NewJob() {
     setError(null);
     setHint(null);
     setPath(file.name);
+    if (inBrowser) {
+      setFile(file);
+      return;
+    }
     const found = await api.locate(file.name, file.size);
     if (found) {
       setPath(found);
@@ -178,7 +197,7 @@ export default function NewJob() {
     e.preventDefault();
     setOver(false);
     const text = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
-    if (text && /^(file:\/\/|\/|~)/.test(text.trim())) {
+    if (!inBrowser && text && /^(file:\/\/|\/|~)/.test(text.trim())) {
       setPath(decodeURIComponent(text.trim().split("\n")[0].replace(/^file:\/\//, "")));
       return;
     }
@@ -188,9 +207,9 @@ export default function NewJob() {
 
   const submit = async (e, how = "now") => {
     e?.preventDefault?.();
-    if (!path.trim()) {
+    if (inBrowser ? !file : !path.trim()) {
       setError("Choose a video first.");
-      pathRef.current?.focus();
+      if (!inBrowser) pathRef.current?.focus();
       return;
     }
     setBusy(true);
@@ -206,6 +225,13 @@ export default function NewJob() {
         ...(license && license !== "other" ? { license } : {}),
         ...(sourceUrl.trim() ? { sourceUrl: sourceUrl.trim() } : {}),
       };
+      if (inBrowser) {
+        // English only, clips only, and the judge is set by Private or Smart mode
+        const { mode: _m, language: _l, model: _model, ...browserSettings } = settings;
+        const job = await api.createJob(file, browserSettings);
+        go(`#/job/${job.id}`);
+        return;
+      }
       const job = await api.createJob(path.trim(), settings, { queueOnly: how === "queue" });
       if (how === "queue") {
         setNotice(`Added ${job.source?.name} to the overnight queue. It starts when the jobs ahead of it finish.`);
@@ -226,7 +252,7 @@ export default function NewJob() {
   // Started and not finished: still working, or stopped. Queued jobs show in the queue.
   const queued = new Set((queue?.items || []).map((q) => q.jobId));
   const unfinished = jobs.filter((j) => !queued.has(j.id) && (["probing", "language", "transcribing", "candidates", "judging", "error"].includes(j.stage) || j.resumable));
-  const issues = health?.unreachable
+  const issues = inBrowser ? [] : health?.unreachable
     ? [{ what: "Selects cannot reach its local server.", fix: "Start it in a terminal, then reload this page.", code: "npm run serve" }]
     : healthIssues(health);
 
@@ -234,6 +260,8 @@ export default function NewJob() {
   const summary =
     mode === "caption"
       ? `Captions for the whole video, ${langLabel}.`
+      : inBrowser
+      ? `Up to ${plural(Number(k) || 0, "clip")}, in English. Gemma picks them${smart ? " through Google's API" : " in this tab"}.`
       : `Up to ${plural(Number(k) || 0, "clip")}, ${langLabel}. ${modelLabel(model)} picks them.`;
   const licName = LICENCES.find(([v]) => v === license)?.[1];
   const creditSummary = credit.trim()
@@ -263,7 +291,7 @@ export default function NewJob() {
           </section>
         )}
 
-        {unfinished.length > 0 && (
+        {!inBrowser && unfinished.length > 0 && (
           <section className="resume" aria-labelledby="resume-h">
             <h2 id="resume-h" className="h-18">Not finished yet</h2>
             <ul className="resume-list">
@@ -274,6 +302,38 @@ export default function NewJob() {
                     <span className="resume-status">{statusLine(j)}</span>
                     <span className="resume-go">{j.stage === "error" ? "Open" : "Continue"}</span>
                   </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {inBrowser && saved.length > 0 && (
+          <section className="resume" aria-labelledby="saved-h">
+            <h2 id="saved-h" className="h-18">{saved.some((x) => !x.finished) ? "Not finished yet" : "Saved on this device"}</h2>
+            <ul className="resume-list">
+              {[...saved.filter((x) => !x.finished), ...saved.filter((x) => x.finished)].slice(0, 4).map((x) => (
+                <li key={x.key}>
+                  <button
+                    type="button"
+                    className={"resume-row" + (x.finished ? " is-done" : "")}
+                    disabled={busy}
+                    onClick={async () => {
+                      setBusy(true);
+                      setError(null);
+                      try {
+                        const job = await api.openSaved(x.key);
+                        go(`#/job/${job.id}`);
+                      } catch (e) {
+                        setError(e.message);
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    <span className="resume-name"><MiddleTruncate text={x.name || "Your video"} tail={10} /></span>
+                    <span className="resume-status">{savedLine(x)}</span>
+                    <span className="resume-go">{x.finished ? "Open" : "Continue"}</span>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -296,6 +356,10 @@ export default function NewJob() {
               <p className="leader-sub">
                 {mode === "caption"
                   ? "Selects writes the captions, you fix any word, and it renders the video with them. Nothing is uploaded."
+                  : inBrowser
+                  ? smart
+                    ? "Gemma picks the best moments and says why. You approve each clip before anything is rendered. Your video stays on this device."
+                    : "Gemma picks the best moments and says why. You approve each clip before anything is rendered. Everything runs in this tab, and nothing is uploaded."
                   : "Gemma picks the best moments and says why. You approve each clip before anything is rendered. Nothing is uploaded."}
               </p>
               <div className="leader-actions">
@@ -313,9 +377,11 @@ export default function NewJob() {
                         Choose another
                       </button>
                     </div>
-                    <button className="linkish on-film" type="button" disabled={busy} onClick={(e) => submit(e, "queue")}>
-                      Add it to the overnight queue instead
-                    </button>
+                    {!inBrowser && (
+                      <button className="linkish on-film" type="button" disabled={busy} onClick={(e) => submit(e, "queue")}>
+                        Add it to the overnight queue instead
+                      </button>
+                    )}
                   </>
                 ) : (
                   <div className="leader-buttons">
@@ -345,7 +411,7 @@ export default function NewJob() {
           {notice && <p className="field-ok" role="status">{notice}</p>}
           {error && <p id="path-error" className="field-error" role="alert">{error}</p>}
 
-          <div className="path-field">
+          {!inBrowser && <div className="path-field">
             <label className="field-label" htmlFor="path">Or type where the video is on this laptop</label>
             <input
               id="path"
@@ -363,7 +429,7 @@ export default function NewJob() {
               aria-invalid={!!error}
             />
             {hint && <p id="path-hint" className="field-hint">{hint}</p>}
-          </div>
+          </div>}
 
           {mode !== "caption" && (
             <fieldset className="made-for">
@@ -382,6 +448,8 @@ export default function NewJob() {
             </fieldset>
           )}
 
+          {inBrowser && <EnginePanel engine={engine} />}
+
           <div className="folds">
             <details className="fold">
               <summary>
@@ -389,7 +457,9 @@ export default function NewJob() {
                 <span className="fold-sum">{summary}</span>
               </summary>
               <div className="fold-body">
-                <div className="mode-row">
+                {inBrowser ? (
+                  <p className="field-hint">Selects Web transcribes English speech, and works best on videos up to about 10 to 15 minutes.</p>
+                ) : <div className="mode-row">
                   <div className="seg seg-light" role="radiogroup" aria-label="What to make">
                     {[["clips", "Find clips"], ["caption", "Caption the whole video"]].map(([v, l]) => (
                       <button key={v} type="button" role="radio" aria-checked={mode === v} className={"seg-btn" + (mode === v ? " is-on" : "")} onClick={() => setMode(v)}>
@@ -409,8 +479,8 @@ export default function NewJob() {
                       ))}
                     </select>
                   </label>
-                </div>
-                {language === "auto" && (
+                </div>}
+                {!inBrowser && language === "auto" && (
                   <p className="field-hint">Selects tries a few short samples in each likely language. Accented English is often mistaken for another language, so pick English here if you know it.</p>
                 )}
                 {mode === "caption" ? (
@@ -441,7 +511,7 @@ export default function NewJob() {
                         )}
                       </p>
                     </details>
-                    {models ? (
+                    {inBrowser ? null : models ? (
                       <ModelControl models={models} value={model} onChange={setModel} judgeN={Number(judgeN) || 8} rates={rates} />
                     ) : (
                       <div className="model-control is-loading" aria-busy="true" />
@@ -483,6 +553,7 @@ export default function NewJob() {
               </div>
             </details>
           </div>
+          {inBrowser && <p className="laptop-line">{LAPTOP_LINE}</p>}
         </form>
 
         <QueueList queue={queue} jobs={jobs} rates={rates} models={models || []} />

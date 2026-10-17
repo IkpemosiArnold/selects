@@ -119,3 +119,51 @@ export function saveEngineMode(m) {
 export const api = await createApi();
 /** True when the work runs in this tab (the hosted build). */
 export const inBrowser = !!api.browser;
+
+
+/**
+ * Carry on with a stopped job. On the server that is POST /resume; in the browser the
+ * engine picks the job up from its last saved step, after taking the video again when
+ * the step needs it (attachFile checks it is the same file).
+ */
+export async function retryJob(id, { file = null, body } = {}) {
+  if (!inBrowser) return api.resume(id, body);
+  if (file) await api.attachFile(id, file);
+  api.engine.run(id).catch(() => {});
+  return { queued: true };
+}
+
+/** In the browser, whether this tab still has the video file for a job (rendering needs it). */
+export function hasVideo(id) {
+  if (!inBrowser) return true;
+  try {
+    return !!api.engine?.rec?.(id)?.file;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Open the file picker for the video again. Call it straight from a tap, before any await,
+ * so the browser lets the picker open. Resolves the File, or null when cancelled.
+ */
+export function pickVideo() {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "video/*";
+    input.onchange = () => resolve(input.files?.[0] || null);
+    input.addEventListener("cancel", () => resolve(null));
+    input.click();
+  });
+}
+
+/** Render clips, asking for the video again first when the browser no longer has it. */
+export async function renderClips(id, ids) {
+  if (inBrowser && !hasVideo(id)) {
+    const file = await pickVideo();
+    if (!file) throw Object.assign(new Error("Rendering needs the video. Choose the same file you started with."), { status: 409 });
+    await api.attachFile(id, file);
+  }
+  return api.render(id, ids);
+}

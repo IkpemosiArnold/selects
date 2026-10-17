@@ -32,6 +32,8 @@ const SHOWN = 160;
 const BEFORE = ["queued", "probing", "language"];
 const GHOST = ".:·.  :.0 ·  9. :  3 ·.  #  ·:  .  6 = .  ·  x .  :";
 
+const mb = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(2)} GB` : `${Math.round((b || 0) / 1e6)} MB`);
+
 function cap(s) {
   return s ? s[0].toUpperCase() + s.slice(1) : s;
 }
@@ -118,6 +120,7 @@ function Reveal({ words, active, reduce }) {
 export default function Processing({ job, words, onResume }) {
   const reduce = useReducedMotion();
   const [resuming, setResuming] = useState(false);
+  const [fileErr, setFileErr] = useState(null);
   const dur = job.source?.duration || 0;
   const st = job.stages || {};
   const reached = words.length ? words[words.length - 1].e : 0;
@@ -145,6 +148,11 @@ export default function Processing({ job, words, onResume }) {
     ? "Keep this tab open to finish faster. If you leave, it carries on when you come back."
     : "You can close this tab. Progress is saved.";
   const notify = useNotifyOptIn(job.id);
+  const dl = ["transcribe", "judge"]
+    .map((key) => ({ key, ...(st[key]?.status === "running" ? st[key].download || {} : {}) }))
+    .find((d) => d.total && d.loaded < d.total);
+  const needsFile = isErr && !!job.error?.needsFile;
+  const fileRef = useRef(null);
 
   let headline, sub;
   if (isErr) {
@@ -161,6 +169,10 @@ export default function Processing({ job, words, onResume }) {
   } else if (checkingLanguage) {
     headline = "Checking which language is spoken.";
     sub = "Selects writes out a few short samples in each likely language and keeps the one that makes the most sense.";
+  } else if (dl) {
+    // the browser engine downloads its models the first time, then keeps them
+    headline = dl.key === "judge" ? "Downloading Gemma, once." : "Downloading the speech model, once.";
+    sub = `${mb(dl.loaded)} of ${mb(dl.total)}. Later videos use the copy kept in this browser. ${leave}`;
   } else if (job.stage === "transcribing") {
     headline = "Transcribing what's said.";
     sub = eta != null ? `${cap(aboutMinutes(eta))} left. ${speedText} ${leave}` : `Timing the speed on this ${api.browser ? "device" : "laptop"}. ${leave}`;
@@ -168,8 +180,17 @@ export default function Processing({ job, words, onResume }) {
     headline = "Finding moments that start and end on a full sentence.";
     sub = "This takes a few seconds.";
   } else {
-    headline = jd.note ? `Gemma is reading ${jd.note}.` : "Gemma is reading each moment.";
-    sub = `${jd.etaSec != null ? `${cap(aboutMinutes(jd.etaSec))} left. ` : ""}${leave}`;
+    const note = String(jd.note || "");
+    if (/waking/i.test(note)) {
+      headline = "Waking the Smart mode server.";
+      sub = api.copy?.smartMode?.waking || "It sleeps when nobody uses it, so this can take up to a minute.";
+    } else if (/cache|loading/i.test(note)) {
+      headline = "Loading Gemma from this browser.";
+      sub = leave;
+    } else {
+      headline = note && /\d/.test(note) && !/model/i.test(note) ? `Gemma is reading ${note}.` : "Gemma is reading each moment.";
+      sub = `${jd.etaSec != null ? `${cap(aboutMinutes(jd.etaSec))} left. ` : ""}${leave}`;
+    }
   }
 
   const pct = job.stage === "transcribing" || isErr ? (dur ? reached / dur : 0) : job.stage === "judging" ? jd.progress || 0 : null;
@@ -221,7 +242,34 @@ export default function Processing({ job, words, onResume }) {
               {isErr && <p className="slate-mark is-skipped">Stopped</p>}
             </div>
             {sub && <p className="proc-sub">{sub}</p>}
-            {isErr && !unreliable && (
+            {needsFile && (
+              <>
+                <button className="btn btn-mark btn-big proc-resume" disabled={resuming} onClick={() => fileRef.current?.click()}>
+                  {resuming ? "Checking the video" : `Choose ${job.source?.name || "the video"} again`}
+                </button>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="video/*"
+                  hidden
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!f) return;
+                    setResuming(true);
+                    try {
+                      await onResume({ file: f });
+                    } catch (err) {
+                      setFileErr(err.message);
+                    } finally {
+                      setResuming(false);
+                    }
+                  }}
+                />
+                {fileErr && <p className="field-error" role="alert">{fileErr}</p>}
+              </>
+            )}
+            {isErr && !unreliable && !needsFile && (
               <button
                 className="btn btn-primary btn-big proc-resume"
                 disabled={resuming}
@@ -234,7 +282,7 @@ export default function Processing({ job, words, onResume }) {
                   }
                 }}
               >
-                {resuming ? "Resuming" : "Resume"}
+                {resuming ? "Resuming" : api.browser ? "Try again" : "Resume"}
               </button>
             )}
             {!isErr && notify.supported && (

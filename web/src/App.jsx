@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, isMock } from "./lib/api.js";
+import { api, isMock, renderClips, retryJob } from "./lib/api.js";
 import { tc } from "./lib/time.js";
 import NewJob from "./components/NewJob.jsx";
 import Processing from "./components/Processing.jsx";
@@ -265,13 +265,13 @@ function JobView({ jobId, view }) {
       (captionMode
         ? ["probe", "language", "transcribe"].includes(job.error?.stage) || job.stages?.transcribe?.status !== "done"
         : job.error?.stage !== "render" && !job.candidates?.length));
-  if (processing) return <Processing job={job} words={words} onResume={async (body) => {
-    await api.resume(jobId, body);
+  if (processing) return <Processing job={job} words={words} onResume={async (opts) => {
+    await retryJob(jobId, opts || {});
     await refetch();
   }} />;
 
   const startRender = async (ids) => {
-    await api.render(job.id, ids);
+    await renderClips(job.id, ids);
     setJob((j) => ({ ...j, stage: "rendering", candidates: j.candidates.map((c) => (ids.includes(c.id) ? { ...c, render: { status: "pending", progress: 0 } } : c)) }));
     go(`#/job/${job.id}/render`);
   };

@@ -4,7 +4,7 @@
 // onto the approved pile; Skip (S or left arrow) slides it quietly away. The
 // next clip is already playing underneath, so nobody waits for the motion.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { api } from "../../lib/api.js";
+import { api, inBrowser } from "../../lib/api.js";
 import { plural, tc } from "../../lib/time.js";
 import { nudgeEdge, toSentences } from "../../lib/sentences.js";
 import { usePlayer } from "../../lib/player.js";
@@ -421,7 +421,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
         "[": () => nudge("end", -1),
         "]": () => nudge("end", 1),
         t: () => cur && setMode("trim"),
-        b: () => cur && setMode((m) => (m === "blur" ? "review" : "blur")),
+        b: () => cur && !inBrowser && setMode((m) => (m === "blur" ? "review" : "blur")),
         z: undo,
       };
       if (k === " ") {
@@ -553,18 +553,25 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
   const timeline = <Timeline job={job} cands={ranked} currentId={cur?.id} onPick={pick} player={cur ? player : null} />;
 
   // The quality bar: say so only when none of the clips is strong.
-  const verdictNote = job.verdict?.note && (job.verdict.strong === 0 || job.verdict.strong == null) ? job.verdict.note : null;
+  const verdictNote =
+    job.verdict?.note && (job.verdict.strong === 0 || job.verdict.strong == null)
+      ? job.verdict.note
+      : job.language?.warning && api.copy?.accentNote
+      ? api.copy.accentNote
+      : null;
 
   return (
     <div className={"reel is-" + mode + (cur ? "" : " is-done") + (phone ? " is-phone" : "") + (verdictNote && cur ? " has-verdict" : "")}>
       <Masthead job={job}>
         <div className="pile" ref={pileRef} aria-live="polite">
-          <span className="pile-stack" aria-hidden="true">
-            {pile.map((c, i) => (
-              <img key={c.id} src={thumbAt(job, c.start + 0.4) || undefined} alt="" style={{ "--i": pile.length - 1 - i }} />
-            ))}
-            {!pile.length && <span className="pile-empty" />}
-          </span>
+          {/* the pile shows once a take has landed on it; an empty outline read as a broken image */}
+          {pile.length > 0 && (
+            <span className="pile-stack" aria-hidden="true">
+              {pile.map((c, i) => (
+                <img key={c.id} src={thumbAt(job, c.start + 0.4) || undefined} alt="" style={{ "--i": pile.length - 1 - i }} />
+              ))}
+            </span>
+          )}
           <span className="pile-count">
             <b>{count}</b> approved
             {skipped.length > 0 && <span className="pile-skipped">, {skipped.length} skipped</span>}
@@ -700,7 +707,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
                   onDecide={(s) => decide(s)}
                   onNudge={nudge}
                   onTrim={() => setMode(mode === "trim" ? "review" : "trim")}
-                  onBlur={() => setMode("blur")}
+                  onBlur={inBrowser ? null : () => setMode("blur")}
                   blurText={blurIsEmpty(blurSpec) ? null : blurSummary(blurSpec)}
                   captionsOn={captionsOn}
                   jobId={job.id}
@@ -725,7 +732,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
             waiting={waiting.length}
             onNudge={nudge}
             onTrim={() => setMode("trim")}
-            onBlur={() => setMode("blur")}
+            onBlur={inBrowser ? null : () => setMode("blur")}
             blurText={blurIsEmpty(blurSpec) ? null : blurSummary(blurSpec)}
             captionsOn={captionsOn}
             jobId={job.id}
@@ -833,9 +840,11 @@ function Controls({ cur, mode, waiting, total, onDecide, onNudge, onTrim, onBlur
         <button type="button" className="tool" onClick={onTrim} aria-pressed={mode === "trim"}>
           <kbd>T</kbd> {mode === "trim" ? "Close the script" : "Trim by words"}
         </button>
-        <button type="button" className="tool" onClick={onBlur}>
-          <kbd>B</kbd> {blurText || "Blur faces or an area"}
-        </button>
+        {onBlur && (
+          <button type="button" className="tool" onClick={onBlur}>
+            <kbd>B</kbd> {blurText || "Blur faces or an area"}
+          </button>
+        )}
         <a className="tool is-link" href={`#/job/${jobId}/captions`}>
           {captionsOn ? "Fix caption words" : "Captions are off. Turn them on"}
         </a>
@@ -886,7 +895,7 @@ function Done({ job, ranked, approved, rendered, onPick, onRender, rendering, no
         ) : (
           <>
             <a className="btn btn-primary btn-big" href="#/">Choose another video</a>
-            <a className="btn btn-quiet" href={`#/job/${job.id}/captions`}>Caption the whole video instead</a>
+            {!inBrowser && <a className="btn btn-quiet" href={`#/job/${job.id}/captions`}>Caption the whole video instead</a>}
           </>
         )}
         {rendered > 0 && (

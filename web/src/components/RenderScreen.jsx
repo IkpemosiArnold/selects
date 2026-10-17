@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "../lib/api.js";
+import { api, renderClips } from "../lib/api.js";
 import { tc, secs, plural, aboutMinutes } from "../lib/time.js";
 import { copyText } from "../lib/hooks.js";
 import { Masthead } from "../App.jsx";
@@ -147,11 +147,13 @@ function Row({ job, c, kit }) {
               </dd>
               <CopyButton text={fullCaption} label="Copy caption" />
             </div>
+            {!api.browser && file && !String(file).startsWith("blob:") && (
             <div className="kit-field">
               <dt className="label">On this laptop</dt>
               <dd className="mono kit-path">{file}</dd>
               <CopyButton text={file} label="Copy path" />
             </div>
+            )}
           </dl>
         )}
       </div>
@@ -330,7 +332,7 @@ export default function RenderScreen({ job, refetch }) {
                 onClick={async () => {
                   setRetrying(true);
                   try {
-                    await api.render(job.id, failed.map((c) => c.id));
+                    await renderClips(job.id, failed.map((c) => c.id));
                   } finally {
                     setRetrying(false);
                   }
@@ -347,7 +349,7 @@ export default function RenderScreen({ job, refetch }) {
                 onClick={async () => {
                   setRetrying(true);
                   try {
-                    await api.render(job.id, stale.map((c) => c.id));
+                    await renderClips(job.id, stale.map((c) => c.id));
                   } finally {
                     setRetrying(false);
                   }
@@ -367,7 +369,7 @@ export default function RenderScreen({ job, refetch }) {
             onRerender={async () => {
               setRetrying(true);
               try {
-                await api.render(job.id, list.filter((c) => c.render.status === "done").map((c) => c.id));
+                await renderClips(job.id, list.filter((c) => c.render.status === "done").map((c) => c.id));
               } finally {
                 setRetrying(false);
               }

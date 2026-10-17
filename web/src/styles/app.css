@@ -510,3 +510,19 @@ button, [role="button"], summary, .btn, .seg-btn, .tab { -webkit-user-select: no
   .btn kbd, .linkish kbd, .ab-keys { display: none; }
 }
 .linkish.inline { display: inline-flex; margin-left: 8px; min-height: 36px; vertical-align: middle; }
+
+/* ---------- Selects Web: where Gemma runs ---------- */
+.engine { display: grid; gap: 8px; max-width: 640px; }
+.engine legend { margin-bottom: 8px; }
+.engine-line { font-size: var(--t-15); max-width: 60ch; }
+.engine-dl { font-size: var(--t-15); }
+.engine-dl b { font-weight: 650; }
+.engine-private, .engine-smart { display: grid; gap: 6px; }
+.engine-key { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 10px; align-items: end; }
+.engine-key .field { min-width: 0; }
+.engine-key .field-hint { grid-column: 1 / -1; margin: 0; }
+.laptop-line { font-size: var(--t-13); color: var(--ink-2); }
+button.resume-row { width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+@media (max-width: 560px) {
+  .engine-key { grid-template-columns: minmax(0, 1fr); }
+}

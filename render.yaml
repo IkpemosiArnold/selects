@@ -1,4 +1,6 @@
 # Render Blueprint for Selects Web. Not deployed yet: Arnold connects the repo in Render.
+# The site is the React review app in web/, built with VITE_ENGINE=browser so the whole
+# pipeline runs in the visitor's tab (src/browser). It writes dist-web/.
 #
 # 1. selects-web: the static site. The browser does all the work (whisper, Gemma, the
 #    render), so the host only serves files. Multithreaded WebAssembly needs the two
@@ -13,7 +15,8 @@ services:
   - type: web
     name: selects-web
     runtime: static
-    buildCommand: npm --prefix src/browser ci && npm --prefix src/browser run build
+    # the review app (web/) built on the in-browser engine (src/browser); see web/vite.config.js
+    buildCommand: npm --prefix src/browser ci && npm --prefix web ci && npm --prefix web run build:web
     staticPublishPath: ./dist-web
     envVars:
       # the proxy's public URL, baked into the page at build time

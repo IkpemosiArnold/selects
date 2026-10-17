@@ -2,6 +2,7 @@
 // review, sent only when the person asked for it and the tab is in the
 // background. Works the same against the local server and the in-browser engine.
 import { useEffect, useRef, useState } from "react";
+import { api } from "./api.js";
 
 const KEY = (id) => `selects-notify-${id}`;
 
@@ -28,7 +29,8 @@ export function useNotifyOptIn(jobId) {
       return;
     }
     let p = Notification.permission;
-    if (p === "default") p = await Notification.requestPermission();
+    // the browser engine asks through its own helper (iOS allows it only for an installed app)
+    if (p === "default") p = api.browser && api.enableNotifications ? ((await api.enableNotifications()) ? "granted" : Notification.permission) : await Notification.requestPermission();
     if (p !== "granted") {
       setDenied(true);
       return;
@@ -43,7 +45,7 @@ export function useNotifyOptIn(jobId) {
 export function useDoneNotice(job) {
   const last = useRef(job?.stage);
   useEffect(() => {
-    if (!job) return;
+    if (!job || api.browser) return; // the browser engine sends its own notice when the clips are ready
     const was = last.current;
     last.current = job.stage;
     const working = ["queued", "probing", "language", "transcribing", "candidates", "judging", "rendering"];

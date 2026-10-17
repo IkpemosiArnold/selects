@@ -234,7 +234,7 @@ const Sheet = forwardRef(function Sheet({ clip, line, total, waiting, onNudge, o
           </div>
           <div className="tools">
             <button type="button" className="tool" onClick={onTrim}>Trim by words</button>
-            <button type="button" className="tool" onClick={onBlur}>{blurText || "Blur faces or an area"}</button>
+            {onBlur && <button type="button" className="tool" onClick={onBlur}>{blurText || "Blur faces or an area"}</button>}
             <a className="tool is-link" href={`#/job/${jobId}/captions`}>{captionsOn ? "Fix caption words" : "Captions are off. Turn them on"}</a>
           </div>
           <div className="sheet-where">
