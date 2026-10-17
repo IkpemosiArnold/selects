@@ -455,7 +455,13 @@ async function runStages(id, { deps = {}, signal } = {}) {
     job.estimate = jobEstimate(job);
     save();
     emit(id, "estimate", job.estimate);
-    if (job.stages.transcribe.status !== "done") checkDisk(diskNeed({ duration: job.source.duration }), "transcribing this video");
+    if (job.stages.transcribe.status !== "done") {
+      try {
+        checkDisk(diskNeed({ duration: job.source.duration }), "transcribing this video");
+      } catch (e) {
+        throw Object.assign(e, { stage: "transcribe", keepStage: true }); // the probe stays done
+      }
+    }
 
     const audioStream = job.source.audioStreams?.[0]?.index ?? null;
 

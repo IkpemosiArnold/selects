@@ -192,3 +192,27 @@ test("a job records its estimate after the probe, and the judge count it used", 
   assert.equal(job.settings.judgeN, job.judgeN.n, "the count it used is kept for estimates and reruns");
   assert.ok(job.judgeN.n >= 12 + 3);
 });
+
+test("a full disk before transcription stops the job without undoing the probe", async () => {
+  const fsMod = (await import("node:fs")).default;
+  const real = fsMod.statfsSync;
+  fsMod.statfsSync = (p, o) => ({ ...real(p, o), bavail: 10 });
+  try {
+    const j = createJob(video, { k: 3, model: "mock", qualityGate: false });
+    const out = await runJob(j.id, { deps: analyse });
+    assert.equal(out.stage, "error");
+    assert.equal(out.error.code, "disk_full");
+    assert.equal(out.error.stage, "transcribe");
+    assert.equal(out.stages.probe.status, "done", "resuming does not read the video again");
+    assert.match(out.error.message, /Not enough free disk space for transcribing this video/);
+  } finally {
+    fsMod.statfsSync = real;
+  }
+});
+
+test("an ffmpeg that runs out of disk says so, even when its output is not kept", async () => {
+  const { run } = await import("./util.mjs");
+  const err = await run("sh", ["-c", "echo 'av_interleaved_write_frame(): No space left on device' >&2; exit 1"], { keepOutput: false }).catch((e) => e);
+  assert.match(err.message, /No space left on device/);
+  assert.ok(isDiskFull(err));
+});

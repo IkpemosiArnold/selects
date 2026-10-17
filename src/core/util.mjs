@@ -29,7 +29,8 @@ export function run(cmd, args, { onStdout, onStderr, signal, allowFail = false, 
     });
     child.stderr.on("data", (d) => {
       const s = d.toString();
-      if (keepOutput) stderr = (stderr + s).slice(-20000);
+      // the tail is always kept: it is what the error message quotes ("No space left on device")
+      stderr = (stderr + s).slice(keepOutput ? -20000 : -4000);
       onStderr?.(s);
     });
     child.on("error", reject);
