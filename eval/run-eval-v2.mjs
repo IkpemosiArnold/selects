@@ -306,6 +306,14 @@ async function evaluate(v, C, P, phase) {
   const ship = out.top["shipped@16"]?.picks;
   const ffile = join(CACHE, v.id, "v2", "faithful.json");
   if (ship?.length && (REPORT_ONLY || phase !== "gemini")) out.faithful = readJson(ffile);
+  // the sentence before and after each pick, so a person can judge the check
+  if (out.faithful) {
+    const sents = C.toSentences(P.words);
+    for (const f of out.faithful) {
+      f.before ??= [...sents].reverse().find((x) => x.e <= f.start + 0.05)?.text ?? null;
+      f.after ??= sents.find((x) => x.s >= f.end - 0.05)?.text ?? null;
+    }
+  }
   else if (ship?.length) {
     const fdir = join(CACHE, v.id, "v2", "judge");
     const full = ship.map((p) => windows.find((w) => w.id === p.id));
@@ -538,8 +546,8 @@ async function main() {
     writeJson(join(OUT, "prefer-pairs.json"), pairs);
     cutPairAudio(pairs, manifest);
     log(`${pairs.length} preference pairs written`);
-    writeFaithfulReview(evals);
   }
+  writeFaithfulReview(evals);
   writeOut(evals, excluded);
   log("done");
 }
@@ -588,7 +596,7 @@ function writeFaithfulReview(evals) {
   writeJson(join(OUT, "faithful-sample.json"), sample);
   const L = ["# Faithful cuts: is the check right?", "", "For each clip, read the quote and decide whether it, cut out on its own, still says what the speaker meant. Then fill in the last line with **right** (the check's verdict is correct) or **wrong**. The check's verdict is shown so you can judge it; try to decide what you think first.", ""];
   sample.forEach((f, i) => {
-    L.push(`## ${i + 1}. ${f.title} (${mmss(f.start)} to ${mmss(f.end)})`, "", `> ${f.text}`, "", `Check says: **${f.verdict}**${f.issue ? ` (${f.issue})` : ""}${f.note ? `: ${f.note}` : ""}`, "", "Your mark (right or wrong): ", "");
+    L.push(`## ${i + 1}. ${f.title} (${mmss(f.start)} to ${mmss(f.end)})`, "", f.before ? `Just before (not in the clip): *${f.before}*` : "", "", `> ${f.text}`, "", f.after ? `Just after (not in the clip): *${f.after}*` : "", "", `Check says: **${f.verdict}**${f.issue ? ` (${f.issue})` : ""}${f.note ? `: ${f.note}` : ""}`, "", "Your mark (right or wrong): ", "");
   });
   writeFileSync(join(OUT, "faithful-review.md"), L.join("\n"));
 }

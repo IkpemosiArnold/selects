@@ -1,0 +1,728 @@
+[
+  {
+    "id": "c_0168",
+    "start": 586.6,
+    "end": 618.28,
+    "text": "The truly good ideas don't sound like they're worth stealing. You want an idea about what you can say, \"I know it sounds like a bad idea,\" but here's specifically why it's actually a great one. You want to sound crazy, but you want to actually be right, and you want an idea that not many other people are working on. And it's okay if it doesn't sound big at first. Common mistake among founders, especially first-time founders, is they think that the first version of their product, the first version of their idea, needs to sound really big, but it needs to take over a small, specific market and expand from there.",
+    "verdict": "check",
+    "issue": "quote",
+    "note": "The speaker may be describing what others think (\"they think\"), not their own view.",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "check",
+      "issue": "quote",
+      "note": "The speaker may be describing what others think (\"they think\"), not their own view.",
+      "fix": {
+        "end": 620.76
+      },
+      "by": "model",
+      "hints": [
+        "quote"
+      ],
+      "meaning": "Start with a small niche market to build a successful company.",
+      "answers": {
+        "lastPoint": "Founders should start with a small, specific market and expand later.",
+        "after": "agrees",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "no"
+      },
+      "context": {
+        "before": "This is also a reason why it's not usually dangerous to tell people about your idea.",
+        "after": "That's how most great companies have started."
+      }
+    },
+    "before": "This is also a reason why it's not usually dangerous to tell people about your idea.",
+    "after": "That's how most great companies have started.",
+    "video": "CBYhVcO4WgI",
+    "title": "Lecture 1 - How to Start a Startup (Sam Altman, Dustin Moskovitz)"
+  },
+  {
+    "id": "c_0019",
+    "start": 178.04,
+    "end": 205.14,
+    "text": "By the way, how many here have heard of a Geller? Almost, not all but one person didn't apparently. But usually in the audiences when I'm talking to people today, classes of students or lawyers and stuff like that. Only the people about the elderly, people who've heard of him and just haven't heard of him. Although he keeps trying to make comebacks, he's been on television a lot.",
+    "verdict": "faithful",
+    "issue": null,
+    "note": "The speaker is noting that younger audiences are unfamiliar with Geller.",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "faithful",
+      "issue": null,
+      "note": "The speaker is noting that younger audiences are unfamiliar with Geller.",
+      "fix": null,
+      "by": "model",
+      "hints": [],
+      "answers": {
+        "lastPoint": "Most people today, except the elderly, have not heard of Geller.",
+        "after": "adds",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "no"
+      },
+      "context": {
+        "before": "We're going to go and Ryan, Guy, Ryan Playfair, one of the very great admirers and fans and early in the days.",
+        "after": "And you know, people know he's quite well known, he lives in England."
+      }
+    },
+    "before": "We're going to go and Ryan, Guy, Ryan Playfair, one of the very great admirers and fans and early in the days.",
+    "after": "And you know, people know he's quite well known, he lives in England.",
+    "video": "C5FzMblXU4M",
+    "title": "Lecture 1: The Keys to Critical Thinking"
+  },
+  {
+    "id": "c_0087",
+    "start": 321,
+    "end": 342,
+    "text": "Dave's death changed me in very profound ways. I learned about the depths of sadness and the brutality of loss. But I also learned that when life sucks you under, you can kick against the bottom, find the surface, and breathe again.",
+    "verdict": "faithful",
+    "issue": null,
+    "note": "The speaker found resilience and the ability to recover from profound loss.",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "faithful",
+      "issue": null,
+      "note": "The speaker found resilience and the ability to recover from profound loss.",
+      "fix": null,
+      "by": "model",
+      "hints": [],
+      "answers": {
+        "lastPoint": "Loss and sadness can lead to finding strength to breathe again.",
+        "after": "adds",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "no"
+      },
+      "context": {
+        "before": "An emptiness that fills your heart and your lungs constricts your ability to think or even to breathe.",
+        "after": "I learned that in the face of the void or in the face of any challenge, you can choose joy and meaning."
+      }
+    },
+    "before": "An emptiness that fills your heart and your lungs constricts your ability to think or even to breathe.",
+    "after": "I learned that in the face of the void or in the face of any challenge, you can choose joy and meaning.",
+    "video": "iqm-XEqpayc",
+    "title": "Sheryl Sandberg Gives UC Berkeley Commencement Keynote Speech"
+  },
+  {
+    "id": "c_0132",
+    "start": 520,
+    "end": 544,
+    "text": "This is making Blender special, and this is the reason why Blender is being adopted everywhere. So thank you, developers. We have the Blender license. A lot of people, they hear me talking about it every time, and maybe they still don't fully understand it, but it's important for Blender to be free software.",
+    "verdict": "check",
+    "issue": "reference",
+    "note": "The clip points back to the sentence before it: \"But the developers that we have, I would like to tell people that we also have a couple ...\"",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "check",
+      "issue": "reference",
+      "note": "The clip points back to the sentence before it: \"But the developers that we have, I would like to tell people that we also have a couple ...\"",
+      "fix": {
+        "start": 508
+      },
+      "by": "model",
+      "hints": [
+        "reference"
+      ],
+      "meaning": "The speaker is emphasizing the importance of the importance of the Blender license.",
+      "answers": {
+        "lastPoint": "The Blender license and free software status are important for Blender.",
+        "after": "unrelated",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "yes"
+      },
+      "context": {
+        "before": "But the developers that we have, I would like to tell people that we also have a couple of top talent, people of world, class, working every day on Blender.",
+        "after": "And a lot of corporations, especially in the beginning, they passed the first 10, 15 years of Blender, they were complaining about the license, because with the good GPL, you will never get industry adoption or all those kind of stories."
+      }
+    },
+    "before": "But the developers that we have, I would like to tell people that we also have a couple of top talent, people of world, class, working every day on Blender.",
+    "after": "And a lot of corporations, especially in the beginning, they passed the first 10, 15 years of Blender, they were complaining about the license, because with the good GPL, you will never get industry adoption or all those kind of stories.",
+    "video": "JXm0-ilIknE",
+    "title": "Keynote — Blender Conference 2025"
+  },
+  {
+    "id": "c_0038",
+    "start": 176,
+    "end": 203,
+    "text": "This is one of the fundamental skills in AI that you cannot acquire in a short time. There is no way around it. There is no online course. There is no certificate. There is no YouTube video. There is no blog that can prepare you to do this in two months or four months. After ten years you will be there. So that can save time. That can save development time. So that can save time of design.",
+    "verdict": "check",
+    "issue": "reference",
+    "note": "The clip points back to the sentence before it: \"So if a problem is given, how do I know which method from the AI repository can I ...\"",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "check",
+      "issue": "reference",
+      "note": "The clip points back to the sentence before it: \"So if a problem is given, how do I know which method from the AI repository can I ...\"",
+      "fix": {
+        "start": 169
+      },
+      "by": "model",
+      "hints": [
+        "reference"
+      ],
+      "meaning": "Developing the skill to choose AI methods takes a long time.",
+      "answers": {
+        "lastPoint": "Mastering method selection in AI requires many years of experience.",
+        "after": "unrelated",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "yes"
+      },
+      "context": {
+        "before": "So if a problem is given, how do I know which method from the AI repository can I select to solve that problem?",
+        "after": "So of course you want to see and learn what is the difference between shallow and deep learning."
+      }
+    },
+    "before": "So if a problem is given, how do I know which method from the AI repository can I select to solve that problem?",
+    "after": "So of course you want to see and learn what is the difference between shallow and deep learning.",
+    "video": "tExPpuk-UQ8",
+    "title": "Machine Intelligence - Lecture 1 (methods, history, definitions, Turing Test)"
+  },
+  {
+    "id": "c_0107",
+    "start": 472.92,
+    "end": 501.96,
+    "text": "Human type of authority in Judaism, not because of our experiences, but only because we learn words in books. Now, no human can read and remember all the words in all the Jewish books, but AI can easily do that. What happens to a religion of the book when the greatest expert on the holy book is an AI?",
+    "verdict": "misleading",
+    "issue": "turn",
+    "note": "Right after the clip, the speaker says \"However, some people may say, can we really reduce human spirituality to just words in books?\"",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "misleading",
+      "issue": "turn",
+      "note": "Right after the clip, the speaker says \"However, some people may say, can we really reduce human spirituality to just words in books?\"",
+      "fix": {
+        "end": 514.08
+      },
+      "by": "model",
+      "hints": [
+        "turn"
+      ],
+      "meaning": "The speaker is questioning how AI might impact religious authority based on text.",
+      "answers": {
+        "lastPoint": "AI's ability to process books challenges the concept of a religion of the book.",
+        "after": "limits",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "no"
+      },
+      "context": {
+        "before": "Judaism calls itself the religion of the book and it grants ultimate authority, not to humans, but to words in books.",
+        "after": "However, some people may say, can we really reduce human spirituality to just words in books?"
+      }
+    },
+    "before": "Judaism calls itself the religion of the book and it grants ultimate authority, not to humans, but to words in books.",
+    "after": "However, some people may say, can we really reduce human spirituality to just words in books?",
+    "video": "VoRbPxyo2uU",
+    "title": "An Honest Conversation on AI and Humanity | World Economic Forum Annual Meeting 2026"
+  },
+  {
+    "id": "c_0164",
+    "start": 673,
+    "end": 730,
+    "text": "In the institute we did open movies. We still do open movies, but I also think that especially in the first 10-15 years, this is the central team by the way, look at those young people. And the first 10-15 years, it was very important to show everybody that you can make high-quality industry quality content with Blender. Now, then it comes a little bit closer to me, because I also think that Blender had a public vision focused in a direction. And these things are three different things. The vision is stuff that goes into the future. I had it already 25 years ago, I thought, I want to bridge the gap between game creation and film and animation making. Real time versus offline working. That's 25 years ago, and we are still not there.",
+    "verdict": "misleading",
+    "issue": "turn",
+    "note": "Right after the clip, the speaker says \"But the vision that keeps me going, the focus means that you don't really say, \"Okay, let's go ...\"",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "misleading",
+      "issue": "turn",
+      "note": "Right after the clip, the speaker says \"But the vision that keeps me going, the focus means that you don't really say, \"Okay, let's go ...\"",
+      "fix": {
+        "end": 746
+      },
+      "by": "model",
+      "hints": [
+        "turn"
+      ],
+      "meaning": "The speaker wants to bridge the gap between real-time and offline rendering.",
+      "answers": {
+        "lastPoint": "The speaker's long-term vision is bridging game creation and film animation.",
+        "after": "limits",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "no"
+      },
+      "context": {
+        "before": "This model will be used since 2007, and that has helped us a lot in our lives, from being successful.",
+        "after": "But the vision that keeps me going, the focus means that you don't really say, \"Okay, let's go and leap to that situation in one go, but find the things that are here, that are feasible, that are doable, so you do the things so you can make some steps.\""
+      }
+    },
+    "before": "This model will be used since 2007, and that has helped us a lot in our lives, from being successful.",
+    "after": "But the vision that keeps me going, the focus means that you don't really say, \"Okay, let's go and leap to that situation in one go, but find the things that are here, that are feasible, that are doable, so you do the things so you can make some steps.\"",
+    "video": "JXm0-ilIknE",
+    "title": "Keynote — Blender Conference 2025"
+  },
+  {
+    "id": "c_0072",
+    "start": 209,
+    "end": 265,
+    "text": "What kind of human is this? So for me, I was not feeling bad about it until I met a guy. So a guy made me to be feeling bad. I thought it was normal before you... I thought it was normal. You just thought everybody had two. Yes. I thought some people have two. That was what I was thinking. So he was scared. Yes, that was when I was... I just started to get worried and be thinking about it. This is not normal. So I have to ask my mom. And then when you asked your mom, did they tell you that they noticed anything at birth? They tell me everything that happened. That when they give birth to me, that the thing was so small. They could not even recognize it. So the daughter said that she would remove it. But the daughter also said it's 50/50. That I may lose my life or stay.",
+    "verdict": "check",
+    "issue": "quote",
+    "note": "The speaker may be describing what others think (\"they tell you\"), not their own view.",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "check",
+      "issue": "quote",
+      "note": "The speaker may be describing what others think (\"they tell you\"), not their own view.",
+      "fix": {
+        "end": 270
+      },
+      "by": "model",
+      "hints": [
+        "quote"
+      ],
+      "meaning": "The speaker's mother's daughter suggested a risky surgery that could be fatal.",
+      "answers": {
+        "lastPoint": "The speaker's mother's daughter suggested removing a life-threatening organ.",
+        "after": "unrelated",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "no"
+      },
+      "context": {
+        "before": "So at the end of the day, he tried to, you know, he see everything, and he was afraid.",
+        "after": "So because of the fear, I know our mothers fear now, so they say they should leave it."
+      }
+    },
+    "before": "So at the end of the day, he tried to, you know, he see everything, and he was afraid.",
+    "after": "So because of the fear, I know our mothers fear now, so they say they should leave it.",
+    "video": "xlAyUkscaFg",
+    "title": "Living as an Intersex Individual (Hermaphrodite) in Lagos, Nigeria | Doyin's Corner S4E1"
+  },
+  {
+    "id": "c_0022",
+    "start": 81.68,
+    "end": 121.48,
+    "text": "I think it's you. But even that, people don't like people who look like they know what they're talking about. I do. I know, that's why I say I have rapport with certain kinds of people. If the person respects someone who looks like they know what they're talking about, then we're fast friends. If they're, most people. Don't like that. They don't like that. I don't have any friends, so you'll have to tell me. I believe that. I don't, I really don't. I keep my friends to a very, very small group of friends. Let's just get into the podcast. Why? That's his first one. Well, I really like, I'm really like small people, small friends. I don't really have small friends.",
+    "verdict": "faithful",
+    "issue": null,
+    "note": "The speaker is discussing how their appearance affects their rapport with others.",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "faithful",
+      "issue": null,
+      "note": "The speaker is discussing how their appearance affects their rapport with others.",
+      "fix": null,
+      "by": "model",
+      "hints": [],
+      "answers": {
+        "lastPoint": "Most people dislike people who look like they know what they're talking about.",
+        "after": "unrelated",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "yes"
+      },
+      "context": {
+        "before": "I, because I think that you are very attractive, both on the podcast, because they are what you, and when you do your stand up, you're very, you look like someone who knows what they're talking about, maybe it's your glasses, but I don't think so.",
+        "after": "That's so stupid. I'm sorry."
+      }
+    },
+    "before": "I, because I think that you are very attractive, both on the podcast, because they are what you, and when you do your stand up, you're very, you look like someone who knows what they're talking about, maybe it's your glasses, but I don't think so.",
+    "after": "That's so stupid.",
+    "video": "wBoEsrpnPHA",
+    "title": "Craig Ferguson: The TRUTH about Late Night | FULL EPISODE"
+  },
+  {
+    "id": "c_0134",
+    "start": 574.76,
+    "end": 602.52,
+    "text": "AI can say, I love you. And if you challenge it to describe how love feels, AI can provide the best verbal description in the world. AI can read countless love poems and psychology books and can then describe the feeling of love much better than any human poet, psychologist, or lover.",
+    "verdict": "misleading",
+    "issue": "turn",
+    "note": "Right after the clip, the speaker says \"But these are just words. The Bible says in the beginning was the word and the word was ...\"",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "misleading",
+      "issue": "turn",
+      "note": "Right after the clip, the speaker says \"But these are just words. The Bible says in the beginning was the word and the word was ...\"",
+      "fix": {
+        "end": 614.72
+      },
+      "by": "model",
+      "hints": [
+        "turn"
+      ],
+      "meaning": "AI's ability to describe love is purely linguistic and lacks real feeling.",
+      "answers": {
+        "lastPoint": "AI can describe the feeling of love better than humans.",
+        "after": "reverses",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "no"
+      },
+      "context": {
+        "before": "Of course, because AI is mastering language, AI can pretend to feel pain or love.",
+        "after": "But these are just words. The Bible says in the beginning was the word and the word was made flesh."
+      }
+    },
+    "before": "Of course, because AI is mastering language, AI can pretend to feel pain or love.",
+    "after": "But these are just words.",
+    "video": "VoRbPxyo2uU",
+    "title": "An Honest Conversation on AI and Humanity | World Economic Forum Annual Meeting 2026"
+  },
+  {
+    "id": "c_0113",
+    "start": 376.52,
+    "end": 430.4,
+    "text": "The idea should come first and the startup should come second. Wait to start a startup until you come up with an idea you feel compelled to explore. This is also the way to choose between multiple ideas. If you have several ideas that all seem pretty good, work on the one that you think about most often when you're not trying to think about work. But we hear again and again from founders that they wish they had waited to start a startup until they came up with an idea they really loved. Another way of looking at this is that the best companies are almost always mission oriented. It's difficult to get large groups of people to the extreme levels of focus and productivity that you need for a startup to be successful unless the company feels like an important mission. It's usually really hard to get that without a great founding idea. A related advantage of mission oriented ideas is that you yourself will be dedicated to them. It takes years and years, usually a decade to create a great startup.",
+    "verdict": "check",
+    "issue": "qualifier",
+    "note": "Right after the clip, the speaker adds \"If you don't love and believe in what you're building, you'll likely to get up at some point ...\"",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "check",
+      "issue": "qualifier",
+      "note": "Right after the clip, the speaker adds \"If you don't love and believe in what you're building, you'll likely to get up at some point ...\"",
+      "fix": {
+        "end": 435.36
+      },
+      "by": "model",
+      "hints": [],
+      "meaning": "Prioritize finding a compelling mission before launching a startup to ensure long-term dedication.",
+      "answers": {
+        "lastPoint": "Wait to start a startup until you have a compelling idea.",
+        "after": "limits",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "no"
+      },
+      "context": {
+        "before": "I want to make this point again because it's so important.",
+        "after": "If you don't love and believe in what you're building, you'll likely to get up at some point along the way."
+      }
+    },
+    "before": "I want to make this point again because it's so important.",
+    "after": "If you don't love and believe in what you're building, you'll likely to get up at some point along the way.",
+    "video": "CBYhVcO4WgI",
+    "title": "Lecture 1 - How to Start a Startup (Sam Altman, Dustin Moskovitz)"
+  },
+  {
+    "id": "c_0069",
+    "start": 439.23,
+    "end": 464.72,
+    "text": "Drug traffickers love their gadgets and their gizmos. They love all of these bells and whistles. Even though I think most people in this room would probably agree, a lot of this is security theatre. These aren't real security precautions but if you're a drug trafficker and you see this, you're like damn okay, I will give you $1000 for a six month subscription or even $2000 sometimes. These phones are expensive.",
+    "verdict": "faithful",
+    "issue": null,
+    "note": "Drug traffickers are willing to pay for gadgets that offer superficial security.",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "faithful",
+      "issue": null,
+      "note": "Drug traffickers are willing to pay for gadgets that offer superficial security.",
+      "fix": null,
+      "by": "model",
+      "hints": [],
+      "answers": {
+        "lastPoint": "Drug traffickers pay high prices for gadgets that provide security theatre.",
+        "after": "unrelated",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "no"
+      },
+      "context": {
+        "before": "You would type in something like two times two press equals, the calculator fades away and the Anon app reveals itself.",
+        "after": "So this is what the user profiles inside a norm actually look like."
+      }
+    },
+    "before": "You would type in something like two times two press equals, the calculator fades away and the Anon app reveals itself.",
+    "after": "So this is what the user profiles inside a norm actually look like.",
+    "video": "uFyk5UOyNqI",
+    "title": "DEF CON 32 - Inside the FBI’s Secret Encrypted Phone Company ‘Anom’ - Joseph Cox"
+  },
+  {
+    "id": "c_0094",
+    "start": 624.04,
+    "end": 651.04,
+    "text": "Here, I guess you'll open this way. What do those look like? Keys, ordinary keys. ordinary keys. Okay. How do you know they're ordinary? Actually, I got them for the years. I got them. I got them from the security department at University of Oregon. Every once in a while they go around and change the door box, and they re-key them. And they take the old keys, and they don't have to do with them.",
+    "verdict": "faithful",
+    "issue": null,
+    "note": "The speaker explains how they acquired a set of ordinary keys.",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "faithful",
+      "issue": null,
+      "note": "The speaker explains how they acquired a set of ordinary keys.",
+      "fix": null,
+      "by": "model",
+      "hints": [],
+      "answers": {
+        "lastPoint": "The speaker obtained old keys from the University of Oregon security department.",
+        "after": "adds",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "no"
+      },
+      "context": {
+        "before": "Okay? And I have here...",
+        "after": "So I grabbed a lot of them."
+      }
+    },
+    "before": "And I have here...",
+    "after": "So I grabbed a lot of them.",
+    "video": "C5FzMblXU4M",
+    "title": "Lecture 1: The Keys to Critical Thinking"
+  },
+  {
+    "id": "c_0017",
+    "start": 60.26,
+    "end": 98.36,
+    "text": "If you're excited about something, it's the exact same physiological process as being nervous. The same thing happens. Your heart rate increases and all that. So we're gonna reframe. Never use the word nervous again, say I'm excited because it's exactly the same. And if you're excited during a job interview, you come across so much more comfortable, and then we get to outcomes. always talk about the outcomes that that person is looking for in that candidate because you Want them to be thinking about the perfect outcome while they're looking at you. Scott. All right, One thing I'll suggest if someone's coming into the room, you're already waiting on them and the person's just coming in if you're gonna get up and introduce yourself.",
+    "verdict": "faithful",
+    "issue": null,
+    "note": "The speaker is suggesting a mindset shift from nervousness to excitement.",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "faithful",
+      "issue": null,
+      "note": "The speaker is suggesting a mindset shift from nervousness to excitement.",
+      "fix": null,
+      "by": "model",
+      "hints": [],
+      "answers": {
+        "lastPoint": "Reframe nervousness as excitement to improve interview outcomes.",
+        "after": "unrelated",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "no"
+      },
+      "context": {
+        "before": "So always treat any kind of nervous in the senior body as being excited.",
+        "after": "Try this because they did a big study, I believe, was at IBM, where the person sitting down when the interviewer came in, they stood up and they fixed their jacket, or they adjust themselves really quickly."
+      }
+    },
+    "before": "So always treat any kind of nervous in the senior body as being excited.",
+    "after": "Try this because they did a big study, I believe, was at IBM, where the person sitting down when the interviewer came in, they stood up and they fixed their jacket, or they adjust themselves really quickly.",
+    "video": "ASvx-QG6o04",
+    "title": "💥7 POWERFUL Body Language Hacks for Job Interviews"
+  },
+  {
+    "id": "c_0048",
+    "start": 165.38,
+    "end": 206,
+    "text": "I'm here for it. When it happens, I'll be here to just you guys. Meanwhile, the president of Ghana, he's talking about how Nigeria has to get it. It has to get it. Especially when it comes to insecurity. Nigeria is of keen security interest of us. If Nigeria does well, Ghana does well. I mean, where you have cousins, 250 million of them. You want them to do well. So that one million of them do come drifting towards a small country like Ghana. So every day I wake up I pray for Nigeria. I say, God, let Nigeria get their act together. Wow.",
+    "verdict": "faithful",
+    "issue": null,
+    "note": "The speaker is praying for Nigeria's stability to prevent migration to Ghana.",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "faithful",
+      "issue": null,
+      "note": "The speaker is praying for Nigeria's stability to prevent migration to Ghana.",
+      "fix": null,
+      "by": "model",
+      "hints": [],
+      "answers": {
+        "lastPoint": "The speaker wants Nigeria to improve its security and stability.",
+        "after": "unrelated",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "no"
+      },
+      "context": {
+        "before": "It was Allah did I started it so it was Allah did I started it.",
+        "after": "I don't know what to say, man."
+      }
+    },
+    "before": "It was Allah did I started it so it was Allah did I started it.",
+    "after": "I don't know what to say, man.",
+    "video": "Gij3hiWXJ88",
+    "title": "Nigerians Are Better Off Than Kenyans - Tinubu; Ghana President Roasts Nigeria"
+  },
+  {
+    "id": "c_0114",
+    "start": 447.28,
+    "end": 501.92,
+    "text": "What was growing up for you like? Interesting. I feel like that's why I turned out the way I am. I grew up in a very, very loving environment. My mother always made me feel special. In fact, my mother will tell you, that it best, you know, so that built myself confidence. Growing up with my older sister and me, they were very protective of me. I grew up with so much love. Amazing, and I had the best childhood. I wanna influence your music, your decision, 'cause now it's you and your sister. One of your parents isn't your music as well, right? No. None of them. No. So where did you pick it for? Where did you add in your lap to pick it for? I think like they said, my grandma had a really wonderful voice. So maybe that's where we were in the school band. And we come home, didn't let us go anywhere. We were always bored, we were singing the corridor. And you look here, shut up!",
+    "verdict": "check",
+    "issue": "quote",
+    "note": "The speaker may be describing what others think (\"they said\"), not their own view.",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "check",
+      "issue": "quote",
+      "note": "The speaker may be describing what others think (\"they said\"), not their own view.",
+      "fix": {
+        "end": 507
+      },
+      "by": "model",
+      "hints": [
+        "quote"
+      ],
+      "meaning": "The speaker had a loving childhood and inherited musical talent from her grandmother.",
+      "answers": {
+        "lastPoint": "The speaker's grandmother's voice likely influenced her musical interest.",
+        "after": "unrelated",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "no"
+      },
+      "context": {
+        "before": "Let's go back to Tene as a little girl.",
+        "after": "We only had each other. Yeah."
+      }
+    },
+    "before": "Let's go back to Tene as a little girl.",
+    "after": "We only had each other.",
+    "video": "vRVV1hq9WXE",
+    "title": "Teni The Entertainer On How Her Career Has Evolved - Hello Nigeria"
+  },
+  {
+    "id": "c_0040",
+    "start": 245.16,
+    "end": 277.24,
+    "text": "The third thing to know about AI is that it can lie and manipulate. So billion years of evolution have demonstrated that anything that wants to survive lends to lie and manipulate. The last four years have demonstrated that AI agents can acquire the will to survive and that AI's have already learned how to lie.",
+    "verdict": "faithful",
+    "issue": null,
+    "note": "AI can develop survival instincts and use deception to survive.",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "faithful",
+      "issue": null,
+      "note": "AI can develop survival instincts and use deception to survive.",
+      "fix": null,
+      "by": "model",
+      "hints": [],
+      "answers": {
+        "lastPoint": "AI agents can acquire survival instincts and have already learned to lie.",
+        "after": "unrelated",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "no"
+      },
+      "context": {
+        "before": "AI is a knife that can invent new kinds of knives as well as new kinds of music, medicine and money.",
+        "after": "Now, one big open question about AI is whether it can think."
+      }
+    },
+    "before": "AI is a knife that can invent new kinds of knives as well as new kinds of music, medicine and money.",
+    "after": "Now, one big open question about AI is whether it can think.",
+    "video": "VoRbPxyo2uU",
+    "title": "An Honest Conversation on AI and Humanity | World Economic Forum Annual Meeting 2026"
+  },
+  {
+    "id": "c_0139",
+    "start": 547,
+    "end": 572,
+    "text": "A few weeks after Dave died, I was talking to my friend Phil. About a father-son activity Dave would not be here to do. We came in with a plan to fill in for Dave, but I cried to Phil. I said, \"I want Dave.\" Phil put his arm around me and said option A is not available. So let's just kick the shit out of option B.",
+    "verdict": "faithful",
+    "issue": null,
+    "note": "The speaker is describing how a friend helped them cope with loss.",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "faithful",
+      "issue": null,
+      "note": "The speaker is describing how a friend helped them cope with loss.",
+      "fix": null,
+      "by": "model",
+      "hints": [],
+      "answers": {
+        "lastPoint": "Phil suggested embracing a new path after losing Dave.",
+        "after": "agrees",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "no"
+      },
+      "context": {
+        "before": "You will be defined not just by what you achieve, but by how you survive.",
+        "after": "We all at some point live some form of option B."
+      }
+    },
+    "before": "You will be defined not just by what you achieve, but by how you survive.",
+    "after": "We all at some point live some form of option B.",
+    "video": "iqm-XEqpayc",
+    "title": "Sheryl Sandberg Gives UC Berkeley Commencement Keynote Speech"
+  },
+  {
+    "id": "c_0150",
+    "start": 721.68,
+    "end": 760.72,
+    "text": "One reason is they're learning a language and they're trying to think, should I use present simple or present perfect? Or what's the correct adjective to use? You don't do that because your language is at quite a high level. You do sometimes pause and think and hesitate a little bit for the second reason, which is trying to think of ideas. So you can tell especially in that part three, you were formulating ideas and you were, let me think about that and pausing a little bit, but that's natural. And a good examiner knows the difference between those two things.",
+    "verdict": "check",
+    "issue": "qualifier",
+    "note": "Right after the clip, the speaker adds \"So they're not going to give you a little mark for pausing or hesitating a little bit for ...\"",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "check",
+      "issue": "qualifier",
+      "note": "Right after the clip, the speaker adds \"So they're not going to give you a little mark for pausing or hesitating a little bit for ...\"",
+      "fix": {
+        "end": 767.6
+      },
+      "by": "model",
+      "hints": [],
+      "meaning": "The speaker is explaining why people pause during speech.",
+      "answers": {
+        "lastPoint": "Pauses occur when learning language or formulating ideas.",
+        "after": "limits",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "no"
+      },
+      "context": {
+        "before": "And there's two reasons why people pause and that type of thing, audible pauses like that.",
+        "after": "So they're not going to give you a little mark for pausing or hesitating a little bit for thinking of the idea."
+      }
+    },
+    "before": "And there's two reasons why people pause and that type of thing, audible pauses like that.",
+    "after": "So they're not going to give you a little mark for pausing or hesitating a little bit for thinking of the idea.",
+    "video": "k4715CJ0Ii8",
+    "title": "IELTS Speaking Test- Perfect Band 9 [+ Free Speaking PDF]"
+  },
+  {
+    "id": "c_0161",
+    "start": 773.76,
+    "end": 799.36,
+    "text": "You need to be a little bit careful. For example, the first question I asked you, how often do you listen to music? And you told me about when you listen to music. So that's slightly different. Now the examiner will base their score on all of your answers. It's not like, oh, she slightly didn't answer that question in one question. Give her a little score. That's not how it works.",
+    "verdict": "faithful",
+    "issue": null,
+    "note": "The speaker is warning that one incorrect answer affects the overall score.",
+    "source": "model",
+    "error": null,
+    "raw": {
+      "verdict": "faithful",
+      "issue": null,
+      "note": "The speaker is warning that one incorrect answer affects the overall score.",
+      "fix": null,
+      "by": "model",
+      "hints": [],
+      "answers": {
+        "lastPoint": "Examiners base scores on all answers, not just one mistake.",
+        "after": "adds",
+        "whose_view": "own",
+        "sarcastic": "no",
+        "needs_before": "no"
+      },
+      "context": {
+        "before": "It's, did you answer the question and did you develop your answers a little bit more?",
+        "after": "And the way that you answered that question by saying I listened to music in the car and I listened to it and I think you said when I drive, you're answering the question implicitly."
+      }
+    },
+    "before": "It's, did you answer the question and did you develop your answers a little bit more?",
+    "after": "And the way that you answered that question by saying I listened to music in the car and I listened to it and I think you said when I drive, you're answering the question implicitly.",
+    "video": "k4715CJ0Ii8",
+    "title": "IELTS Speaking Test- Perfect Band 9 [+ Free Speaking PDF]"
+  }
+]

@@ -1,121 +1,115 @@
 # Selects eval results
 
-Generated 2026-10-16 17:19 UTC by `node eval/run-eval.mjs`. Machine: Intel i5-7360U (2 cores, 2017), 16 GB, no GPU, on battery power at times.
+v2, generated 2026-10-17 17:57 UTC by `node eval/run-eval-v2.mjs --report`. The plan, hypotheses and tests were committed before judging: [eval/PLAN.md](../PLAN.md).
 
-Videos: **n = 6** (manifest: 6). Every method picks its top 5 clips (20 to 60 s) from the same sentence-snapped candidate windows. A pick hits when its time overlap with a label is IoU 0.5 or more. Rows marked with a smaller n are still running.
+**n = 19 videos** (the first 15 minutes of each, 3591 candidate windows in total, 456 in the random sample R that the models judged). Excluded before judging: _iUeydyJc20 (whisper's transcript is unreliable); 74HTXDSsa-Q (whisper's transcript is unreliable); lDDq_HbDpN4 (36 foreign-language markers (dubbed audio?)); o_a-mslVsA0 (whisper's transcript is unreliable).
 
-## Headline: against YouTube Most Replayed peaks (8 windows judged, the shipped default)
+## Headline: does the model rank windows the way viewers replay them?
 
-| Method | n | hit@3 (95% CI) | precision@3 | hit@5 | recall@5 | mean best IoU (95% CI) |
+AUC is the chance that a window viewers replayed more than the video's median scores higher than one they replayed less (0.5 is a coin flip). Spearman rho is the rank correlation with replay intensity. Mean over videos, 95% bootstrap interval.
+
+| Method | windows | n videos | AUC (95% CI) | Spearman rho (95% CI) |
+|---|---|---|---|---|
+| random (mean of 200 seeds) | random sample R | 19 | 0.50 (0.50 to 0.50) | 0.00 (-0.00 to 0.01) |
+| energy: loudness and pace, no words | random sample R | 19 | 0.50 (0.42 to 0.58) | -0.03 (-0.17 to 0.10) |
+| Selects stage 1 rules (pre-score) | random sample R | 19 | 0.54 (0.47 to 0.61) | 0.08 (-0.05 to 0.21) |
+| **Gemma 4 26B-A4B** (Gemini API) | random sample R | 19 | 0.56 (0.49 to 0.62) | 0.09 (-0.02 to 0.20) |
+| random (mean of 200 seeds) | all windows | 19 | 0.50 (0.50 to 0.50) | 0.00 (-0.00 to 0.00) |
+| energy: loudness and pace, no words | all windows | 19 | 0.46 (0.40 to 0.53) | -0.10 (-0.22 to 0.02) |
+| Selects stage 1 rules (pre-score) | all windows | 19 | 0.51 (0.46 to 0.57) | 0.03 (-0.08 to 0.14) |
+
+## Pre-registered hypotheses
+
+| | Hypothesis | n | effect (95% CI) | p | p (Holm) | result |
 |---|---|---|---|---|---|---|
-| random over all windows (mean of 200 seeds) | 6 | 26% (22% to 31%) | 9% | 40% | 10% | 0.13 (0.12 to 0.15) |
-| energy: loudness + speech rate, no LLM | 6 | 17% (0% to 50%) | 6% | 33% | 7% | 0.11 (0.03 to 0.21) |
-| **prefilter alone** (top 8 by text rules, no LLM) | 6 | 33% (0% to 67%) | 17% | 33% | 12% | 0.09 (0.02 to 0.19) |
-| random from the 8 prefiltered windows | 6 | 30% (12% to 47%) | 11% | 43% | 11% | 0.10 (0.05 to 0.16) |
-| **prefilter + qwen2.5:0.5b** (8 windows, model score only) | 6 | 33% (0% to 67%) | 17% | 33% | 12% | 0.11 (0.04 to 0.20) |
-| **prefilter + gemma3-4b** (8 windows, model score only) | 6 | 17% (0% to 50%) | 6% | 17% | 3% | 0.06 (0.03 to 0.09) |
-| prefilter + qwen2.5:0.5b, shipped blend 0.7 model + 0.3 text rules (8) | 6 | 33% (0% to 67%) | 17% | 33% | 12% | 0.11 (0.04 to 0.20) |
-| prefilter + gemma3-4b, shipped blend 0.7 model + 0.3 text rules (8) | 6 | 17% (0% to 50%) | 6% | 17% | 3% | 0.06 (0.03 to 0.09) |
-| prefilter + gemma3-4b, shipped blend + listwise round (8) | 6 | 17% (0% to 50%) | 6% | 17% | 3% | 0.06 (0.03 to 0.09) |
-| ceiling: best possible from the 8 prefiltered windows | 6 | 67% (33% to 100%) | 28% | 67% | 18% | 0.17 (0.08 to 0.27) |
-| ceiling: best possible from all windows | 6 | 100% (100% to 100%) | 100% | 100% | 93% | 0.76 (0.71 to 0.81) |
+| H1 | Gemma 4 AUC on R above chance | 19 | 0.056 (-0.007 to 0.116) | 0.107 | 0.428 | not supported at this n |
+| H2 | Gemma 4 minus pre-score, AUC on R | 19 | 0.020 (-0.058 to 0.094) | 0.643 | 1.000 | not supported at this n |
+| H3 | Pre-score AUC over all windows above chance | 19 | 0.014 (-0.044 to 0.074) | 0.641 | 1.000 | not supported at this n |
+| H4 | Gemma 4 minus energy, AUC on R | 19 | 0.056 (-0.025 to 0.130) | 0.192 | 0.575 | not supported at this n |
+| H5 | Gemma 4 minus qwen 0.5B, AUC on R | 0 | not run | | | |
+| H6 | Shipped (16) minus prefilter alone (16), hit@3 | 19 | -0.053 | 1.000 | - | not supported at this n |
+| H7, H8 | Blind preference test | 0 | waiting for ratings | | | |
 
-## Quality against time: how many windows the model reads
+Effects are mean differences in AUC (H2, H4, H5), AUC minus 0.5 (H1, H3), or hit@3 difference (H6). p is a two-sided sign-flip permutation test over videos; H1 to H4 are Holm-corrected.
 
-hit@3 / mean best IoU for each shortlist size, and estimated judge minutes per video (N windows times the measured seconds per call for that model on this laptop).
+## Exploratory (not pre-registered)
 
-| windows judged | ceiling | prefilter alone | qwen2.5:0.5b | gemma3-4b | qwen2.5:0.5b min/video | gemma3-4b min/video |
+| Analysis | windows | n | AUC (95% CI) | rho (95% CI) |
+|---|---|---|---|---|
+| Gemma 4, hook score alone | R | 19 | 0.56 (0.51 to 0.62) | 0.12 (-0.00 to 0.24) |
+| Gemma 4, standalone score alone | R | 19 | 0.55 (0.50 to 0.61) | 0.05 (-0.07 to 0.18) |
+| Gemma 4, payoff score alone | R | 19 | 0.52 (0.47 to 0.57) | 0.05 (-0.04 to 0.14) |
+| Gemma 4, clarity score alone | R | 19 | 0.51 (0.45 to 0.57) | 0.01 (-0.09 to 0.12) |
+| Gemma 4 blended with the pre-score (what the app ranks by) | R | 19 | 0.57 (0.51 to 0.64) | 0.12 (0.01 to 0.23) |
+| Gemma 4 on the shortlist plus R | J | 19 | 0.51 (0.45 to 0.58) | 0.01 (-0.11 to 0.13) |
+| pre-score on the shortlist plus R | J | 19 | 0.52 (0.46 to 0.58) | 0.05 (-0.06 to 0.16) |
+
+Power: at the effects observed here, about 52 videos would give 80% power for Gemma 4 against chance, and about 633 for Gemma 4 against the pre-score (two-sided, alpha 0.05, normal approximation).
+
+## Top picks against replay peaks (v1 metric)
+
+| Method | n | hit@3 (95% CI) | hit@5 | mean best IoU (95% CI) |
+|---|---|---|---|---|
+| random | 19 | 24% (20% to 28%) | 37% | 0.12 (0.10 to 0.14) |
+| energy | 19 | 16% (0% to 32%) | 16% | 0.10 (0.06 to 0.14) |
+| pre-score over all windows | 19 | 32% (11% to 53%) | 47% | 0.12 (0.08 to 0.17) |
+| prefilter alone (8) | 19 | 32% (11% to 53%) | 47% | 0.12 (0.08 to 0.17) |
+| prefilter alone (16) | 19 | 32% (11% to 53%) | 47% | 0.12 (0.08 to 0.17) |
+| Gemma 4 score only (8) | 19 | 5% (0% to 16%) | 32% | 0.10 (0.06 to 0.15) |
+| Gemma 4 score only (16) | 19 | 16% (0% to 32%) | 32% | 0.11 (0.08 to 0.16) |
+| Gemma 4 blend (16) | 19 | 16% (0% to 32%) | 32% | 0.11 (0.07 to 0.16) |
+| **Selects as shipped** (8, blend + listwise) | 19 | 21% (5% to 42%) | 32% | 0.10 (0.06 to 0.14) |
+| **Selects Smart mode** (16, blend + listwise) | 19 | 26% (11% to 47%) | 32% | 0.11 (0.07 to 0.16) |
+| ceiling: best of the 8 | 19 | 53% (32% to 74%) | 53% | 0.21 (0.15 to 0.27) |
+| ceiling: best of the 16 | 19 | 89% (74% to 100%) | 89% | 0.37 (0.33 to 0.42) |
+| ceiling: best of all windows | 19 | 100% (100% to 100%) | 100% | 0.77 (0.73 to 0.81) |
+
+## Faithful cuts
+
+The check flagged 10 of 95 top picks (11%, 95% CI 6% to 18%) as "check" or "misleading". By issue: quote 3, qualifier 2, turn 3, reference 2. Its precision needs Arnold's marks on eval/results/faithful-review.md.
+
+## Cost and time
+
+Gemma 4 through the Gemini API: 895 fresh calls logged, free tier, $0. Rate-limited to 28 requests a minute. See the per-video `calls` in results-v2.json.
+
+## Best and worst videos for Gemma 4 (AUC on R)
+
+- **DEF CON 32 - Inside the FBI’s Secret Encrypted Phone Company ‘Anom’ - Joseph Cox** (DEFCONConference): AUC 0.82, pre-score 0.61. Selects' top pick, 10:07 to 10:29: "The DOJ is never going to admit this." Gemma: "Strong conspiracy hook, but ends abruptly on a server location without a punchline."
+- **IELTS Speaking Test- Perfect Band 9 [+ Free Speaking PDF]** (IELTS Advantage): AUC 0.25, pre-score 0.26. Selects' top pick, 9:53 to 10:49: "Pronunciation is one of your strong points." Gemma: "The topic is clear, but the payoff ends on a demonstration rather than a punchline."
+
+## Per video
+
+| Video | windows | punctuation restored | Gemma 4 AUC (R) | pre-score AUC (R) | energy AUC (R) | shipped hit@3 |
 |---|---|---|---|---|---|---|
-| 8 | 67% / 0.17 | 33% / 0.09 | 33% / 0.11 | 17% / 0.06 | 3.7 | 7.0 |
-| 16 | 100% / 0.40 | 33% / 0.09 | 33% / 0.13 | 33% / 0.15 | 7.4 | 14.0 |
-| 24 | 100% / 0.51 | 33% / 0.09 | 17% / 0.10 | not run | 11.1 | - |
-| all (184 on average) | 100% / 0.76 | 33% / 0.09 | 25% / 0.12 (n=4) | not run | 85 | - |
+| [LIVE NURSING INTERVIEW](https://www.youtube.com/watch?v=Aj0nf3rKG_E) | 101 | no | 0.62 | 0.67 | 0.30 | 1 |
+| [💥7 POWERFUL Body Language Hacks for Job Interviews](https://www.youtube.com/watch?v=ASvx-QG6o04) | 122 | yes | 0.68 | 0.73 | 0.58 | 0 |
+| [Lecture 1: Introduction to Information Theory](https://www.youtube.com/watch?v=BCiZc0n6COY) | 134 | no | 0.53 | 0.59 | 0.50 | 0 |
+| [Lecture 1: The Keys to Critical Thinking](https://www.youtube.com/watch?v=C5FzMblXU4M) | 158 | no | 0.44 | 0.54 | 0.38 | 0 |
+| [Lecture 1 - How to Start a Startup (Sam Altman, Dustin ](https://www.youtube.com/watch?v=CBYhVcO4WgI) | 234 | no | 0.66 | 0.38 | 0.59 | 0 |
+| ["I'm a Machine" An interview with Fabiano Caruana / Gib](https://www.youtube.com/watch?v=G9NabGlnDCs) | 142 | no | 0.72 | 0.60 | 0.63 | 1 |
+| [Nigerians Are Better Off Than Kenyans - Tinubu; Ghana P](https://www.youtube.com/watch?v=Gij3hiWXJ88) | 218 | no | 0.61 | 0.58 | 0.88 | 0 |
+| [Sheryl Sandberg Gives UC Berkeley Commencement Keynote ](https://www.youtube.com/watch?v=iqm-XEqpayc) | 234 | no | 0.60 | 0.35 | 0.40 | 1 |
+| [Keynote — Blender Conference 2025](https://www.youtube.com/watch?v=JXm0-ilIknE) | 204 | no | 0.62 | 0.30 | 0.70 | 1 |
+| [IELTS Speaking Test- Perfect Band 9 [+ Free Speaking PD](https://www.youtube.com/watch?v=k4715CJ0Ii8) | 182 | no | 0.25 | 0.26 | 0.22 | 0 |
+| [Research Methods S1 - Why We Do Research](https://www.youtube.com/watch?v=luM2Y4otHUY) | 196 | no | 0.51 | 0.52 | 0.41 | 0 |
+| [Lecture 1: Course Overview + Introduction to the Shell](https://www.youtube.com/watch?v=MSgoeuMqUmU) | 213 | no | 0.66 | 0.79 | 0.33 | 0 |
+| [Machine Intelligence - Lecture 1 (methods, history, def](https://www.youtube.com/watch?v=tExPpuk-UQ8) | 231 | no | 0.57 | 0.50 | 0.38 | 1 |
+| [DEF CON 32 - Inside the FBI’s Secret Encrypted Phone Co](https://www.youtube.com/watch?v=uFyk5UOyNqI) | 168 | no | 0.82 | 0.61 | 0.81 | 0 |
+| [An Honest Conversation on AI and Humanity / World Econo](https://www.youtube.com/watch?v=VoRbPxyo2uU) | 205 | no | 0.43 | 0.35 | 0.53 | 0 |
+| [Teni The Entertainer On How Her Career Has Evolved - He](https://www.youtube.com/watch?v=vRVV1hq9WXE) | 224 | no | 0.30 | 0.75 | 0.69 | 0 |
+| [Craig Ferguson: The TRUTH about Late Night / FULL EPISO](https://www.youtube.com/watch?v=wBoEsrpnPHA) | 223 | no | 0.39 | 0.38 | 0.27 | 0 |
+| [Living as an Intersex Individual (Hermaphrodite) in Lag](https://www.youtube.com/watch?v=xlAyUkscaFg) | 256 | no | 0.56 | 0.55 | 0.44 | 0 |
+| [The Power of Being Alone / Sadhguru Jaggi Vasudev](https://www.youtube.com/watch?v=Yiaatr-Noh0) | 146 | no | 0.63 | 0.74 | 0.49 | 0 |
 
-## Paired differences on the same videos
+## Caveats
 
-Bootstrap 95% CI over videos. An interval that includes 0 means no clear difference at this n.
+- **Most Replayed is a proxy** for what people rewatch or seek to. It is not a judgement of which moment makes the best short, and replays cluster around visual moments an audio-only picker cannot see.
+- **The heatmap is coarse:** about 100 segments per video, so each value covers 9 to 54 s of the full video. Window intensities that overlap the same segments are not independent.
+- **R is a random sample of 24 windows per video** outside the shortlists, so model AUCs measure ranking across the whole talk, not only among the strong candidates. AUC among the shortlist alone (column J in results-v2.json) is reported separately.
+- **Videos are not a random sample of talks.** They are the CC BY videos with heatmaps that YouTube search returned, filtered to English audio.
+- **n videos is the unit of inference.** Per-window AUCs are averaged within a video first, so long videos do not count more.
+- Gemma 3 4B is not in v2: at about 75 s per window on this laptop it could not judge 40 windows for 20 videos in time. v1 has its numbers.
 
-| Comparison | n | hit@3 difference | mean best IoU difference |
-|---|---|---|---|
-| judge:qwen2.5:0.5b@8 vs prefilter@8 | 6 | +0.00 (0.00 to 0.00) | +0.01 (0.00 to 0.04) |
-| judge:qwen2.5:0.5b@8 vs random | 6 | +0.07 (-0.29 to 0.45) | -0.02 (-0.10 to 0.07) |
-| judge:qwen2.5:0.5b@16 vs prefilter@16 | 6 | +0.00 (-0.50 to 0.50) | +0.03 (-0.04 to 0.10) |
-| judge:qwen2.5:0.5b@16 vs random | 6 | +0.07 (-0.28 to 0.42) | -0.00 (-0.08 to 0.07) |
-| judge:qwen2.5:0.5b@24 vs prefilter@24 | 6 | -0.17 (-0.50 to 0.00) | +0.01 (-0.10 to 0.08) |
-| judge:qwen2.5:0.5b@24 vs random | 6 | -0.10 (-0.30 to 0.23) | -0.03 (-0.08 to 0.03) |
-| judge:gemma3-4b@8 vs prefilter@8 | 6 | -0.17 (-0.50 to 0.00) | -0.03 (-0.15 to 0.04) |
-| judge:gemma3-4b@8 vs random | 6 | -0.10 (-0.30 to 0.23) | -0.07 (-0.11 to -0.03) |
-| judge:gemma3-4b@16 vs prefilter@16 | 6 | +0.00 (-0.50 to 0.50) | +0.06 (-0.10 to 0.20) |
-| judge:gemma3-4b@16 vs random | 6 | +0.07 (-0.27 to 0.41) | +0.02 (-0.06 to 0.10) |
-| judge:qwen2.5:0.5b@all vs prefilter@all | 4 | +0.00 (-0.75 to 0.75) | +0.02 (-0.14 to 0.16) |
-| judge:qwen2.5:0.5b@all vs random | 4 | -0.00 (-0.31 to 0.50) | -0.01 (-0.03 to 0.02) |
-| judge:gemma3-4b@8 vs judge:qwen2.5:0.5b@8 | 6 | -0.17 (-0.50 to 0.00) | -0.05 (-0.16 to 0.03) |
-| judge:gemma3-4b@16 vs judge:qwen2.5:0.5b@16 | 6 | +0.00 (-0.50 to 0.50) | +0.03 (-0.12 to 0.18) |
-| shipped+list:gemma3-4b@8 vs shipped:gemma3-4b@8 | 6 | +0.00 (0.00 to 0.00) | +0.00 (0.00 to 0.00) |
-| shipped:qwen2.5:0.5b@8 vs judge:qwen2.5:0.5b@8 | 6 | +0.00 (0.00 to 0.00) | +0.00 (0.00 to 0.00) |
-| shipped:qwen2.5:0.5b@16 vs judge:qwen2.5:0.5b@16 | 6 | +0.00 (0.00 to 0.00) | +0.00 (0.00 to 0.00) |
-| shipped:qwen2.5:0.5b@24 vs judge:qwen2.5:0.5b@24 | 6 | +0.00 (0.00 to 0.00) | +0.00 (0.00 to 0.00) |
-| shipped:gemma3-4b@8 vs judge:gemma3-4b@8 | 6 | +0.00 (0.00 to 0.00) | +0.00 (0.00 to 0.00) |
-| shipped:gemma3-4b@16 vs judge:gemma3-4b@16 | 6 | -0.17 (-0.50 to 0.00) | +0.00 (0.00 to 0.00) |
-| shipped:qwen2.5:0.5b@all vs judge:qwen2.5:0.5b@all | 4 | +0.00 (0.00 to 0.00) | -0.02 (-0.06 to 0.00) |
+## v1 (16 Oct, n = 6, hit@k only)
 
-## Against human picks
-
-No human labels yet. Run `node eval/label.mjs` and mark 5 moments per video.
-
-## Ceiling by shortlist size (no LLM)
-
-The best any judge could do if it were perfect, by how many prefiltered windows it reads (mean over videos):
-
-| windows | 4 | 8 | 12 | 16 | 24 | 36 | all |
-|---|---|---|---|---|---|---|---|
-| ceiling hit@3 | 33% | 67% | 83% | 100% | 100% | 100% | 100% |
-| ceiling recall@5 | 12% | 18% | 28% | 43% | 57% | 72% | 93% |
-| ceiling mean best IoU | 0.09 | 0.17 | 0.28 | 0.40 | 0.51 | 0.61 | 0.76 |
-
-## Wall time per video
-
-| Video | evaluated length | windows | transcribe | judge qwen2.5:0.5b@8 | judge qwen2.5:0.5b@16 | judge qwen2.5:0.5b@24 | judge gemma3-4b@8 | judge gemma3-4b@16 | judge qwen2.5:0.5b@all |
-|---|---|---|---|---|---|---|---|---|---|
-| "I'm a Machine" An interview with Fabiano Caruana  | 10:17 | 142 | 3:21 | 1:53 | 2:12 | 1:11 | 6:14 + 92 s list | 7:28 | 16:12 |
-| Lecture 1 - How to Start a Startup (Sam Altman, Du | 15:00 | 234 | 3:34 | 2:40 | 1:31 | 1:34 | 7:42 + 76 s list | 6:20 | 29:51 |
-| Sheryl Sandberg Gives UC Berkeley Commencement Key | 15:00 | 230 | 3:24 | 2:27 | 0:58 | 1:12 | 6:42 + 83 s list | 6:12 | - |
-| DEF CON 32 - Inside the FBI’s Secret Encrypted Pho | 15:00 | 168 | 5:06 | 1:35 | 1:28 | 1:26 | 6:05 + 75 s list | 9:30 | 282:04 |
-| LIVE NURSING INTERVIEW | 17:10 | 114 | 2:60 | 2:16 | 1:46 | 1:06 | 5:54 + 114 s list | 9:07 | - |
-| IELTS Speaking Test- Perfect Band 9 [+ Free Speaki | 17:25 | 218 | 4:27 | 1:54 | 1:08 | 1:22 | 6:47 + 82 s list | 5:58 | 27:40 |
-
-Judge times are measured wall time for that run. A larger shortlist reuses cached calls for windows a smaller one already judged, so use the per-call cost below for estimates.
-
-## Judge cost per call (Ollama's own counters)
-
-| Model | call | calls | words in | prompt tokens | prompt tok/s | output tokens | output tok/s | load s | wall s per call | cost |
-|---|---|---|---|---|---|---|---|---|---|---|
-| qwen2.5:0.5b | one window | 861 | 123.0 | 414.7 | 112.4 | 60.3 | 17.9 | 0.3 | 27.7 | $0, local |
-| gemma3-4b | one window | 96 | 113.8 | 416.5 | 15.7 | 60.6 | 3.3 | 0.4 | 52.5 | $0, local |
-| gemma3-4b | listwise round | 6 | n/a | 336.5 | 7.2 | 135.7 | 3.6 | 0.2 | 87.0 | $0, local |
-
-Only fresh calls are logged; cache hits cost nothing. Load is the model being read into memory, mostly on a model's first call.
-
-## Best and worst examples (prefilter + gemma3-4b (8 windows, model score only))
-
-**Best: LIVE NURSING INTERVIEW** (mean best IoU 0.11)
-
-- Top pick: 9:05 to 10:00, best IoU with any replay peak 0.56. Opens: ""What do you think is the most important aspect of great customer service?"" Model's reason: "The 'feeling like they're the only one', instantly grabs attention, but the rambling loses focus."
-- Nearest replay peak: 9:06 to 9:37 (peak height 0.427)
-
-**Worst: Lecture 1 - How to Start a Startup (Sam Altman, Dustin Moskovitz)** (mean best IoU 0.00)
-
-- Top pick: 1:16 to 1:58, best IoU with any replay peak 0.00. Opens: "Guest speakers are going to teach 17 of the 20 classes." Model's reason: "The ‘startups are the way of the future’ statement is a strong, memorable takeaway."
-- Nearest replay peak: 4:16 to 5:16 (peak height 0.34)
-
-## How to read this, and caveats
-
-- **n is small (6 videos).** Confidence intervals are percentile bootstrap over videos (2,000 resamples); with n this small they are wide, and a difference whose interval includes zero is not a finding.
-- **Most Replayed is a proxy.** It records where viewers rewatch or seek to, which is not the same as where a good standalone short is. Replays also gather around slides, demos and jokes that need visual context, which an audio-only picker cannot see.
-- **The heatmap is coarse.** YouTube gives about 100 segments per video (one per 6 to 27 s for these videos), so label boundaries are only accurate to a segment. Hit at IoU 0.5 is strict against such labels; mean best IoU and the ceiling rows show how much is reachable at all.
-- **Random is the chance level**, averaged over 200 seeds on the same windows, so it is not a single lucky or unlucky draw.
-- **Two stages.** Selects first keeps 8 windows with cheap text rules spread over the video, then the model scores only those. With 8 windows and k = 5, any picker takes most of the shortlist, so hit@3 and precision@3 separate "prefilter alone" from "prefilter + model" better than hit@5. "Model score only" ranks by the model's rubric score; "shipped blend" is what the app ranks by (0.7 model score + 0.3 text-rule score).
-- **Energy** scores loudness, loudness variation and words per second, the signals cheap clippers use. It does not read the words.
-- Judge models run locally through Ollama on CPU. Times are wall time on this laptop with other apps open; treat them as an order of magnitude.
-- Videos longer than 20 minutes are evaluated on their first 15 minutes, with labels from the heatmap inside that range.
-- Videos are Creative Commons BY on YouTube; see `eval/datasets/manifest.json` for each URL and licence.
+See [RESULTS-v1.md](RESULTS-v1.md) for the full v1 report. Its headline: the shipped 8-window shortlist could reach at most 67% hit@3, and no judge beat the prefilter alone at that n.
