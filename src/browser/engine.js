@@ -3,6 +3,7 @@
 // (notes/CONTRACTS.md), run entirely in this tab. Jobs live in memory for the page's life.
 import { attributionLine, captionWithCredit, mediaReminder, normaliseLicense } from "../core/attribution.mjs";
 import { makeCandidates, shortlist } from "../core/candidates.mjs";
+import { judgeCount } from "../core/select.mjs";
 import { applyCueEdits, cuesFromWords, toSrt, toVtt } from "../core/cues.mjs";
 import { nigerianCues } from "../core/langid/cues.mjs";
 import { ng5Predict } from "../core/langid/ng5.mjs";
@@ -15,6 +16,7 @@ import { loadAsr, transcribePcm } from "./asr.js";
 import { cachedFetch } from "./cache.js";
 import { faithfulRound, judgeShortlist, listwiseRound, makeKit, rankAndCurve } from "./judge.js";
 import { decodeAudio16k, loudnessFromPcm, makeThumbs, probeFile } from "./media.js";
+import { decodeAudioSegments, longVideoNote, pcmStore } from "./pcm.js";
 import { MODELS } from "./models.js";
 import { clipGainDb, renderInWorker } from "./render.js";
 import { keepAwake, notifyDone, titleProgress } from "./device.js";
@@ -39,6 +41,10 @@ const newId = () => {
   return `j_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${Math.random().toString(36).slice(2, 6)}`;
 };
 
+// Above this, the audio is decoded and transcribed in 10-minute segments kept in OPFS
+// (pcm.js), so the tab never holds the whole video's PCM. Below it, one piece in memory.
+const LONG_SEC = 20 * 60;
+
 export class Engine {
   constructor({ getJudge, getFallback, store } = {}) {
     this.store = store || createJobStore(typeof indexedDB !== "undefined" ? indexedDbBackend() : memoryBackend());
@@ -46,7 +52,9 @@ export class Engine {
     // getFallback(): Promise<backend>, the on-device judge Smart mode falls back to.
     this.getJudge = getJudge;
     this.getFallback = getFallback;
-    this.jobs = new Map(); // id -> { job, file, words, events, pcm, captions, thumbs, clips, kits }
+    this.jobs = new Map(); // id -> { job, file, words, events, pcm, pcmSegs, captions, thumbs, clips, kits }
+    // long videos keep their 16 kHz audio in 10-minute segments in OPFS, not in memory
+    this.pcm = pcmStore();
     this.listeners = new Map(); // id -> Set(fn)
     this.timings = [];
   }
@@ -173,6 +181,14 @@ export class Engine {
   async forgetSaved(key) {
     await this.store.remove(key);
     await dropVideo(key);
+    await this.pcm.drop(key);
+  }
+
+  /** 16 kHz mono audio between two times: from memory for short videos, from the saved segments for long ones. */
+  async pcmRange(r, start, end) {
+    if (r.pcm) return r.pcm.subarray(Math.max(0, Math.floor(start * 16000)), Math.ceil(end * 16000));
+    if (r.pcmSegs?.length) return this.pcm.range(r.key, r.pcmSegs, start, end);
+    return null;
   }
 
   getJob(id) {
@@ -244,7 +260,8 @@ export class Engine {
         finish("probe", `${Math.round(job.source.duration)} s, ${job.source.uprightWidth || "?"}x${job.source.uprightHeight || "?"}`);
         await this.save(r, "probe");
       }
-      if (job.source.duration > 20 * 60) job.warning = "This video is longer than 20 minutes. The browser build is best up to about 15 minutes; the desktop app has no limit.";
+      // the honest limit: phones over about 30 minutes, any tab over an hour
+      job.warning = longVideoNote(job.source.duration) ?? (job.source.duration > 20 * 60 ? "This video is longer than 20 minutes, so transcribing it in the tab takes a while. The desktop app is faster." : null);
       if (r.file) {
         try {
           const t = await makeThumbs(r.file, job.source.duration);
@@ -260,13 +277,18 @@ export class Engine {
 
       // 2. transcribe: decode audio, load whisper, run it window by window
       if (has("transcribe")) {
-        const [words, events, loudness, pcm] = await Promise.all(["words", "events", "loudness", "pcm"].map((n) => this.store.part(r.key, n)));
+        const [words, events, loudness, pcm, pcmSegs] = await Promise.all(["words", "events", "loudness", "pcm", "pcmSegs"].map((n) => this.store.part(r.key, n)));
         r.words = words || [];
         r.events = events || [];
         r.pcm = pcm || null;
+        r.pcmSegs = pcmSegs || null;
         job.loudness = loudness || null;
         if (r.words.length) this.emit(id, "words", r.words);
         reuse("transcribe", `${r.words.length} words`);
+      } else if (job.source.duration > LONG_SEC) {
+        needFile();
+        begin("transcribe");
+        await this.transcribeLong(r, { progress, finish });
       } else {
         needFile();
         begin("transcribe");
@@ -320,7 +342,8 @@ export class Engine {
         begin("candidates");
         const sentences = toSentences(r.words);
         const all = makeCandidates(sentences, { minLen: job.settings.minLen, maxLen: job.settings.maxLen, stride: job.settings.stride ?? 6, loudness: job.loudness, words: r.words, events: r.events });
-        short = shortlist(all, { n: job.settings.judgeN ?? 8, duration: job.source.duration });
+        // never fewer windows than k clips need (30 clips cannot come out of 8 judged windows)
+        short = shortlist(all, { n: judgeCount({ k: job.settings.k, judgeN: job.settings.judgeN ?? 8 }).n, duration: job.source.duration });
         job.windows = all.length;
         finish("candidates", `${all.length} windows passed the filter, ${short.length} go to the judge`);
         await this.save(r, "candidates", { shortlist: short });
@@ -363,6 +386,69 @@ export class Engine {
   }
 
   /** Captions, posting kits and rendered clips saved earlier for this video. */
+  /**
+   * Transcribe a long video 10 minutes at a time: decode a segment, keep it in OPFS, send it
+   * to whisper, save the words so far, let the segment go. Peak memory stays at about one
+   * segment (38 MB of PCM) however long the video is, and a job that stops part way (a
+   * closed tab, a frozen phone) resumes at the next segment.
+   */
+  async transcribeLong(r, { progress, finish }) {
+    const job = r.job;
+    const dur = job.source.duration;
+    const partial = (await this.store.part(r.key, "asrPartial").catch(() => null)) || null;
+    const segs = partial?.segs || [];
+    r.words = partial?.words || [];
+    r.events = partial?.events || [];
+    const db = partial?.db || [];
+    if (r.words.length) this.emit(job.id, "words", r.words);
+    const startAt = segs.length ? segs[segs.length - 1].end : 0;
+    progress("transcribe", { progress: startAt / dur, note: segs.length ? `carrying on from ${Math.round(startAt / 60)} min` : "reading the audio" });
+    const files = {};
+    const asr = await loadAsr({
+      device: job.settings.asrDevice || "auto",
+      onDownload: (m) => {
+        if (m.total) files[m.file] = { loaded: m.loaded, total: m.total };
+        const loaded = Object.values(files).reduce((a, f) => a + f.loaded, 0);
+        const total = Object.values(files).reduce((a, f) => a + f.total, 0);
+        progress("transcribe", { progress: startAt / dur, note: `getting the speech model: ${Math.round(loaded / 1e6)} of ${Math.round(total / 1e6)} MB`, download: { loaded, total } });
+      },
+    });
+    const where = asr.device === "webgpu" ? "the GPU" : "the CPU";
+    const t0 = performance.now();
+    let decodeSec = partial?.decodeSec || 0;
+    let td = performance.now();
+    for await (const seg of decodeAudioSegments(r.file, { duration: dur, startAt, firstIndex: segs.length })) {
+      decodeSec += (performance.now() - td) / 1000;
+      await this.pcm.put(r.key, seg.index, seg.pcm);
+      await transcribePcm(seg.pcm, {
+        onChunk: (m) => {
+          const split = splitNonSpeech(m.words.map((w) => ({ ...w, s: +(w.s + seg.start).toFixed(3), e: +(w.e + seg.start).toFixed(3) })));
+          r.words.push(...split.words);
+          r.events.push(...split.events);
+          if (split.words.length) this.emit(job.id, "words", split.words);
+          const heard = seg.start + m.processed;
+          const wall = (performance.now() - t0) / 1000;
+          const speed = (heard - startAt) / Math.max(0.1, wall);
+          progress("transcribe", { progress: Math.min(0.999, heard / dur), speed, etaSec: speed > 0 ? Math.round((dur - heard) / speed) : null, note: `transcribing on ${where} at ${speed.toFixed(1)}x real time, part ${seg.index + 1} of about ${Math.ceil(dur / 600)}` });
+        },
+      });
+      db.push(...loudnessFromPcm(seg.pcm).db);
+      segs.push({ index: seg.index, start: seg.start, end: seg.end });
+      // a checkpoint after every segment: the words so far and where the audio is
+      await this.store.savePart(r.key, "asrPartial", { segs, words: r.words, events: r.events, db, decodeSec }).catch(() => {});
+      td = performance.now();
+    }
+    const wallSec = (performance.now() - t0) / 1000;
+    r.pcm = null;
+    r.pcmSegs = segs;
+    job.loudness = { step: 0.5, db };
+    job.asr = { provider: "transformers.js", model: MODELS.whisper.id, device: asr.device, language: "en", decodeSec: +decodeSec.toFixed(1), loadSec: asr.loadSec, sec: +wallSec.toFixed(1), speed: +((dur - startAt) / Math.max(0.1, wallSec)).toFixed(2), segments: segs.length, pcmIn: this.pcm.kind };
+    job.language = await this.languageNote(r.words);
+    finish("transcribe", `${r.words.length} words, ${job.asr.speed}x real time on ${where}, in ${segs.length} parts`);
+    await this.save(r, "transcribe", { words: r.words, events: r.events, loudness: job.loudness, pcmSegs: segs });
+    await this.store.savePart(r.key, "asrPartial", null).catch(() => {});
+  }
+
   async restoreExtras(r) {
     try {
       const [caps, kits] = await Promise.all([this.store.part(r.key, "captions"), this.store.part(r.key, "kits")]);
@@ -596,7 +682,7 @@ export class Engine {
       this.emit(id, "render", { id: c.id, preset, ...c[field] });
       try {
         const result = await renderInWorker(
-          { file: r.file, source: job.source, candidate: { id: c.id, start: c.start, end: c.end }, cues, preset, style, edited: !!caps?.edited, gainDb: clipGainDb(r.pcm, c.start, c.end, { channels: Math.min(2, job.source.audioStreams?.[0]?.channels || 2) }) },
+          { file: r.file, source: job.source, candidate: { id: c.id, start: c.start, end: c.end }, cues, preset, style, edited: !!caps?.edited, gainDb: clipGainDb(await this.pcmRange(r, c.start, c.end), 0, c.end - c.start, { channels: Math.min(2, job.source.audioStreams?.[0]?.channels || 2) }) },
           { onProgress: (p) => {
             c[field].progress = +p.progress.toFixed(3);
             job.stages.render.progress = +((i + p.progress) / targets.length).toFixed(3);
