@@ -14,6 +14,7 @@ import { captionOptions, captionTimeline, clipWords, motionSize, paintCaption, P
 import { uprightSize } from "./probe.mjs";
 import { clipCaptionStyle } from "./madefor.mjs";
 import { readJson, run } from "./util.mjs";
+import { isDiskFull } from "./estimate.mjs";
 
 // presets, caption layout and the reframe decision have no Node imports (layout.mjs), so the
 // browser build draws the same captions; they are re-exported here for older callers
@@ -216,14 +217,15 @@ async function encode({ src, start, dur, graph: graphFor, capList, capY, P, out,
       await attempt(GPU_INPUT, true);
       return "gpu";
     } catch (e) {
-      if (e.name === "AbortError") throw e;
+      // another decoder will not help when the disk is full
+      if (e.name === "AbortError" || isDiskFull(e)) throw e;
     }
   }
   try {
     await attempt(hw);
     return hw.length ? "hw" : "sw";
   } catch (e) {
-    if (!hw.length || e.name === "AbortError") throw e;
+    if (!hw.length || e.name === "AbortError" || isDiskFull(e)) throw e;
     await attempt([]);
     return "sw";
   }
