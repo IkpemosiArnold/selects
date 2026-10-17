@@ -9,6 +9,7 @@ import { talk } from "./test/fixtures.mjs";
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "selects-job-"));
 process.env.SELECTS_HOME = home;
 const { createJob, jobEvents, listJobs, loadJob, renderJob, resumeJob, runJob, updateCandidate, updateJobSettings, jobDir } = await import("./job.mjs");
+const { checkFaithful } = await import("./faithful.mjs");
 
 const video = path.join(home, "talk.mp4");
 const WORDS = talk(120); // about 6 minutes of speech
@@ -29,6 +30,8 @@ function mocks(counter, { failJudgeAt = -1 } = {}) {
       return WORDS;
     },
     listwise: async (cands) => ({ candidates: cands, order: [], reasons: {} }),
+    // the faithful check from rules only: no model in these tests
+    faithful: (cands, o) => checkFaithful(cands, { ...o, mode: "rules" }),
     judge: async (cands, { onProgress }) => {
       const out = [];
       for (let i = 0; i < cands.length; i++) {
@@ -374,4 +377,46 @@ test("a transcript without full stops gets punctuation restored before sentences
   d2.restorePunctuation = (w) => (again++, { words: w, info: {} });
   await runJob(punctuated.id, { deps: d2 });
   assert.equal(again, 0, "a punctuated transcript is left alone");
+});
+
+test("faithful cuts: a misleading pick drops to the bottom until accepted, and the fix is applied only when asked", async () => {
+  const job = createJob(video, { k: 3, model: "mock", qualityGate: false });
+  const deps = mocks({ probe: 0, transcribe: 0, judge: 0 });
+  let calls = 0;
+  let firstId = null;
+  deps.faithful = (cands, o) => {
+    firstId = cands[0].id;
+    return checkFaithful(cands, {
+      ...o,
+      request: async (messages) => {
+        calls++;
+        assert.match(messages[1].content, /Sentence before the clip:/);
+        const bad = calls === 1;
+        return { data: bad ? { issue: "turn", verdict: "misleading", extend: "after", note: "The speaker turns the point in the next sentence." } : { issue: "none", verdict: "faithful", extend: "none", note: "Says what the speaker meant." } };
+      },
+    });
+  };
+  const ready = await runJob(job.id, { deps });
+  assert.equal(calls, ready.candidates.length, "one model call per top pick");
+  assert.deepEqual(Object.keys(ready.faithful).slice(0, 5), ["mode", "checked", "faithful", "check", "misleading"]);
+  assert.equal(ready.faithful.misleading, 1);
+  const last = ready.candidates[ready.candidates.length - 1];
+  assert.equal(last.id, firstId, "the best-scored pick moved to the bottom");
+  assert.equal(last.demoted, true);
+  assert.equal(last.rank, ready.candidates.length);
+  assert.ok(last.faithful.fix?.end > last.end, "a fix that grows the end is suggested");
+  const endBefore = last.end;
+  assert.equal(loadJob(job.id).candidates.find((c) => c.id === firstId).end, endBefore, "nothing is applied on its own");
+
+  const accepted = updateCandidate(job.id, firstId, { faithful: "accept" });
+  assert.equal(accepted.rank, 1, "accepted: back in its place");
+  assert.equal(accepted.demoted, undefined);
+  updateCandidate(job.id, firstId, { faithful: "reset" });
+  assert.equal(loadJob(job.id).candidates.find((c) => c.id === firstId).demoted, true);
+  const fixed = updateCandidate(job.id, firstId, { faithful: "fix" });
+  assert.equal(fixed.end, last.faithful.fix.end);
+  assert.equal(fixed.faithful.applied, true);
+  assert.equal(fixed.trimmed, true);
+  assert.equal(fixed.rank, 1);
+  assert.throws(() => updateCandidate(job.id, firstId, { faithful: "maybe" }), (e) => e.status === 400);
 });

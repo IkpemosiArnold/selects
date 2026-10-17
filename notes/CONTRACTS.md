@@ -279,3 +279,31 @@ The rule (`src/core/langid/rule.mjs`, tested in `src/core/langid.test.mjs`): eac
 | punctuation model | `<models>/punct/sherpa-onnx-online-punct-en-2024-08-06` | `SELECTS_PUNCT_DIR` |
 
 VAD was measured and not adopted (whisper.cpp's built-in Silero VAD moved word times by up to 4 s and squashed pauses; see `notes/timings.md`).
+
+## Faithful cuts (16 Oct, evening, core)
+
+All additive. After ranking, each top pick (about k clips) is checked once more: does cutting here change what the speaker meant? The pure parts are in `src/core/faithful-core.mjs` (browser-safe), the Ollama call in `src/core/faithful.mjs`, the prompt in `src/core/prompts/faithful.md`.
+
+### Candidate field
+
+```js
+candidate.faithful = {
+  verdict: "faithful" | "check" | "misleading",
+  issue: "turn" | "quote" | "sarcasm" | "qualifier" | "reference" | null,
+  note: "One plain sentence for the user.",
+  fix: { start?: 21.4, end?: 51.2 } | null,   // grow to the nearby sentence boundary (snapTrim); only the edges that move
+  by: "model" | "rules",                       // rules only when settings.faithful is "rules" or the model call failed
+  hints: ["turn"],                             // what the cheap rule check noticed (the model saw these as a hint)
+  context: { before: "sentence before the clip" | null, after: "sentence after" | null },
+  error?: "why the model could not check it",
+  accepted?: true,                             // the person kept the cut as it is
+  applied?: true,                              // the person took the fix (or trimmed to cover it)
+}
+candidate.demoted = true                       // only while a misleading cut is neither accepted nor fixed
+```
+
+- Nothing is applied on its own. A `"misleading"` clip is moved below the others (ranks renumbered, `demoted: true`) until the person accepts it or applies the fix. Rules alone never say `"misleading"`: a rule hint gives `"check"`, no hint gives `"faithful"`.
+- `PATCH /api/jobs/:id/candidates/:cid` takes `{ faithful: "accept" | "fix" | "reset" }`. `"fix"` moves start and end to `faithful.fix` (like a trim: `trimmed: true`, the old render is dropped) and sets `applied`. A trim that covers the fix also sets `applied`. Returns the Candidate; the `candidates` event carries the reordered list.
+- `job.faithful = { mode, checked, faithful, check, misleading, asked, cached, failed, sec, secPerCall }`; `job.timings.faithful` is its wall seconds (inside the judge stage, which now reports 0 to 0.8 for the pointwise calls, 0.8 for the listwise round and 0.9 to 1 for this check).
+- `settings.faithful`: `"model"` (default, one call per top pick, cached in `judge-cache.json`, logged in `judge-calls.jsonl` as `kind: "faithful"`), `"rules"` (no model) or `"off"`. CLI `--faithful model|rules|off`. With `--yes`, misleading cuts are left unapproved.
+- Browser: `tasks.mjs` has a `faithful` task: `{ kind: "faithful", candidate, before, after, hints }`, with `prompts.faithful` the text of `prompts/faithful.md`; `readTask` returns `{ verdict, issue, extend, note }` or null. Build the field with `contextFor`, `faithfulHints` and `faithfulResult` from `faithful-core.mjs`, then order with `orderByFaithful`.

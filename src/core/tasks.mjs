@@ -5,16 +5,20 @@
 //
 // A task is { kind: "judge", candidate } | { kind: "listwise", top } | { kind: "kit", candidate }
 // | { kind: "judgeBatch", candidates } (Smart mode: the whole shortlist in one call, each
-// clip still scored on its own with the same rubric).
-// prompts is { judge, listwise, kit }: the text of the three files in src/core/prompts.
+// clip still scored on its own with the same rubric)
+// | { kind: "faithful", candidate, before, after, hints } (does the cut keep what the speaker
+// meant? before/after are the sentences around the clip, hints from faithfulHints).
+// prompts is { judge, listwise, kit, faithful }: the text of the files in src/core/prompts.
 import { JUDGE_SCHEMA, judgeMessages, listMessages, listSchema, parseListAnswer, salvageJudge, splitPrompt } from "./judge-core.mjs";
 import { cleanKit, KIT_SCHEMA, kitMessages } from "./kit-core.mjs";
+import { FAITHFUL_SCHEMA, faithfulMessages, faithfulPrompt, readFaithful } from "./faithful-core.mjs";
 
 /** Output budgets, as on the desktop (num_predict): 80 for a judge call, 40 + 30 per clip for the round, 120 for a kit. */
 export function maxTokensFor(task) {
   if (task.kind === "judge") return 80;
   if (task.kind === "judgeBatch") return 40 + 70 * task.candidates.length;
   if (task.kind === "listwise") return 40 + 30 * task.top.length;
+  if (task.kind === "faithful") return 130;
   return 120;
 }
 
@@ -25,6 +29,7 @@ export function buildTask(task, prompts) {
   if (task.kind === "judge") return { messages: judgeMessages(splitPrompt(prompts.judge, "prompts/judge.md"), task.candidate), schema: JUDGE_SCHEMA, maxTokens: maxTokensFor(task) };
   if (task.kind === "listwise") return { messages: listMessages(splitPrompt(prompts.listwise, "prompts/listwise.md"), task.top), schema: listSchema(lettersFor(task.top)), maxTokens: maxTokensFor(task) };
   if (task.kind === "kit") return { messages: kitMessages(prompts.kit, task.candidate), schema: KIT_SCHEMA, maxTokens: maxTokensFor(task) };
+  if (task.kind === "faithful") return { messages: faithfulMessages(faithfulPrompt(prompts.faithful), { text: task.candidate.text, before: task.before, after: task.after, hints: task.hints }), schema: FAITHFUL_SCHEMA, maxTokens: maxTokensFor(task) };
   if (task.kind === "judgeBatch") return { messages: batchMessages(splitPrompt(prompts.judge, "prompts/judge.md"), task.candidates), schema: batchSchema(lettersFor(task.candidates)), maxTokens: maxTokensFor(task) };
   throw new Error(`unknown task kind ${task.kind}`);
 }
@@ -89,6 +94,7 @@ export function readTask(task, { data, text }) {
   }
   if (task.kind === "listwise") return parseListAnswer(obj?.ranking ? obj : String(text ?? ""), lettersFor(task.top));
   if (task.kind === "kit") return cleanKit(obj || {});
+  if (task.kind === "faithful") return readFaithful(obj || String(text ?? "")); // null when there is no verdict
   if (task.kind === "judgeBatch") {
     // { byLetter: { A: { hook, standalone, payoff, clarity, reason } } }; clips the answer left out are missing
     const letters = lettersFor(task.candidates);
@@ -118,6 +124,11 @@ export function checkTaskShape(task, { maxChars = 3000, maxClips = 6 } = {}) {
   if (!task || typeof task !== "object") return "body must be a JSON object";
   const clip = (c) => c && typeof c === "object" && typeof c.text === "string" && c.text.trim() && c.text.length <= maxChars && Number.isFinite(c.start) && Number.isFinite(c.end) && c.end > c.start && c.end - c.start <= 600;
   if (task.kind === "judge" || task.kind === "kit") return clip(task.candidate) ? null : "candidate must be { text, start, end } with at most 3000 characters";
+  if (task.kind === "faithful") {
+    if (!clip(task.candidate)) return "candidate must be { text, start, end } with at most 3000 characters";
+    const side = (s) => s == null || (typeof s === "string" && s.length <= 1000);
+    return side(task.before) && side(task.after) ? null : "before and after must be one sentence each (at most 1000 characters) or null";
+  }
   if (task.kind === "judgeBatch") {
     if (!Array.isArray(task.candidates) || task.candidates.length < 1 || task.candidates.length > 8) return "candidates must hold 1 to 8 clips";
     return task.candidates.every(clip) ? null : "each clip must be { text, start, end } with at most 3000 characters";
@@ -126,7 +137,7 @@ export function checkTaskShape(task, { maxChars = 3000, maxClips = 6 } = {}) {
     if (!Array.isArray(task.top) || task.top.length < 2 || task.top.length > maxClips) return `top must hold 2 to ${maxClips} clips`;
     return task.top.every((c) => clip(c) && typeof c.hook === "string" && c.hook.length <= maxChars) ? null : "each clip must be { text, hook, start, end }";
   }
-  return "kind must be judge, judgeBatch, listwise or kit";
+  return "kind must be judge, judgeBatch, listwise, kit or faithful";
 }
 
 /** Only the fields a task needs, so nothing else from a job ever leaves the device. */
@@ -134,6 +145,7 @@ export function slimTask(task) {
   const c = (x) => ({ text: x.text, hook: x.hook, start: x.start, end: x.end });
   if (task.kind === "listwise") return { kind: "listwise", top: task.top.map(c) };
   if (task.kind === "judgeBatch") return { kind: "judgeBatch", candidates: task.candidates.map(c) };
+  if (task.kind === "faithful") return { kind: "faithful", candidate: c(task.candidate), before: task.before ?? null, after: task.after ?? null, hints: (task.hints || []).map((h) => ({ issue: h.issue, cue: h.cue })) };
   return { kind: task.kind, candidate: c(task.candidate) };
 }
 
