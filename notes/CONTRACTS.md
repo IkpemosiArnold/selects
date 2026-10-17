@@ -329,3 +329,12 @@ All additive. `STRONG_TOTAL = 0.55` in `src/core/rank.mjs`, calibrated on this m
 - When `strong` is 0, `job.candidates` holds only the closest 2 (ranks 1 and 2); each keeps its `reason` as the "why".
 - `GET /api/jobs` summaries carry `verdict`. The CLI prints "No strong clips in <video>." instead of "N proposed clips" and marks weak clips; with `--yes` it still renders the closest ones and says so.
 - `qualityVerdict(cands, { threshold })` and `applyQualityBar(cands, { threshold, closest: 2 })` are exported from `rank.mjs` (browser-safe).
+
+## Transcript reuse (17 Oct, core)
+
+All additive. `src/core/reuse.mjs`.
+
+- The language check and the transcript are saved in `<SELECTS_HOME>/cache/` (`language/<key>.json`; `transcripts/<key>/` with `words.json`, `events.json`, `loudness.json`, `meta.json`). The source is identified by `sourceFingerprint(path)`: sha1 of size, mtime and the first and last 4 MB (8 MB read at most). The transcript key adds the whisper model's file name, the language, the prompt, the audio clean-up and the audio stream; the language key adds the setting, the remembered language, the rule version and the check model. Caption mode and clip mode share both.
+- Whisper's words are saved before punctuation restoration and the non-speech split, so a reused job runs those steps (seconds) the same way as a fresh one.
+- `job.reuse = { language: { key, sec } | null, transcript: { key, from: jobId, sec } | null }`: `sec` is what the original run took, so the UI can say "reused the transcript from an earlier run (saved 2 min)". The stages still run and end `done`, with a progress note saying what was reused.
+- `settings.reuse: false` (CLI `--fresh`) turns it off for one job; `SELECTS_REUSE=0` everywhere.

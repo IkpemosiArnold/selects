@@ -170,6 +170,7 @@ A clipper that trusts a bad transcript picks bad clips: the windows, the judge, 
 - **Transcript quality gate.** After whisper finishes, Selects scores the transcript from whisper's own word probabilities: the mean, the share of words below 0.5, and a check for the loops whisper falls into when it loses the audio (repeated phrases, and text that compresses too well). Eight clean English recordings scored between 0.89 and 0.95. If the transcript is unreliable, Selects stops before judging and says what to try (a bigger model, or the right language); `--force` judges it anyway. If it is shaky, Selects carries on and warns you to check the captions.
 - **Language check with several models, and a question when they disagree.** Whisper's built-in language detector is known to fail on accents, so Selects does not trust it alone. It decodes samples of the video in each likely language, has two small text models read what whisper wrote, and combines the answers with a short written rule. When the answers disagree, it asks you one question instead of guessing. Details are under "Languages and accents" below.
 - **No pretending a weak video is a good one.** If no proposed clip scores 0.55 or more, Selects says "No strong clips in this video" and offers only the closest 2, each with the model's reason. The bar was set from real runs: a family video whose clips the model itself called weak scored 0.40 to 0.52, while a conference talk scored 0.56 to 0.68 and the best clip of each of the 6 eval videos scored 0.60 to 0.68. Clips below the bar in an otherwise strong video are marked weak.
+- **A video is transcribed once.** The language check and the transcript are saved per source file, so a second job on the same video (caption mode after clip mode, another `--k`, a different `--made-for`) skips both and starts at the clip finding. The file is recognised by its size, its modified time and its first and last 4 MB, so a copy with the same content is recognised too; another whisper model, language, prompt or audio clean-up makes a new transcript. `--fresh` does both again.
 - **Clips only from words whisper heard.** The first stage marks down windows with low word confidence and keeps them out of the shortlist, so the judge never reads words whisper did not really hear. In the caption review, unsure words are underlined so you can fix those first.
 
 ## Languages and accents
@@ -325,6 +326,7 @@ selects doctor                 check whisper, Ollama, the judge model and disk
 | `--asr-model <name>` | `auto` | the whisper model: a name in the models folder (`base.en`, `small.en`, `medium.en-q5_0`, `small`) or a path. Auto is `base.en` for English and the best installed multilingual model otherwise |
 | `--prompt <text>` | none | a short neutral context sentence passed to whisper |
 | `--accent <a>` | `auto` | `auto` uses the Nigerian-accent whisper model for English when the language check finds signs of a Nigerian accent; `ng` always uses it for English; `none` never does |
+| `--fresh` | off | check the language and transcribe again, even if this video was done before |
 | `--clean-audio` | off | cut rumble below 80 Hz and hiss above 7.6 kHz and even out loudness before whisper |
 | `--no-captions` | off | render clips without burned-in captions |
 | `--style <s>` | auto | `bold` (2 to 4 big words, current word in yellow) or `subtitle` (up to two lines); auto is bold for portrait and clips, subtitle for landscape caption mode |
@@ -358,6 +360,7 @@ Without a terminal to ask in (for example in a script), `selects <video>` stops 
 | `SELECTS_LANGID_DIR` | `<models>/langid` | the text language models (`lid-lite-608/model.ftz`, `lid-lite-5/lid-lite-5.json`) |
 | `SELECTS_ACCENT_MODEL_NG` | `<models>/ggml-small-nigerian-accent.bin` | the whisper model for Nigerian-accented English |
 | `SELECTS_PUNCT_DIR` | `<models>/punct/sherpa-onnx-online-punct-en-2024-08-06` | the punctuation model |
+| `SELECTS_REUSE` | on | set to `0` to never reuse a saved language check or transcript |
 | `PORT` | 4317 | port for `selects serve`, if `--port` is not given |
 
 ## Rights and attribution

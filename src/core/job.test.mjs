@@ -8,6 +8,7 @@ import { talk } from "./test/fixtures.mjs";
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "selects-job-"));
 process.env.SELECTS_HOME = home;
+process.env.SELECTS_REUSE = "0"; // each test transcribes on its own; the reuse test turns it back on
 const { createJob, jobEvents, listJobs, loadJob, renderJob, resumeJob, runJob, updateCandidate, updateJobSettings, jobDir } = await import("./job.mjs");
 const { checkFaithful } = await import("./faithful.mjs");
 
@@ -474,4 +475,38 @@ test("quality bar: a video with no strong clips says so and offers only the clos
   assert.equal(ok.verdict.strong, strong);
   assert.match(ok.verdict.note, /^\d strong clips?\. The other \d (is|are) weaker\.$/);
   assert.deepEqual(ok.candidates.map((c) => c.weak), ok.candidates.map((c) => c.total < 0.55));
+});
+
+test("transcript reuse: a second job on the same video skips the language check and whisper", async () => {
+  delete process.env.SELECTS_REUSE;
+  try {
+    const own = path.join(home, "reuse-talk.mp4");
+    fs.writeFileSync(own, "another not-really-a-video");
+    const counter = { probe: 0, transcribe: 0, judge: 0 };
+    let lang = 0;
+    const deps = () => {
+      const d = mocks(counter);
+      const decide = d.decideLanguage;
+      d.decideLanguage = (...a) => (lang++, decide(...a));
+      return d;
+    };
+    const first = await runJob(createJob(own, { model: "mock", qualityGate: false }).id, { deps: deps() });
+    assert.deepEqual([counter.transcribe, lang], [1, 1]);
+    assert.equal(first.reuse.transcript, null);
+    // caption mode on the same file reuses both
+    const second = await runJob(createJob(own, { mode: "caption" }).id, { deps: deps() });
+    assert.deepEqual([counter.transcribe, lang], [1, 1], "no second transcription or language check");
+    assert.equal(second.reuse.transcript.from, first.id);
+    assert.ok(second.reuse.language);
+    assert.equal(second.language.used, "en");
+    assert.equal(JSON.parse(fs.readFileSync(path.join(jobDir(second.id), "words.json"), "utf8")).length, JSON.parse(fs.readFileSync(path.join(jobDir(first.id), "words.json"), "utf8")).length);
+    // another whisper model or language is another transcript
+    await runJob(createJob(own, { model: "mock", qualityGate: false, asrModel: "small.en" }).id, { deps: deps() });
+    assert.equal(counter.transcribe, 2);
+    // and reuse can be turned off for one job
+    await runJob(createJob(own, { model: "mock", qualityGate: false, reuse: false }).id, { deps: deps() });
+    assert.deepEqual([counter.transcribe, lang], [3, 2]);
+  } finally {
+    process.env.SELECTS_REUSE = "0";
+  }
 });

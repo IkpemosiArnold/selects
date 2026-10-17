@@ -56,6 +56,7 @@ Speech and captions (clips and caption mode)
   --accent <a>      auto (default: Nigerian-accented English goes to a fine-tuned model when the
                     language check finds cues), ng (always, for English), or none
   --clean-audio     cut rumble and hiss and even out loudness before whisper
+  --fresh           check the language and transcribe again, even if this video was done before
   --no-captions     render clips without burned-in captions
   --style <s>       caption look: bold (2 to 4 words, current word yellow) or subtitle (two lines)
   --captions <l>    source (default); en and both are planned
@@ -353,6 +354,7 @@ function speechSettings(values) {
     captionStyle: values.style,
     captionLang: values.captions,
     qualityGate: values.force ? false : undefined,
+    reuse: values.fresh ? false : undefined,
     blur: blur ?? undefined,
     profile: values.profile,
   };
@@ -624,6 +626,7 @@ async function main() {
       max: { type: "string" },
       "judge-n": { type: "string" },
       "made-for": { type: "string" },
+      fresh: { type: "boolean" },
       faithful: { type: "string" },
       out: { type: "string" },
       port: { type: "string" },

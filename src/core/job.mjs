@@ -4,10 +4,11 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { DEFAULT_SETTINGS, jobsDir, resolveAsrModel, resolveModel } from "./config.mjs";
+import { DEFAULT_SETTINGS, jobsDir, languageCheckModel, resolveAsrModel, resolveModel } from "./config.mjs";
 import { captionsFile, clipCues, loadCaptions, textInRange } from "./captions.mjs";
 import { detectFaces as realDetectFaces } from "./faces.mjs";
-import { decideLanguage as realDecideLanguage } from "./language.mjs";
+import { decideLanguage as realDecideLanguage, LANGUAGE_RULE } from "./language.mjs";
+import { languageKey, loadLanguage, loadTranscript, reuseEnabled, saveLanguage, saveTranscript, sourceFingerprint, transcriptKey } from "./reuse.mjs";
 import { accentRoute, nigerianCues } from "./langid/accent.mjs";
 import { applyProfile } from "./profiles.mjs";
 import { applyMadeFor } from "./madefor.mjs";
@@ -395,19 +396,41 @@ async function runStages(id, { deps = {}, signal } = {}) {
 
     const audioStream = job.source.audioStreams?.[0]?.index ?? null;
 
+    // Transcript reuse: the language check and the transcript are kept per source file (a fast
+    // content fingerprint), so another job on the same video skips both
+    let fingerprint = null;
+    if (reuseEnabled(job.settings)) {
+      try {
+        fingerprint = sourceFingerprint(job.source.path);
+      } catch {}
+    }
+    job.reuse = job.reuse || { language: null, transcript: null };
+
     // 2. language: decode-and-compare, because whisper's own guess is biased against accents
     if (job.stages.language.status !== "done" || !job.language) {
       current = "language";
       begin("language");
-      job.language = await d.decideLanguage(job.source.path, {
-        duration: job.source.duration,
-        setting: job.settings.language || "en",
-        remembered: job.settings.rememberedLanguage ?? null,
-        cacheDir: dir,
-        audioStream,
-        signal,
-        onProgress: (p) => progress("language", p),
-      });
+      const setting = job.settings.language || "en";
+      const remembered = job.settings.rememberedLanguage ?? null;
+      const lKey = fingerprint ? languageKey(fingerprint, { setting, remembered, rule: LANGUAGE_RULE, model: languageCheckModel(), audioStream }) : null;
+      const saved = lKey ? loadLanguage(lKey) : null;
+      if (saved) {
+        job.language = saved;
+        writeJsonAtomic(path.join(dir, "language.json"), saved);
+        job.reuse.language = { key: lKey, sec: saved.sec ?? null };
+        progress("language", { progress: 1, note: "reused the language check from an earlier run" });
+      } else {
+        job.language = await d.decideLanguage(job.source.path, {
+          duration: job.source.duration,
+          setting,
+          remembered,
+          cacheDir: dir,
+          audioStream,
+          signal,
+          onProgress: (p) => progress("language", p),
+        });
+        if (lKey && job.language) saveLanguage(lKey, job.language);
+      }
       const q = job.language.question;
       finish("language", q ? `${q.text} The language signals disagree; Selects carries on with ${job.language.used}.` : job.language.warning ? job.language.warning : `${job.language.used}${job.language.detected ? `, whisper guessed ${job.language.detected.code} (p = ${job.language.detected.p})` : ""}`);
       emit(id, "job", job);
@@ -426,18 +449,25 @@ async function runStages(id, { deps = {}, signal } = {}) {
       job.accent = { accent: route.accent, routed: !!route.model, model: route.model ? path.basename(route.model) : null, cues, reason: route.reason };
       const model = route.model || resolveAsrModel(job.settings.asrModel || "auto", lang);
       const t0 = Date.now();
-      words = await d.transcribe(job.source.path, {
-        cacheDir: dir,
-        duration: job.source.duration,
-        signal,
-        language: lang,
-        model,
-        prompt: job.settings.asrPrompt || null,
-        preprocess: job.settings.asrPreprocess || "none",
-        audioStream,
-        onProgress: (p) => progress("transcribe", p),
-        onWords: (chunk) => emit(id, "words", chunk),
-      });
+      const asrOpts = { model, language: lang, prompt: job.settings.asrPrompt || null, preprocess: job.settings.asrPreprocess || "none", audioStream };
+      const tKey = fingerprint ? transcriptKey(fingerprint, asrOpts) : null;
+      const saved = tKey ? loadTranscript(tKey, { jobDir: dir }) : null;
+      if (saved) {
+        words = saved.words;
+        job.reuse.transcript = { key: tKey, from: saved.meta.job ?? null, sec: saved.meta.sec ?? null };
+        emit(id, "words", words);
+        progress("transcribe", { progress: 0.99, note: "reused the transcript from an earlier run" });
+      } else {
+        words = await d.transcribe(job.source.path, {
+          cacheDir: dir,
+          duration: job.source.duration,
+          signal,
+          ...asrOpts,
+          onProgress: (p) => progress("transcribe", p),
+          onWords: (chunk) => emit(id, "words", chunk),
+        });
+        if (tKey && words?.length) saveTranscript(tKey, words, { jobDir: dir, meta: { job: id, source: job.source.name, model: path.basename(model), language: lang, sec: +((Date.now() - t0) / 1000).toFixed(1) } });
+      }
       const split = splitNonSpeech(words); // a no-op for segmentsToWords output, which is already clean
       writeJsonAtomic(path.join(dir, "events.json"), [...(words.events || []), ...split.events].sort((a, b) => a.s - b.s));
       words = split.words;
