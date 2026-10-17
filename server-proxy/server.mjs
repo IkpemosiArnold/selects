@@ -7,7 +7,9 @@
 //
 //   GEMINI_API_KEY   required: a Google AI Studio key
 //   GEMMA_MODEL      default gemma-4-26b-a4b-it (falls back through GEMMA_FALLBACKS when a model is not served)
-//   ALLOWED_ORIGINS  comma-separated origins allowed to call it (the static site's URL)
+//   ALLOWED_ORIGINS  comma-separated origins allowed to call it (the static site's URL); no wildcard
+//   TRUST_PROXY_HOPS how many proxies in front of us append to X-Forwarded-For (default 1 on
+//                    Render, where RENDER is set, else 0: use the socket address)
 //   PORT             default 8787
 //
 // Run: node server-proxy/server.mjs     Health: GET /healthz     Task: POST /v1/task
@@ -16,6 +18,7 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { geminiGenerate, GEMINI_BASE } from "../src/core/gemini.mjs";
+import { MADE_FOR } from "../src/core/madefor.mjs";
 import { buildTask, checkTaskShape, slimTask } from "../src/core/tasks.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -51,13 +54,86 @@ export function makeLimiter(now = () => Date.now()) {
   };
 }
 
-const clientIp = (req) => String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket.remoteAddress || "unknown";
+/**
+ * The rate-limit key. X-Forwarded-For is a list the client starts: anyone can send
+ * "X-Forwarded-For: 1.2.3.4", and a proxy that appends (Render's does not strip what the
+ * client sent) turns that into "1.2.3.4, <real ip>". The left-most entry is therefore the
+ * client's choice and must never be the key. Each trusted proxy appends exactly one entry,
+ * so with `hops` trusted proxies the real client is the hops-th entry from the right. With no
+ * proxy in front (hops 0, local runs and tests) the TCP peer address is the only truth.
+ * Check after a deploy: `curl -H 'X-Forwarded-For: 1.2.3.4' <proxy>/healthz` must report
+ * your own address in "you", not 1.2.3.4. If it reports an internal address (Render added
+ * more than one hop after you), raise TRUST_PROXY_HOPS by the number of extra entries.
+ * Never lower it to read the left-most entry.
+ */
+export function clientIp(req, hops = 0) {
+  if (hops > 0) {
+    const xs = String(req.headers["x-forwarded-for"] || "").split(",").map((x) => x.trim()).filter(Boolean);
+    if (xs.length >= hops) return xs[xs.length - hops];
+  }
+  return req.socket.remoteAddress || "unknown";
+}
+
+const KINDS = new Set(["judge", "judgeBatch", "listwise", "kit", "faithful"]);
+const TOP_KEYS = new Set(["kind", "candidate", "candidates", "top", "before", "after", "hints", "madeFor", "model"]);
+const isObj = (x) => x != null && typeof x === "object" && !Array.isArray(x);
+const shortStr = (x, n) => typeof x === "string" && x.length <= n;
+
+/**
+ * Strict shape check on top of checkTaskShape (src/core/tasks.mjs): a plain object with only
+ * the keys a Selects task uses, a known kind, a known madeFor, and short string fields.
+ * Returns a reason, or null when the task is fine.
+ */
+export function strictTaskShape(task) {
+  if (!isObj(task)) return "body must be a JSON object";
+  for (const k of Object.keys(task)) if (!TOP_KEYS.has(k)) return `unknown field ${k.slice(0, 40)}`;
+  if (!KINDS.has(task.kind)) return "kind must be judge, judgeBatch, listwise, kit or faithful";
+  if (task.madeFor != null && !(typeof task.madeFor === "string" && Object.hasOwn(MADE_FOR, task.madeFor))) return `madeFor must be one of ${Object.keys(MADE_FOR).join(", ")}`;
+  if (task.model != null && !(typeof task.model === "string" && /^[\w.:-]{1,64}$/.test(task.model))) return "model must be a model name";
+  const clips = [task.candidate, ...(Array.isArray(task.candidates) ? task.candidates : []), ...(Array.isArray(task.top) ? task.top : [])].filter((c) => c !== undefined);
+  for (const c of clips) {
+    if (!isObj(c)) return "each clip must be an object";
+    if (c.hook != null && !shortStr(c.hook, 3000)) return "hook must be text (at most 3000 characters)";
+  }
+  if (task.hints != null) {
+    if (!Array.isArray(task.hints) || task.hints.length > 10) return "hints must be a list of at most 10";
+    if (!task.hints.every((h) => isObj(h) && shortStr(h.issue, 60) && shortStr(h.cue, 400))) return "each hint must be { issue, cue } as short text";
+  }
+  return checkTaskShape(task);
+}
+
+/** The body as one Buffer (so a UTF-8 character split across chunks stays whole), capped. */
+function readBody(req, cap) {
+  return new Promise((resolve, reject) => {
+    if (Number(req.headers["content-length"]) > cap) return resolve({ tooBig: true });
+    const chunks = [];
+    let size = 0;
+    let done = false;
+    req.on("data", (c) => {
+      if (done) return;
+      size += c.length;
+      if (size > cap) {
+        done = true;
+        req.pause();
+        return resolve({ tooBig: true });
+      }
+      chunks.push(c);
+    });
+    req.on("end", () => {
+      if (done) return;
+      done = true;
+      resolve({ buf: Buffer.concat(chunks) });
+    });
+    req.on("error", (e) => (done ? null : ((done = true), reject(e))));
+  });
+}
 
 export function createProxy({
   key = process.env.GEMINI_API_KEY,
   model = process.env.GEMMA_MODEL || "gemma-4-26b-a4b-it",
   fallbacks = (process.env.GEMMA_FALLBACKS || "gemma-4-31b-it").split(",").map((s) => s.trim()).filter(Boolean),
-  origins = (process.env.ALLOWED_ORIGINS || "http://localhost:4319,http://localhost:5173,http://127.0.0.1:4319").split(",").map((s) => s.trim()).filter(Boolean),
+  origins = (process.env.ALLOWED_ORIGINS || "http://localhost:4319,http://localhost:5173,http://127.0.0.1:4319").split(",").map((s) => s.trim().replace(/\/$/, "")).filter((s) => s && s !== "*"),
+  trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? (process.env.RENDER ? 1 : 0)),
   base = process.env.GEMINI_BASE || GEMINI_BASE,
   limits = LIMITS,
   limiter = makeLimiter(),
@@ -80,7 +156,8 @@ export function createProxy({
   const server = http.createServer((req, res) => {
     handle(req, res).catch((e) => {
       counts.failed++;
-      log(JSON.stringify({ at: new Date().toISOString(), error: String(e?.message || e).slice(0, 120) }));
+      // the error's code or name only: a message can quote the request
+      log(JSON.stringify({ at: new Date().toISOString(), error: String(e?.code || e?.name || "Error").slice(0, 40) }));
       if (!res.headersSent) send(res, 500, { error: "The proxy failed on this request.", hint: "Try again, or switch to Private mode." }, null);
       else res.end();
     });
@@ -90,14 +167,16 @@ export function createProxy({
   async function handle(req, res) {
     const t0 = Date.now();
     const reqOrigin = req.headers.origin || "";
-    const origin = origins.includes("*") ? "*" : origins.includes(reqOrigin) ? reqOrigin : null;
+    const origin = origins.includes(reqOrigin) ? reqOrigin : null;
     const url = new URL(req.url, "http://x");
     if (req.method === "OPTIONS") {
       res.writeHead(origin ? 204 : 403, origin ? { "access-control-allow-origin": origin, "access-control-allow-methods": "GET, POST", "access-control-allow-headers": "content-type", "access-control-max-age": "86400", vary: "Origin" } : {});
       return res.end();
     }
     if (req.method === "GET" && (url.pathname === "/healthz" || url.pathname === "/")) {
-      return send(res, 200, { ok: !!key, model: current, limits: { perIpPerMinute: limits.perIpPerMinute, globalPerMinute: limits.globalPerMinute }, counts }, origin);
+      // "you" is the caller's own rate-limit key, so a deploy can check that a spoofed
+      // X-Forwarded-For does not change it
+      return send(res, 200, { ok: !!key, model: current, limits: { perIpPerMinute: limits.perIpPerMinute, globalPerMinute: limits.globalPerMinute }, counts, you: clientIp(req, trustProxyHops) }, origin);
     }
     if (req.method !== "POST" || url.pathname !== "/v1/task") return send(res, 404, { error: "Not found." }, origin);
     if (reqOrigin && !origin) {
@@ -106,7 +185,7 @@ export function createProxy({
     }
     if (!key) return send(res, 503, { error: "The proxy has no API key.", hint: "Set GEMINI_API_KEY on the server, or use your own key in Smart mode." }, origin);
 
-    const ip = clientIp(req);
+    const ip = clientIp(req, trustProxyHops);
     for (const [k, lim, win] of [[`m:${ip}`, limits.perIpPerMinute, 60000], [`d:${ip}`, limits.perIpPerDay, 86400000], ["gm", limits.globalPerMinute, 60000], ["gd", limits.globalPerDay, 86400000]]) {
       const a = limiter.allow(k, lim, win);
       if (!a.ok) {
@@ -116,20 +195,18 @@ export function createProxy({
       }
     }
 
-    let raw = "";
-    let tooBig = false;
-    for await (const chunk of req) {
-      raw += chunk;
-      if (raw.length > limits.bodyBytes) {
-        tooBig = true;
-        break;
-      }
+    const body = await readBody(req, limits.bodyBytes);
+    if (body.tooBig) {
+      counts.refused++;
+      res.on("finish", () => req.destroy());
+      res.setHeader("connection", "close");
+      return send(res, 413, { error: "Refused: body too large.", hint: "The proxy only judges Selects clips." }, origin);
     }
     let task = null;
     try {
-      task = tooBig ? null : JSON.parse(raw);
+      task = JSON.parse(body.buf.toString("utf8"));
     } catch {}
-    const bad = tooBig ? "body too large" : checkTaskShape(task);
+    const bad = strictTaskShape(task);
     if (bad) {
       counts.refused++;
       return send(res, 400, { error: `Refused: ${bad}.`, hint: "The proxy only judges Selects clips." }, origin);

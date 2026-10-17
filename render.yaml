@@ -55,6 +55,12 @@ services:
         value: gemma-4-31b-it
       - key: GEMMA_TIMEOUT_MS
         value: "25000"
-      # the static site's URL, for example https://selects-web.onrender.com
+      # the static site's URL, for example https://selects-web.onrender.com (no wildcard)
       - key: ALLOWED_ORIGINS
         sync: false
+      # Render's proxy appends the caller's address to X-Forwarded-For; the proxy reads that
+      # right-most entry and ignores what the client wrote (see clientIp in server-proxy).
+      # After deploying, curl -H 'X-Forwarded-For: 1.2.3.4' <proxy>/healthz must show your own
+      # address in "you".
+      - key: TRUST_PROXY_HOPS
+        value: "1"
