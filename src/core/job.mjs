@@ -4,7 +4,7 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { DEFAULT_SETTINGS, jobsDir, languageCheckModel, resolveAsrModel, resolveModel } from "./config.mjs";
+import { DEFAULT_SETTINGS, jobsDir, languageCheckModel, resolveAsrModel, resolveModel, selectsHome } from "./config.mjs";
 import { captionsFile, clipCues, loadCaptions, textInRange } from "./captions.mjs";
 import { detectFaces as realDetectFaces } from "./faces.mjs";
 import { decideLanguage as realDecideLanguage, LANGUAGE_RULE } from "./language.mjs";
@@ -14,9 +14,10 @@ import { applyProfile } from "./profiles.mjs";
 import { applyMadeFor } from "./madefor.mjs";
 import { transcriptQuality } from "./quality.mjs";
 import { attributionLine, captionWithCredit, mediaReminder, normaliseLicense, OWN_FOOTAGE } from "./attribution.mjs";
-import { selectCandidates } from "./select.mjs";
+import { judgeCount, selectCandidates } from "./select.mjs";
 import { splitNonSpeech, speechOnly } from "./nonspeech.mjs";
-import { judge as realJudge, listwise as realListwise } from "./judge.mjs";
+import { judge as realJudge, listwise as realListwise, measuredSpeeds } from "./judge.mjs";
+import { DEFAULT_RATES, diskFullError, diskNeed, estimateJob, isDiskFull, thumbCount } from "./estimate.mjs";
 import { checkFaithful as realFaithful } from "./faithful.mjs";
 import { orderByFaithful } from "./faithful-core.mjs";
 import { plainKit, postingKit as realKit } from "./kit.mjs";
@@ -162,8 +163,8 @@ function loadEvents(dir, rawWords) {
   return [...(Array.isArray(saved) ? saved : []), ...splitNonSpeech(rawWords).events].sort((a, b) => a.s - b.s);
 }
 
-/** Make thumbnails for the filmstrip from keyframes only (fast: no full decode). */
-async function makeThumbs(job, { count = 60 } = {}) {
+/** Make thumbnails for the filmstrip from keyframes only (fast: no full decode). One every 30 s, 60 to 240. */
+async function makeThumbs(job, { count = thumbCount(job.source.duration) } = {}) {
   const dir = path.join(jobDir(job.id), "thumbs");
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
@@ -253,7 +254,7 @@ export function resetTranscript(id, { language, asrModel, asrPrompt, asrPreproce
   if (asrPreprocess) job.settings.asrPreprocess = asrPreprocess;
   if (accent) job.settings.accent = accent;
   const dir = jobDir(id);
-  for (const f of ["whisper.json", "whisper.meta.json", "words.json", "events.json", "captions.json", "candidates.json", "judged.json", "loudness.json"]) fs.rmSync(path.join(dir, f), { force: true });
+  for (const f of ["whisper.json", "whisper.meta.json", "words.json", "events.json", "captions.json", "candidates.json", "judged.json", "loudness.json", "audio.wav", "audio.part.wav", "whisper-chunks"]) fs.rmSync(path.join(dir, f), { recursive: true, force: true });
   for (const s of ["language", "transcribe", "candidates", "judge"]) job.stages[s] = freshStage();
   job.language = null;
   job.accent = null;
@@ -327,6 +328,54 @@ export function cleanBlur(blur) {
   return { faces: { mode, tracks: Array.isArray(blur.faces?.tracks) ? blur.faces.tracks.map(String) : [] }, regions };
 }
 
+/** Free bytes on the drive that holds the jobs folder (null when the OS will not say). */
+function freeBytes() {
+  try {
+    const st = fs.statfsSync(jobsDir());
+    return st.bavail * st.bsize;
+  } catch {
+    return null;
+  }
+}
+
+/** Stop before writing anything when the drive cannot hold what the next step writes. */
+export function checkDisk(needBytes, during, { free = freeBytes() } = {}) {
+  if (free != null && free < needBytes) throw diskFullError({ needBytes, freeBytes: free, home: selectsHome(), during });
+}
+
+/** Median whisper speed (x real time) over this laptop's finished jobs, or null. */
+function measuredAsrSpeed() {
+  const xs = [];
+  for (const j of listJobs().slice(0, 20)) {
+    const st = j.stages?.transcribe;
+    const d = j.source?.duration;
+    if (st?.status !== "done" || !d || !st.startedAt || !st.endedAt) continue;
+    const sec = (Date.parse(st.endedAt) - Date.parse(st.startedAt)) / 1000;
+    if (sec > 5) xs.push(d / sec);
+  }
+  if (!xs.length) return null;
+  xs.sort((a, b) => a - b);
+  return +xs[xs.length >> 1].toFixed(2);
+}
+
+/** Seconds per judge call: set by the caller (Smart mode), else measured on this laptop, else the reference laptop's. */
+function judgeSecPerCall(s) {
+  return s.judgeSecPerCall ?? measuredSpeeds()[s.model]?.secPerCandidate ?? DEFAULT_RATES.judgeSec;
+}
+
+/** Time per stage for this job on this laptop: measured speeds where there are some. */
+export function jobEstimate(job, { rates = {} } = {}) {
+  const s = job.settings;
+  const judgeSec = judgeSecPerCall(s);
+  const asrSpeed = measuredAsrSpeed();
+  const judgeN = judgeCount({ k: s.k ?? null, duration: job.source.duration, judgeN: s.judgeN ?? null, secPerCall: judgeSec }).n;
+  const est = estimateJob(
+    { duration: job.source.duration, k: s.k, judgeN, minLen: s.minLen, maxLen: s.maxLen, faithful: s.faithful, listwise: s.listwise, language: s.language, preset: s.preset, kit: s.kit, mode: s.mode },
+    { judgeSec, asrSpeed, ...rates },
+  );
+  return { ...est, judgeN, at: now(), measured: { judgeSec, asrSpeed } };
+}
+
 async function runStages(id, { deps = {}, signal } = {}) {
   const d = {
     probe: realProbe,
@@ -354,14 +403,22 @@ async function runStages(id, { deps = {}, signal } = {}) {
     save();
     emit(id, "stage", { stage: job.stage, name: s, state: job.stages[s] });
   };
+  // the whole job's time left: this stage's own ETA plus the estimate for the stages after it
+  const ANALYSIS = ["probe", "language", "transcribe", "candidates", "judge"];
+  const jobEta = (s, stageEta) => {
+    if (stageEta == null || !job.estimate?.stages) return null;
+    const later = ANALYSIS.slice(ANALYSIS.indexOf(s) + 1).filter((x) => job.stages[x]?.status !== "done");
+    return Math.round(stageEta + later.reduce((a, x) => a + (job.estimate.stages[x] ?? 0), 0));
+  };
   const progress = (s, p) => {
     Object.assign(job.stages[s], {
       progress: +(p.progress ?? 0).toFixed(3),
       etaSec: p.etaSec ?? null,
       note: p.note ?? job.stages[s].note,
     });
+    const jobEtaSec = jobEta(s, p.etaSec ?? null);
     save(false);
-    emit(id, "progress", { name: s, ...job.stages[s], ...(p.speed != null ? { speed: +p.speed.toFixed(2) } : {}) });
+    emit(id, "progress", { name: s, ...job.stages[s], ...(p.speed != null ? { speed: +p.speed.toFixed(2) } : {}), ...(jobEtaSec != null ? { jobEtaSec } : {}) });
   };
   const finish = (s, note) => {
     const st = job.stages[s];
@@ -393,6 +450,12 @@ async function runStages(id, { deps = {}, signal } = {}) {
       }
       finish("probe", `${Math.round(job.source.duration)} s of video`);
     }
+
+    // an honest estimate for the whole job, and room on the disk for the WAV before it is written
+    job.estimate = jobEstimate(job);
+    save();
+    emit(id, "estimate", job.estimate);
+    if (job.stages.transcribe.status !== "done") checkDisk(diskNeed({ duration: job.source.duration }), "transcribing this video");
 
     const audioStream = job.source.audioStreams?.[0]?.index ?? null;
 
@@ -522,10 +585,15 @@ async function runStages(id, { deps = {}, signal } = {}) {
       current = "candidates";
       begin("candidates");
       // sentences and windows are built from speech only; laughter is kept as a pre-score signal
-      const sel = selectCandidates({ words, events: loadEvents(dir, words), loudness: readJson(path.join(dir, "loudness.json"), null), settings: job.settings, duration: job.source.duration });
+      // how many windows the judge reads: scaled with k and the length, capped by a time budget
+      // at the judge's measured speed (judgeCount in select.mjs)
+      const secPerCall = judgeSecPerCall(job.settings);
+      const sel = selectCandidates({ words, events: loadEvents(dir, words), loudness: readJson(path.join(dir, "loudness.json"), null), settings: job.settings, duration: job.source.duration, judge: { secPerCall } });
       const { sentences, windows: all } = sel;
       short = sel.shortlist;
-      writeJsonAtomic(candFile, { sentences: sentences.length, windows: all.length, shortlist: short });
+      job.judgeN = sel.judgeN;
+      if (sel.judgeN.auto) job.settings.judgeN = sel.judgeN.n; // the count it used, for estimates and reruns
+      writeJsonAtomic(candFile, { sentences: sentences.length, windows: all.length, shortlist: short, judgeN: sel.judgeN });
       job.candidates = short;
       finish("candidates", `${all.length} windows passed the filter, ${short.length} go to the judge`);
       emit(id, "candidates", { ranked: false, candidates: short });
@@ -595,6 +663,7 @@ async function runStages(id, { deps = {}, signal } = {}) {
 
 function fail(job, stage, e) {
   const aborted = e?.name === "AbortError";
+  if (!aborted && e?.code !== "disk_full" && isDiskFull(e)) e = diskFullError({ home: selectsHome(), during: STAGE_DOING[stage] || "this step" });
   job.stage = "error";
   if (stage && job.stages[stage] && !e?.keepStage) Object.assign(job.stages[stage], { status: "error", endedAt: now() });
   job.error = {
@@ -602,11 +671,18 @@ function fail(job, stage, e) {
     message: aborted ? "Stopped before it finished." : e.message || String(e),
     hint: e.hint || "Resume the job to continue from the last finished stage. Your progress is saved.",
     ...(e.suggest ? { suggest: e.suggest } : {}),
+    ...(e.code === "disk_full" ? { code: "disk_full" } : {}),
   };
-  saveJob(job);
+  try {
+    saveJob(job);
+  } catch {
+    // a full disk can refuse even the error note; job.json keeps its last good version
+  }
   emit(job.id, "error", job.error);
   return job;
 }
+
+const STAGE_DOING = { probe: "reading the video", language: "the language check", transcribe: "transcription", candidates: "finding moments", judge: "judging", render: "rendering" };
 
 /**
  * Change a candidate: approve or skip it, or move its in and out points (snapped to
@@ -815,6 +891,52 @@ async function renderCaptioned(id, { deps = {}, signal } = {}) {
   }
 }
 
+// What a person owns on a candidate while the renderer runs: decisions and cuts. The
+// renderer saves its progress without undoing an approval or a trim made meanwhile.
+const HUMAN_FIELDS = ["status", "blur", "start", "end", "text", "hook", "trimmed", "faithful"];
+
+/** Take the person's edits that landed on disk into the renderer's copy of a job. */
+function mergeHuman(job) {
+  let disk = null;
+  try {
+    disk = loadJob(job.id);
+  } catch {}
+  if (disk) {
+    const theirs = new Map((disk.candidates || []).map((c) => [c.id, c]));
+    for (const c of job.candidates) {
+      const d = theirs.get(c.id);
+      if (d) for (const f of HUMAN_FIELDS) if (f in d) c[f] = d[f];
+    }
+    job.settings = disk.settings; // credit and licence edits reach the kits written after them
+  }
+  return job;
+}
+
+/** Save the renderer's copy of a job, keeping the person's edits that landed on disk meanwhile. */
+function saveRendering(job) {
+  return saveJob(mergeHuman(job));
+}
+
+/**
+ * Approve the best n clips that a person has not skipped, in the order the review shows them
+ * (rank, with misleading cuts moved down). Clips beyond n keep their status. Returns the job.
+ */
+export function approveTop(id, n, { includeWeak = true } = {}) {
+  const count = Math.floor(Number(n));
+  if (!Number.isFinite(count) || count < 1) throw Object.assign(new Error("top must be a whole number of clips, 1 or more."), { status: 400 });
+  const job = loadJob(id);
+  let approved = 0;
+  for (const c of job.candidates) {
+    if (approved >= count) break;
+    if (c.status === "skipped" || (!includeWeak && c.weak)) continue;
+    c.status = "approved";
+    approved++;
+  }
+  saveJob(job);
+  emit(id, "candidates", { ranked: true, candidates: job.candidates });
+  return job;
+}
+
 async function renderClips(id, { ids, deps = {}, signal, kit, preset } = {}) {
   const d = { render: realRender, postingKit: realKit, ...deps };
   const job = loadJob(id);
@@ -822,70 +944,114 @@ async function renderClips(id, { ids, deps = {}, signal, kit, preset } = {}) {
   const usePreset = preset || job.settings.preset || "shorts";
   const field = usePreset === "preview" ? "preview" : "render";
   const kitMode = field === "preview" ? false : (kit ?? job.settings.kit ?? "model");
-  const targets = job.candidates.filter((c) => (ids ? ids.includes(c.id) : c.status === "approved"));
+  const pick = (j) => j.candidates.filter((c) => (ids ? ids.includes(c.id) : c.status === "approved"));
+  let targets = pick(job);
   if (!targets.length) return job;
   const isDone = (c) => c[field]?.status === "done" && !c[field].stale && c[field].path && fs.existsSync(path.join(dir, c[field].path));
   if (targets.every(isDone)) return job; // nothing to do: keep the stage's real timings
+  const todo0 = targets.filter((c) => !isDone(c));
+  try {
+    checkDisk(diskNeed({ clips: todo0.length, minLen: job.settings.minLen, maxLen: job.settings.maxLen, stage: "render" }), `rendering ${todo0.length} clip${todo0.length === 1 ? "" : "s"}`);
+  } catch (e) {
+    return fail(job, "render", e);
+  }
   const words = loadWords(id);
   const prevStage = job.stage;
   job.stage = "rendering";
   job.stages.render = { ...freshStage(), status: "running", startedAt: now(), note: `${usePreset} preset` };
   const blank = () => ({ status: "pending", path: null, srt: null, kit: null, progress: 0 });
   for (const c of targets) if (!isDone(c)) c[field] = blank();
-  saveJob(job);
+  saveRendering(job);
   emit(id, "stage", { stage: "rendering", name: "render", state: job.stages.render });
   let lastSave = 0;
+  const failed = [];
+  const finished = new Set();
+  const t0 = Date.now();
   try {
-    let i = 0;
-    for (const c of targets) {
-      i++;
-      if (isDone(c)) continue;
-      c[field] = { ...blank(), status: "running" };
-      saveJob(job);
-      emit(id, "render", { id: c.id, preset: usePreset, ...c[field] });
-      const r = await d.render(job, c, {
-        preset: usePreset,
-        jobDir: dir,
-        words,
-        signal,
-        onProgress: (p) => {
-          c[field].progress = +p.progress.toFixed(3);
-          job.stages.render.progress = +((i - 1 + p.progress) / targets.length).toFixed(3);
-          if (Date.now() - lastSave > 2000) {
-            saveJob(job);
-            lastSave = Date.now();
-          }
-          emit(id, "render", { id: c.id, preset: usePreset, ...c[field] });
-        },
-      });
-      c[field] = { status: "done", inputs: renderFingerprint(job, c), stale: false, path: r.path, srt: r.srt, kit: null, progress: 1, reframe: r.reframe?.mode, decode: r.decode, blurBoxes: r.blurBoxes, wallSec: r.wallSec };
-      if (kitMode) {
-        let k;
-        const k0 = Date.now();
+    // A render queue: one clip at a time (two cores), each clip saved and announced the moment
+    // it is done, a clip that fails is marked and the rest carry on, and clips approved while
+    // it runs join the end of the queue
+    for (;;) {
+      const todo = targets.filter((c) => !isDone(c) && !finished.has(c.id));
+      if (!todo.length) break;
+      for (const c of todo) {
+        if (signal?.aborted) throw signal.reason ?? Object.assign(new Error("aborted"), { name: "AbortError" });
+        finished.add(c.id);
+        const doneSoFar = targets.filter((x) => finished.has(x.id)).length - 1;
+        c[field] = { ...blank(), status: "running" };
+        saveRendering(job);
+        emit(id, "render", { id: c.id, preset: usePreset, ...c[field], queue: { done: doneSoFar, total: targets.length } });
+        let r;
         try {
-          k = kitMode === "model" ? await d.postingKit(kitSource(dir, c), { model: job.settings.model, madeFor: job.settings.madeFor || "shorts", signal, cacheDir: dir }) : plainKit(kitSource(dir, c));
-        } catch {
-          k = plainKit(kitSource(dir, c));
+          r = await d.render(job, c, {
+            preset: usePreset,
+            jobDir: dir,
+            words,
+            signal,
+            onProgress: (p) => {
+              c[field].progress = +p.progress.toFixed(3);
+              const all = (doneSoFar + p.progress) / targets.length;
+              job.stages.render.progress = +all.toFixed(3);
+              // the queue's ETA: the pace so far over the clips still to go
+              const spent = (Date.now() - t0) / 1000;
+              job.stages.render.etaSec = all > 0.02 ? Math.round((spent / all) * (1 - all)) : null;
+              if (Date.now() - lastSave > 2000) {
+                saveRendering(job);
+                lastSave = Date.now();
+              }
+              emit(id, "render", { id: c.id, preset: usePreset, ...c[field], queue: { done: doneSoFar, total: targets.length, etaSec: job.stages.render.etaSec } });
+            },
+          });
+        } catch (e) {
+          // stop everything when the person stopped it or the disk is full; otherwise mark
+          // this clip and carry on with the next
+          if (e?.name === "AbortError" || isDiskFull(e)) throw e;
+          c[field] = { status: "error", path: null, srt: null, kit: null, progress: 0, message: e.message || String(e), hint: e.hint || "Render this clip again. The others are not affected." };
+          failed.push(c.id);
+          saveRendering(job);
+          emit(id, "render", { id: c.id, preset: usePreset, ...c[field] });
+          continue;
         }
-        const kitRel = writeKit(job, c, k);
-        c.title = k.title;
-        c[field].kit = kitRel;
-        c[field].kitSec = +((Date.now() - k0) / 1000).toFixed(1);
+        c[field] = { status: "done", inputs: renderFingerprint(job, c), stale: false, path: r.path, srt: r.srt, kit: null, progress: 1, reframe: r.reframe?.mode, decode: r.decode, blurBoxes: r.blurBoxes, wallSec: r.wallSec };
+        if (kitMode) {
+          let k;
+          const k0 = Date.now();
+          try {
+            k = kitMode === "model" ? await d.postingKit(kitSource(dir, c), { model: job.settings.model, madeFor: job.settings.madeFor || "shorts", signal, cacheDir: dir }) : plainKit(kitSource(dir, c));
+          } catch (e) {
+            if (e?.name === "AbortError") throw e;
+            k = plainKit(kitSource(dir, c));
+          }
+          const kitRel = writeKit(job, c, k);
+          c.title = k.title;
+          c[field].kit = kitRel;
+          c[field].kitSec = +((Date.now() - k0) / 1000).toFixed(1);
+        }
+        job.timings = job.timings || {};
+        const key = field === "preview" ? "preview" : "render";
+        job.timings[key] = (Array.isArray(job.timings[key]) ? job.timings[key] : []).filter((t) => t.id !== c.id).concat({ id: c.id, sec: r.wallSec, clipSec: +(c.end - c.start).toFixed(1), kitSec: c[field].kitSec ?? null });
+        saveRendering(job);
+        emit(id, "render", { id: c.id, preset: usePreset, ...c[field], title: c.title, queue: { done: doneSoFar + 1, total: targets.length } });
       }
-      job.timings = job.timings || {};
-      const key = field === "preview" ? "preview" : "render";
-      job.timings[key] = (Array.isArray(job.timings[key]) ? job.timings[key] : []).filter((t) => t.id !== c.id).concat({ id: c.id, sec: r.wallSec, clipSec: +(c.end - c.start).toFixed(1), kitSec: c[field].kitSec ?? null });
-      saveJob(job);
-      emit(id, "render", { id: c.id, preset: usePreset, ...c[field], title: c.title });
+      // clips the person approved while this ran (saveRendering kept their decisions)
+      if (!ids) {
+        const more = pick(job).filter((c) => !targets.includes(c));
+        for (const c of more) if (!isDone(c)) c[field] = blank();
+        targets = targets.concat(more);
+      }
     }
-    Object.assign(job.stages.render, { status: "done", endedAt: now(), progress: 1, etaSec: 0, note: `rendered ${targets.length} clip${targets.length === 1 ? "" : "s"} (${usePreset})` });
+    const ok = targets.length - failed.length;
+    const note = failed.length
+      ? `rendered ${ok} of ${targets.length} clips (${usePreset}); ${failed.length} failed and can be rendered again: ${failed.join(", ")}`
+      : `rendered ${targets.length} clip${targets.length === 1 ? "" : "s"} (${usePreset})`;
+    Object.assign(job.stages.render, { status: "done", endedAt: now(), progress: 1, etaSec: 0, note, ...(failed.length ? { failed } : {}) });
     // a preview leaves the job in review; a final render finishes it
     job.stage = field === "preview" ? (prevStage === "done" ? "done" : "ready") : "done";
-    saveJob(job);
+    saveRendering(job);
     emit(id, "stage", { stage: job.stage, name: "render", state: job.stages.render });
     return job;
   } catch (e) {
     for (const c of targets) if (c[field]?.status === "running") c[field].status = "error";
-    return fail(job, "render", e);
+    return fail(mergeHuman(job), "render", e);
   }
 }

@@ -18,8 +18,15 @@ const save = (q) => writeJsonAtomic(file(), q);
  */
 export function enqueue({ jobId, kind = "analyze", ids, preset }) {
   const q = load();
-  if (!q.items.some((x) => x.jobId === jobId && x.kind === kind)) {
-    q.items.push({ jobId, kind, ids: ids ?? null, preset: preset ?? null, addedAt: new Date().toISOString() });
+  // the same work already waiting is not added twice; but an item that is running now has
+  // already read its list of clips, so a new render request queues behind it
+  const waiting = q.items.find((x) => x.jobId === jobId && x.kind === kind && !(current && sameItem(x, current)));
+  if (waiting && kind === "render" && (waiting.preset ?? null) === (preset ?? null)) {
+    // merge the clip lists: no list means "every approved clip"
+    waiting.ids = waiting.ids && ids ? [...new Set([...waiting.ids, ...ids])] : null;
+    save(q);
+  } else if (!waiting) {
+    q.items.push({ key: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, jobId, kind, ids: ids ?? null, preset: preset ?? null, addedAt: new Date().toISOString() });
     save(q);
   }
   jobEvents.emit("queue", queueState());
@@ -33,6 +40,9 @@ export function queueState() {
 
 let draining = null;
 let current = null;
+
+/** One queue item, by its key (items from before keys existed: by job and kind). */
+const sameItem = (a, b) => (a.key || b.key ? a.key === b.key : a.jobId === b.jobId && a.kind === b.kind);
 
 /**
  * Work through the queue in order until it is empty. Safe to call repeatedly: only one
@@ -67,9 +77,10 @@ async function drain({ deps, onItem } = {}) {
     } catch (e) {
       job = { id: item.jobId, stage: "error", error: { message: e.message, hint: e.hint } };
     }
-    // remove this item (by identity, the file may have changed while it ran)
+    // remove this item (by its key: the file may have changed while it ran, and a render
+    // request for the same job may have queued behind it)
     const after = load();
-    after.items = after.items.filter((x) => !(x.jobId === item.jobId && x.kind === item.kind));
+    after.items = after.items.filter((x) => !sameItem(x, item));
     save(after);
     current = null;
     done.push(job);

@@ -49,8 +49,14 @@ export function run(cmd, args, { onStdout, onStderr, signal, allowFail = false, 
 export function writeJsonAtomic(file, data) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 7)}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 1));
-  fs.renameSync(tmp, file);
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 1));
+    fs.renameSync(tmp, file);
+  } catch (e) {
+    // a full disk leaves a half-written temp file; the target keeps its last good version
+    fs.rmSync(tmp, { force: true });
+    throw e;
+  }
 }
 
 /** Append one JSON line to a log file, creating its folder first. */

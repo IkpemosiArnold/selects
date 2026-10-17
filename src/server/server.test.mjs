@@ -223,3 +223,15 @@ test("blur is validated on clips and job settings", async () => {
   const faces = await req("GET", `/api/jobs/${job.id}/faces`);
   assert.equal(faces.status, 404);
 });
+
+test("approve top N: the best clips in one call, without rendering unless asked", async () => {
+  const before = (await req("GET", `/api/jobs/${job.id}`)).json.candidates;
+  const top = await req("POST", `/api/jobs/${job.id}/approve`, { body: { top: 2 } });
+  assert.equal(top.status, 200);
+  const best = before.filter((c) => c.status !== "skipped").slice(0, 2).map((c) => c.id);
+  assert.ok(top.json.approved >= 2);
+  for (const id of best) assert.equal(top.json.candidates.find((c) => c.id === id).status, "approved");
+  const bad = await req("POST", `/api/jobs/${job.id}/approve`, { body: { top: "lots" } });
+  assert.equal(bad.status, 400);
+  assert.match(bad.json.hint, /top: 10/);
+});

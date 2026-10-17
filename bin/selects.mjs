@@ -15,6 +15,7 @@ import { languageName } from "../src/core/language.mjs";
 import { asrModels } from "../src/core/config.mjs";
 import { drainQueue, enqueue, queueState } from "../src/core/queue.mjs";
 import { diskFreeGb, run, slugify, tc } from "../src/core/util.mjs";
+import { aboutTime, overnightAdvice } from "../src/core/estimate.mjs";
 
 const HELP = `selects: pull the best clips from a long video. Everything runs on this laptop.
 
@@ -37,7 +38,8 @@ Options
                     line), story (60 to 90 s with a setup, a turn and a resolution)
   --min <sec>       shortest clip (default 20)
   --max <sec>       longest clip (default 60)
-  --judge-n <n>     how many pre-scored windows the model reads (default 8; more is slower)
+  --judge-n <n>     how many pre-scored windows the model reads (default: max(16, 2 x k), more
+                    for long videos, capped at about half the video's length in judge time)
   --faithful <m>    check each pick still says what the speaker meant: model (default, one
                     call per pick), rules (no model), or off
   --preview         render fast 720x1280 drafts instead of final 1080x1920 clips
@@ -92,7 +94,8 @@ function fmtEta(sec) {
 const STAGE_NAMES = { probe: "Reading video", language: "Checking the language", transcribe: "Transcribing", candidates: "Finding windows", judge: "Judging", render: "Rendering" };
 
 /** Show stage progress: one live line on a terminal, a line every 15 s otherwise. */
-function progressReporter(jobId) {
+function progressReporter(jobId, { videoName = null } = {}) {
+  let estimated = false;
   let lastLine = "";
   let lastPrint = 0;
   let tail = [];
@@ -109,10 +112,20 @@ function progressReporter(jobId) {
   const onEvent = ({ type, data }) => {
     if (type === "words") {
       tail = tail.concat(data.map((w) => w.w)).slice(-8);
+    } else if (type === "estimate") {
+      // the whole job, before it starts: honest numbers, and overnight mode when it is long
+      if (!estimated) {
+        estimated = true;
+        const s = data.stages || {};
+        write(dim(`Estimate on this laptop: ${aboutTime(data.analysisSec)} to find the clips (transcribing ${aboutTime(s.transcribe)}, judging ${aboutTime(s.judge)}), then ${aboutTime(data.renderSec)} to render them.`), true);
+        const advice = overnightAdvice(data, { video: JSON.stringify(videoName || "<video>") });
+        if (advice) write(yellow(advice), true);
+      }
     } else if (type === "progress") {
       const pct = `${Math.round((data.progress ?? 0) * 100)}%`.padStart(4);
       const extra = data.name === "transcribe" && tail.length ? dim(`  ...${tail.join(" ")}`) : "";
-      write(`${STAGE_NAMES[data.name] || data.name} ${pct}  ${data.note || ""}  ${fmtEta(data.etaSec)}${extra}`);
+      const all = data.jobEtaSec != null && data.jobEtaSec - (data.etaSec ?? 0) > 60 ? dim(` (${aboutTime(data.jobEtaSec)} for the whole job)`) : "";
+      write(`${STAGE_NAMES[data.name] || data.name} ${pct}  ${data.note || ""}  ${fmtEta(data.etaSec)}${all}${extra}`);
     } else if (type === "stage" && data.name && data.state) {
       const st = data.state;
       if (st.status === "running") write(`${STAGE_NAMES[data.name]}...`);
@@ -121,8 +134,10 @@ function progressReporter(jobId) {
         write(`${STAGE_NAMES[data.name]}: done${secs != null ? ` in ${secs < 90 ? secs.toFixed(1) + " s" : (secs / 60).toFixed(1) + " min"}` : ""}. ${dim(st.note || "")}`, true);
       }
     } else if (type === "render") {
-      if (data.status === "running") write(`Rendering ${data.id} ${Math.round((data.progress ?? 0) * 100)}%`);
-      if (data.status === "done") write(`Rendered ${data.id}${data.title ? `: ${data.title}` : ""}`, true);
+      const q = data.queue ? ` (clip ${Math.min(data.queue.total, data.queue.done + (data.status === "done" ? 0 : 1))} of ${data.queue.total}${data.queue.etaSec ? `, ${fmtEta(data.queue.etaSec)}` : ""})` : "";
+      if (data.status === "running") write(`Rendering ${data.id} ${Math.round((data.progress ?? 0) * 100)}%${q}`);
+      if (data.status === "done") write(`Rendered ${data.id}${data.title ? `: ${data.title}` : ""}${q}`, true);
+      if (data.status === "error") write(yellow(`Could not render ${data.id}: ${data.message}. The other clips carry on.`), true);
     } else if (type === "error") {
       if (lastLine && isTTY) process.stdout.write("\n");
     }
@@ -331,8 +346,8 @@ async function cmdClip(video, values) {
     if (e.hint) say(e.hint);
     process.exit(1);
   }
-  say(`${bold(job.source.name)}  ${dim(`job ${job.id}, ${job.settings.model} reads the best ${job.settings.judgeN} moments`)}`);
-  const stop = progressReporter(job.id);
+  say(`${bold(job.source.name)}  ${dim(`job ${job.id}, ${job.settings.model} reads ${job.settings.judgeN ? `the best ${job.settings.judgeN}` : "the best"} moments${job.settings.judgeN ? "" : " (more for longer videos and higher --k)"}`)}`);
+  const stop = progressReporter(job.id, { videoName: video });
   const t0 = Date.now();
   job = await runJob(job.id);
   stop();

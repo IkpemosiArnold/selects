@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { REPO, asrModels, ollamaModels, ollamaUrl, selectsHome, whisperBin, whisperModel } from "../core/config.mjs";
 import { measuredSpeeds } from "../core/judge.mjs";
 import { editCaptions, loadCaptions, resetCaptions, toSrt, toVtt } from "../core/captions.mjs";
-import { confirmLanguage, createJob, detectJobFaces, refreshStale, isRunning, jobDir, jobEvents, listJobs, loadJob, loadWords, resetTranscript, saveJob, updateCandidate, updateJobSettings } from "../core/job.mjs";
+import { approveTop, confirmLanguage, createJob, detectJobFaces, refreshStale, isRunning, jobDir, jobEvents, listJobs, loadJob, loadWords, resetTranscript, saveJob, updateCandidate, updateJobSettings } from "../core/job.mjs";
 import { LOW_P } from "../core/quality.mjs";
 import { loadProfiles } from "../core/profiles.mjs";
 import { hwaccelArgs } from "../core/render.mjs";
@@ -395,6 +395,25 @@ async function route(req, res) {
     enqueue({ jobId: job.id, kind: "render", ids, preset: body.preset });
     drainQueue();
     return sendJson(res, 202, { queued: true, clips: n, queue: queueState() });
+  }
+  if ((r = m(/^\/api\/jobs\/([^/]+)\/approve$/)) && method === "POST") {
+    // approve the best N clips in one go, and optionally queue their render
+    const job = getJob(r[1]);
+    const body = await readBody(req);
+    if (job.settings.mode === "caption") throw new HttpError(400, "Caption jobs have no clips to approve.");
+    if (body.preset && !["shorts", "preview"].includes(body.preset)) throw new HttpError(400, "preset must be shorts or preview.");
+    let updated;
+    try {
+      updated = approveTop(job.id, body.top, { includeWeak: body.includeWeak !== false });
+    } catch (e) {
+      throw new HttpError(e.status || 400, e.message, "Send { top: 10 } to approve the 10 best clips, and render: true to render them.");
+    }
+    const approved = updated.candidates.filter((c) => c.status === "approved").length;
+    if (body.render && approved) {
+      enqueue({ jobId: job.id, kind: "render", preset: body.preset });
+      drainQueue();
+    }
+    return sendJson(res, body.render ? 202 : 200, { approved, candidates: updated.candidates, ...(body.render ? { queue: queueState() } : {}) });
   }
   if ((r = m(/^\/api\/jobs\/([^/]+)\/resume$/)) && method === "POST") {
     const job = getJob(r[1]);
