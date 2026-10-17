@@ -20,7 +20,7 @@ import { checkFaithful as realFaithful } from "./faithful.mjs";
 import { orderByFaithful } from "./faithful-core.mjs";
 import { plainKit, postingKit as realKit } from "./kit.mjs";
 import { probe as realProbe } from "./probe.mjs";
-import { curve, rank } from "./rank.mjs";
+import { applyQualityBar, curve, qualityVerdict, rank } from "./rank.mjs";
 import { hwaccelArgs, render as realRender, renderFull as realRenderFull } from "./render.mjs";
 import { restorePunctuation as realRestorePunctuation } from "./punctuate.mjs";
 import { isSparsePunctuation, snapTrim, toSentences } from "./sentences.mjs";
@@ -137,6 +137,7 @@ export function listJobs() {
           approvedCount: (j.candidates || []).filter((c) => c.status === "approved").length,
           language: j.language ?? null,
           transcriptQuality: j.transcriptQuality ?? null,
+          verdict: j.verdict ?? null,
           output: j.output ?? null,
           createdAt: j.createdAt,
           updatedAt: j.updatedAt,
@@ -545,6 +546,10 @@ async function runStages(id, { deps = {}, signal } = {}) {
         job.faithful = { mode: fmode, checked: ranked.length, faithful: count("faithful"), check: count("check"), misleading: count("misleading"), ...fr.stats };
         job.timings = { ...(job.timings || {}), faithful: fr.stats.sec };
       }
+      // The quality bar: say plainly when nothing is strong, and offer only the closest 2
+      const bar = applyQualityBar(ranked);
+      ranked = bar.candidates;
+      job.verdict = bar.verdict;
       // keep any human decisions from an earlier run of the same windows
       const prev = new Map((job.candidates || []).map((c) => [c.id, c]));
       job.candidates = ranked.map((c) => (prev.get(c.id)?.status && prev.get(c.id).status !== "proposed" ? { ...c, status: prev.get(c.id).status } : c));
@@ -630,7 +635,14 @@ export function updateCandidate(id, cid, patch = {}) {
     const f = c.faithful?.fix;
     if (f && (fixing || ((f.start == null || c.start <= f.start + 1e-3) && (f.end == null || c.end >= f.end - 1e-3)))) c.faithful.applied = true;
   }
-  if (c.faithful) job.candidates = orderByFaithful(job.candidates);
+  if (c.faithful) {
+    job.candidates = orderByFaithful(job.candidates);
+    if (job.verdict) {
+      const t = job.verdict.threshold;
+      for (const x of job.candidates) if (typeof x.weak === "boolean") x.weak = !(typeof x.total === "number" && x.total >= t && !x.demoted);
+      job.verdict = qualityVerdict(job.candidates, { threshold: t });
+    }
+  }
   saveJob(job);
   emit(id, "candidates", { ranked: true, candidates: job.candidates, changed: cid });
   return job.candidates.find((x) => x.id === cid);

@@ -319,3 +319,13 @@ All additive. `src/core/madefor.mjs` (browser-safe) holds the presets.
 - `story` adds one line (the `<!-- made-for: story -->` block in `prompts/judge.md`) to the judge's system prompt. Other presets send the rubric unchanged, so their judge cache is shared.
 - Exports: `MADE_FOR`, `madeForPreset(name)`, `applyMadeFor(settings)`, `clipCaptionStyle(settings)`, `madeForBlock(md, key)`; `kitSchema(madeFor)`, `kitMessages(md, c, { madeFor })`, `cleanKit(d, { madeFor })` in `kit-core.mjs`; `judgeMessages(prompt, c, { extra })` in `judge-core.mjs`.
 - Browser tasks: `judge`, `judgeBatch` and `kit` tasks take an optional `madeFor`, kept by `slimTask`.
+
+## Quality bar (17 Oct, core)
+
+All additive. `STRONG_TOTAL = 0.55` in `src/core/rank.mjs`, calibrated on this machine's jobs (scores only): a family video the judge called weak topped out at 0.52 (0.40 to 0.52), the EMF talk scored 0.56 to 0.68, and the best clip of each of the 6 eval videos 0.60 to 0.68.
+
+- `job.verdict = { strong: n, threshold: 0.55, best: 0.52, note }`, set when judging finishes (after the faithful check) and recomputed when a faithful accept or fix changes the order. `note` is plain text for the UI, for example "No strong clips in this video. These are the closest 2, with why." or "2 strong clips. The other 1 is weaker." A demoted (misleading, not accepted) clip never counts as strong.
+- Each ranked candidate has `weak: true | false` (below the bar, or demoted).
+- When `strong` is 0, `job.candidates` holds only the closest 2 (ranks 1 and 2); each keeps its `reason` as the "why".
+- `GET /api/jobs` summaries carry `verdict`. The CLI prints "No strong clips in <video>." instead of "N proposed clips" and marks weak clips; with `--yes` it still renders the closest ones and says so.
+- `qualityVerdict(cands, { threshold })` and `applyQualityBar(cands, { threshold, closest: 2 })` are exported from `rank.mjs` (browser-safe).

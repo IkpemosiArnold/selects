@@ -51,3 +51,24 @@ test("combine maps 1..5 rubric scores to 0..1 with hook weighted most", () => {
   assert.ok(hookHeavy > clarityHeavy);
   assert.equal(+Object.values(WEIGHTS).reduce((a, b) => a + b, 0).toFixed(6), 1);
 });
+
+test("quality bar: strong clips counted, weak ones marked; with none strong only the closest 2 stay", async () => {
+  const { applyQualityBar, qualityVerdict, STRONG_TOTAL } = await import("./rank.mjs");
+  assert.equal(STRONG_TOTAL, 0.55);
+  const mk = (id, total, extra = {}) => ({ id, total, rank: null, reason: `Reason ${id}.`, ...extra });
+  // the EMF talk's three picks: all strong
+  const emf = applyQualityBar([mk("a", 0.683), mk("b", 0.629), mk("c", 0.557)]);
+  assert.deepEqual(emf.verdict, { strong: 3, threshold: 0.55, best: 0.683, note: "3 strong clips." });
+  assert.ok(emf.candidates.every((c) => c.weak === false));
+  // the family video's picks (0.40 to 0.52): none strong, the closest 2 kept with their reasons
+  const fam = applyQualityBar([mk("a", 0.524), mk("b", 0.466), mk("c", 0.403)]);
+  assert.equal(fam.verdict.strong, 0);
+  assert.match(fam.verdict.note, /^No strong clips in this video\. These are the closest 2, with why\.$/);
+  assert.deepEqual(fam.candidates.map((c) => [c.id, c.rank, c.weak]), [["a", 1, true], ["b", 2, true]]);
+  const mixed = qualityVerdict([mk("a", 0.6), mk("b", 0.5)]);
+  assert.equal(mixed.note, "1 strong clip. The other 1 is weaker.");
+  // a misleading cut nobody accepted is never strong
+  assert.equal(qualityVerdict([mk("a", 0.7, { demoted: true })]).strong, 0);
+  assert.match(qualityVerdict([mk("a", 0.3)]).note, /This is the closest one/);
+  assert.equal(qualityVerdict([]).note, "No clips were found in this video.");
+});

@@ -137,11 +137,15 @@ function printCandidates(job) {
     return;
   }
   say("");
-  say(bold(`${cs.length} proposed clip${cs.length === 1 ? "" : "s"} from ${job.source.name}`));
+  if (job.verdict && !job.verdict.strong) {
+    // the quality bar: no pretending that weak clips are good ones
+    say(bold(yellow(`No strong clips in ${job.source.name}.`)));
+    say(`${job.verdict.note.replace(/^No strong clips in this video\. /, "")} ${dim(`(The best scored ${job.verdict.best?.toFixed(2) ?? "-"}; a strong clip scores ${job.verdict.threshold} or more.)`)}`);
+  } else say(bold(`${cs.length} proposed clip${cs.length === 1 ? "" : "s"} from ${job.source.name}${job.verdict && job.verdict.strong < cs.length ? `: ${job.verdict.note}` : ""}`));
   for (const c of cs) {
     const s = c.scores || {};
     say("");
-    say(`${bold(String(c.rank ?? "-").padStart(2))}  ${tc(c.start)} to ${tc(c.end)}  ${Math.round(c.end - c.start)} s   ${blue(`score ${(c.total ?? 0).toFixed(2)}`)}   ${dim(`hook ${s.hook ?? "-"}  stands alone ${s.standalone ?? "-"}  payoff ${s.payoff ?? "-"}  clarity ${s.clarity ?? "-"}`)}`);
+    say(`${bold(String(c.rank ?? "-").padStart(2))}  ${tc(c.start)} to ${tc(c.end)}  ${Math.round(c.end - c.start)} s   ${blue(`score ${(c.total ?? 0).toFixed(2)}`)}${c.weak ? yellow(" (weak)") : ""}   ${dim(`hook ${s.hook ?? "-"}  stands alone ${s.standalone ?? "-"}  payoff ${s.payoff ?? "-"}  clarity ${s.clarity ?? "-"}`)}`);
     say(`    "${c.hook.length > 110 ? c.hook.slice(0, 107) + "..." : c.hook}"`);
     if (c.reason) say(`    ${blue(c.reason)}`);
     if (c.listRank) say(`    ${dim(`Side by side: ${c.listRank} of ${job.listwise?.order?.length ?? "?"}${c.listReason ? `. ${c.listReason}` : ""}`)}`);
@@ -169,6 +173,7 @@ async function askApprovals(job, { yes }) {
     const ok = job.candidates.filter((c) => !c.demoted);
     for (const c of ok) updateCandidate(job.id, c.id, { status: "approved" });
     const held = job.candidates.length - ok.length;
+    if (job.verdict && !job.verdict.strong) say(yellow(`None of these is a strong clip; rendering the closest ${ok.length} because of --yes.`));
     say(`Approved ${ok.length === job.candidates.length ? "all " : ""}${ok.length} (--yes).${held ? ` Left out ${held} misleading cut${held === 1 ? "" : "s"}; review ${held === 1 ? "it" : "them"} with selects review ${job.id}.` : ""}`);
     return loadJob(job.id);
   }

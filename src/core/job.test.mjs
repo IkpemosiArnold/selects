@@ -452,3 +452,26 @@ test("made for: the preset sets the length range, the caption style and the kit'
   const kit = JSON.parse(fs.readFileSync(path.join(jobDir(li.id), "clips", `${c.id}.kit.json`), "utf8"));
   assert.equal(kit.madeFor, "linkedin");
 });
+
+test("quality bar: a video with no strong clips says so and offers only the closest 2", async () => {
+  const job = createJob(video, { k: 4, model: "mock", qualityGate: false });
+  const deps = mocks({ probe: 0, transcribe: 0, judge: 0 });
+  deps.judge = async (cands) => cands.map((c, i) => ({ ...c, scores: { hook: 2, standalone: 2, payoff: 2, clarity: 2 }, total: 0.5 - i * 0.01, reason: `Weak because ${i}.` }));
+  const weak = await runJob(job.id, { deps });
+  assert.equal(weak.verdict.strong, 0);
+  assert.match(weak.verdict.note, /^No strong clips in this video\. These are the closest 2, with why\.$/);
+  assert.equal(weak.candidates.length, 2);
+  assert.ok(weak.candidates.every((c) => c.weak && c.reason));
+  assert.equal(listJobs().find((j) => j.id === job.id).verdict.strong, 0);
+
+  const good = createJob(video, { k: 3, model: "mock", qualityGate: false });
+  const d2 = mocks({ probe: 0, transcribe: 0, judge: 0 });
+  d2.judge = async (cands) => cands.map((c, i) => ({ ...c, scores: { hook: 4, standalone: 4, payoff: 4, clarity: 4 }, total: i < 2 ? 0.7 : 0.5, reason: "Fine." }));
+  const ok = await runJob(good.id, { deps: d2 });
+  assert.equal(ok.candidates.length, 3);
+  const strong = ok.candidates.filter((c) => c.total >= 0.55).length;
+  assert.ok(strong >= 1 && strong < 3);
+  assert.equal(ok.verdict.strong, strong);
+  assert.match(ok.verdict.note, /^\d strong clips?\. The other \d (is|are) weaker\.$/);
+  assert.deepEqual(ok.candidates.map((c) => c.weak), ok.candidates.map((c) => c.total < 0.55));
+});
