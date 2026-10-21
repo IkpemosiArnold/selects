@@ -8,7 +8,7 @@ tags: devchallenge, hf26challenge, ai, opensource
 
 On the night of 15 October, my 2017 MacBook Pro sat on its 67 W charger and still lost battery, from 18% down to 8%, while Gemma 3 4B read a passage of about 330 words at 0.87 tokens a second. It took 1,437 seconds, nearly 24 minutes, to choose one clip from that passage. It returned valid JSON with real timestamps, and it chose the speaker's introduction, which the prompt had told it to skip.
 
-The test was the first step of an experiment, and the reason for the experiment was a number. In the week of 9 September, one of the top posts on r/naijaremote was a video clipping gig that paid $0.40 for every 1,000 views. At that rate a clip needs 100,000 views to earn $40. Opus Clip's Starter plan costs $15 a month on its [pricing page](https://www.opus.pro/pricing), so a clipper on that gig would need 37,500 views before the tool paid for itself.
+The test was the first step of an experiment, and the reason for the experiment was a number. In the week of 9 September, one of the top posts on r/naijaremote was a video clipping gig offering $0.40 for every 1,000 views. The rate is from my notes at the time; I could not reopen the post when I checked again on 21 October, so treat it as unverified. At that rate a clip needs 100,000 views to earn $40. Opus Clip's Starter plan costs $15 a month, billed monthly ([pricing page](https://www.opus.pro/pricing), checked 21 October 2026), so a clipper on that gig would need 37,500 views a month before the tool paid for itself.
 
 So I built a clipper with no monthly bill that runs on the laptop I already have, and then I asked it a harder question. Can a free open model on a 2017 laptop pick clips as well as people do? I measured it.
 
@@ -28,7 +28,7 @@ Selects is free and MIT licensed, so the useful version of "who would pay" is wh
 
 | Who | How they are paid | What they pay for tools today |
 |---|---|---|
-| Per-view clippers on brand campaigns (for example Whop Content Rewards) | per 1,000 views; guides quote $0.20 to $6, and the r/naijaremote gig paid $0.40 | Opus Clip $15 or $29 a month; Klap $14 to $94 a month billed yearly (pricing pages, checked 15 Oct) |
+| Per-view clippers on brand campaigns (for example Whop Content Rewards) | per 1,000 views; guides quote $0.20 to $6, and the r/naijaremote gig offered $0.40 (unverified) | Opus Clip $15 (Starter) or $29 (Pro) a month billed monthly, or Pro at $14.50 a month billed yearly; Klap $14 to $94 a month billed yearly (pricing pages, checked 21 Oct) |
 | Me | I cut 9:16 shorts of my own video series | [ARNOLD: how long one short takes you to cut by hand, start to finish] |
 
 Editors who cut shorts for podcasters and event media teams use the same subscriptions, and they upload every long file first. The rates for clipping campaigns come from third-party guides, several of them written by clipper vendors, and they disagree with each other, so I treat them as a range and not a fact.

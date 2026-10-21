@@ -6,7 +6,7 @@ Selects finds the best short clips in a long video and renders them as captioned
 
 ## Why it exists
 
-People who clip long videos for money are often paid per view, at rates as low as $0.40 per 1,000 views, so a $15 monthly subscription to a hosted clipper eats the first 37,500 views.
+People who clip long videos for money are often paid per view. One clipping gig posted on r/naijaremote in September 2026 offered $0.40 per 1,000 views. That rate comes from a note made while the post was up; the post could not be reopened on 21 October 2026, so treat it as unverified. At that rate, Opus Clip's Starter plan ($15 a month, billed monthly, on [its pricing page](https://www.opus.pro/pricing) on 21 October 2026) costs the first 37,500 views of every month.
 Selects has no subscription, no per-minute limit and no watermark, and it runs on hardware you already own, including a 2017 dual-core laptop with no GPU.
 Every proposed clip shows the scores and the reason behind it, and nothing is rendered until you approve it.
 
