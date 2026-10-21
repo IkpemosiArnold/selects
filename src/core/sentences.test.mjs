@@ -56,7 +56,7 @@ test("snapTrim with no words returns the input", () => {
 
 // An unpunctuated transcript, the way whisper often writes casual or accented speech:
 // lowercase, no full stops, phrases separated by short pauses, and one long stretch with
-// no pause at all. Synthetic on purpose (real family footage stays out of the tests).
+// no pause at all. Synthetic on purpose (real private footage stays out of the tests).
 const PHRASES = [
   "we trained three times a week for a whole year",
   "nobody tells you how slow strength really is",

@@ -1,5 +1,5 @@
 // Which language is spoken? Whisper's own detector looks at the first 30 seconds and is
-// biased against accented English: it called an elderly Nigerian woman's English "Yoruba"
+// biased against accented English: it called an elderly Nigerian speaker's English "Yoruba"
 // with p = 0.88. So Selects decodes a few short samples in each candidate language and keeps
 // the one whisper is most confident in, and treats the detector's guess as a hint only.
 import fs from "node:fs";

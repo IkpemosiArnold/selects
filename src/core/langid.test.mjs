@@ -17,7 +17,7 @@ const LABEL = { en: "eng_Latn", yo: "yor_Latn", ha: "hau_Latn", ig: "ibo_Latn", 
 const dec = (code, textCode, p = 0.95, words = 60, ng = null, meanP = 0.7, label = LABEL[textCode]) => ({ code, words, meanP, text: { lid608: textCode ? { label, code: textCode, p } : null, ng5: ng } });
 const sig = (r, id) => r.signals.find((s) => s.id === id);
 
-test("the grandmother case: English speech the detector calls Yoruba comes out English, with no question", () => {
+test("an accented English speaker the detector calls Yoruba comes out English, with no question", () => {
   // measured shape (16 Oct): detector yo p = 0.90; told to write Yoruba, whisper wrote English
   const r = ensemble({
     setting: "auto",

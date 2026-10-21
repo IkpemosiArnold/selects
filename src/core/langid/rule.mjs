@@ -3,7 +3,7 @@
 //
 // Signals:
 //   whisper-detect  whisper's own audio guess on the first 30 s. Biased against accents
-//                   (it called an elderly Nigerian woman's English "Yoruba", p = 0.90).
+//                   (it called an elderly Nigerian speaker's English "Yoruba", p = 0.90).
 //   whisper-decode  decode-and-compare: the samples decoded in each candidate language,
 //                   ranked by mean word probability, with a decode that came out as English
 //                   text unable to win (chooseLanguage in language.mjs).

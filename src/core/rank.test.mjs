@@ -60,11 +60,11 @@ test("quality bar: strong clips counted, weak ones marked; with none strong only
   const emf = applyQualityBar([mk("a", 0.683), mk("b", 0.629), mk("c", 0.557)]);
   assert.deepEqual(emf.verdict, { strong: 3, threshold: 0.55, best: 0.683, note: "3 strong clips." });
   assert.ok(emf.candidates.every((c) => c.weak === false));
-  // the family video's picks (0.40 to 0.52): none strong, the closest 2 kept with their reasons
-  const fam = applyQualityBar([mk("a", 0.524), mk("b", 0.466), mk("c", 0.403)]);
-  assert.equal(fam.verdict.strong, 0);
-  assert.match(fam.verdict.note, /^No strong clips in this video\. These are the closest 2, with why\.$/);
-  assert.deepEqual(fam.candidates.map((c) => [c.id, c.rank, c.weak]), [["a", 1, true], ["b", 2, true]]);
+  // the private phone video's picks (0.40 to 0.52): none strong, the closest 2 kept with their reasons
+  const weakVideo = applyQualityBar([mk("a", 0.524), mk("b", 0.466), mk("c", 0.403)]);
+  assert.equal(weakVideo.verdict.strong, 0);
+  assert.match(weakVideo.verdict.note, /^No strong clips in this video\. These are the closest 2, with why\.$/);
+  assert.deepEqual(weakVideo.candidates.map((c) => [c.id, c.rank, c.weak]), [["a", 1, true], ["b", 2, true]]);
   const mixed = qualityVerdict([mk("a", 0.6), mk("b", 0.5)]);
   assert.equal(mixed.note, "1 strong clip. The other 1 is weaker.");
   // a misleading cut nobody accepted is never strong

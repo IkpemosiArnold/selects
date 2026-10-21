@@ -43,7 +43,7 @@ export function curve(candidates, duration, { step = 5 } = {}) {
 
 /**
  * The quality bar: a clip is strong when its total is STRONG_TOTAL or more. Calibrated on the
- * jobs on this machine (notes/timings.md): a family video whose clips the judge itself called
+ * jobs on this machine (notes/timings.md): a private phone video whose clips the judge itself called
  * weak topped out at 0.52 (0.40 to 0.52), the EMF talk scored 0.56 to 0.68, and the best clip
  * of each of the 6 eval videos scored 0.60 to 0.68.
  */

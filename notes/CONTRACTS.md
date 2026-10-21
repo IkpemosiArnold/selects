@@ -366,7 +366,7 @@ All additive. `src/core/madefor.mjs` (browser-safe) holds the presets.
 
 ## Quality bar (17 Oct, core)
 
-All additive. `STRONG_TOTAL = 0.55` in `src/core/rank.mjs`, calibrated on this machine's jobs (scores only): a family video the judge called weak topped out at 0.52 (0.40 to 0.52), the EMF talk scored 0.56 to 0.68, and the best clip of each of the 6 eval videos 0.60 to 0.68.
+All additive. `STRONG_TOTAL = 0.55` in `src/core/rank.mjs`, calibrated on this machine's jobs (scores only): a private phone video the judge called weak topped out at 0.52 (0.40 to 0.52), the EMF talk scored 0.56 to 0.68, and the best clip of each of the 6 eval videos 0.60 to 0.68.
 
 - `job.verdict = { strong: n, threshold: 0.55, best: 0.52, note }`, set when judging finishes (after the faithful check) and recomputed when a faithful accept or fix changes the order. `note` is plain text for the UI, for example "No strong clips in this video. These are the closest 2, with why." or "2 strong clips. The other 1 is weaker." A demoted (misleading, not accepted) clip never counts as strong.
 - Each ranked candidate has `weak: true | false` (below the bar, or demoted).

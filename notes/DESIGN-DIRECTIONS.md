@@ -13,7 +13,7 @@ Run the core server and the web dev server (`node bin/selects.mjs serve`, then `
 | `/?direction=lined-script` | Review, on the real job `j_20261016_07m4` (strength-talk-6min.mp4: real words, thumbnails, source video and the model's 3 picks) |
 | `/?direction=reel` | Review, same job |
 | `/?direction=contact-sheet` | Review, same job |
-| add `&mock=1&job=j_20261016_unr2` | The language question, on the mock job whisper got wrong (family-reunion-toast.mov, heard as Yoruba, 42% of words unsure). No real job in `.selects/jobs` has this state. |
+| add `&mock=1&job=j_20261016_unr2` | The language question, on the mock job whisper got wrong (toast-speech.mov, heard as Yoruba, 42% of words unsure). No real job in `.selects/jobs` has this state. |
 | add `&theme=dark` or `&theme=light` | Force a theme (the reel is dark unless asked) |
 | add `&approved=c_0014&skipped=c_0020` | Start with some decisions made (used for the screenshots) |
 

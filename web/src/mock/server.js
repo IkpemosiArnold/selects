@@ -133,7 +133,7 @@ export function createMockApi(params) {
 
   // Clip mode, stopped: the transcript was too unsure to pick clips from.
   {
-    const bad = makeJob({ id: "j_20261016_unr2", name: "family-reunion-toast.mov", stage: "error", createdAt: "2026-10-16T07:40:02.000Z", duration: 248.9 });
+    const bad = makeJob({ id: "j_20261016_unr2", name: "toast-speech.mov", stage: "error", createdAt: "2026-10-16T07:40:02.000Z", duration: 248.9 });
     bad._words = accentedWords(words.filter((w) => w.e < 246), 0.42);
     bad.settings = { ...bad.settings, mode: "clips", language: "auto", asrModel: "auto", credit: null, license: "own", sourceUrl: null };
     bad.candidates = [];

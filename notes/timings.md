@@ -137,7 +137,7 @@ whisper base.en default beam search ran at 14.8x real time; greedy (`-bs 1 -bo 1
 
 ## Accented English, captions and blur (16 Oct, feature engineer)
 
-Test video: a private phone recording (an elderly Nigerian woman speaking English to camera, lav mic), 165 s, HEVC 3840x2160 at 59.94 fps stored with rotation -90 (portrait), mono AAC 44.1 kHz at 39 kb/s. Integrated loudness -18.3 LUFS, peaks at 0 dBFS, many 1 to 4 s pauses. Only speeds and confidence numbers are recorded here, never content. The transcripts are in `.selects/private/asr-compare.md` (gitignored) for a person to rate.
+Test video: a private phone recording (an elderly Nigerian speaker speaking English to camera, lav mic), 165 s, HEVC 3840x2160 at 59.94 fps stored with rotation -90 (portrait), mono AAC 44.1 kHz at 39 kb/s. Integrated loudness -18.3 LUFS, peaks at 0 dBFS, many 1 to 4 s pauses. Only speeds and confidence numbers are recorded here, never content. The transcripts are in `.selects/private/asr-compare.md` (gitignored) for a person to rate.
 
 ### Speech recognition on 60 s of her audio (20 s to 80 s), greedy decoding, 2 threads
 
@@ -175,7 +175,7 @@ The share of unsure words separates the two groups much better than the mean: 0.
 
 ### Language check
 
-Whisper's own detector (multilingual base, first 30 s of three 20 s samples) said Yoruba, p = 0.906 (0.88 in Arnold's earlier run on the start of the video). The first version of decode-and-compare ranked languages by mean word probability and also picked Yoruba: decoding the samples "as Yoruba" scored 0.798 (18% unsure) against 0.650 for English (31% unsure). But every word of the "Yoruba" decode was plain ASCII and 93% were English dictionary words: told to write Yoruba, whisper wrote English. So mean probability is not comparable across languages, and the check now treats a non-English decode that comes out as English text (a share of common English function words of 0.2 or more) as evidence for English. With that rule (run B2 below, `--language auto`), the samples decoded as Yoruba had an English function-word share of 0.519 and as English 0.513, so Yoruba was ruled out and English chosen, with this warning: "Whisper's quick guess was Yoruba (p = 0.90), but when asked to write Yoruba it wrote English, so this is English."
+Whisper's own detector (multilingual base, first 30 s of three 20 s samples) said Yoruba, p = 0.906 (0.88 in an earlier run on the start of the video). The first version of decode-and-compare ranked languages by mean word probability and also picked Yoruba: decoding the samples "as Yoruba" scored 0.798 (18% unsure) against 0.650 for English (31% unsure). But every word of the "Yoruba" decode was plain ASCII and 93% were English dictionary words: told to write Yoruba, whisper wrote English. So mean probability is not comparable across languages, and the check now treats a non-English decode that comes out as English text (a share of common English function words of 0.2 or more) as evidence for English. With that rule (run B2 below, `--language auto`), the samples decoded as Yoruba had an English function-word share of 0.519 and as English 0.513, so Yoruba was ruled out and English chosen, with this warning: "Whisper's quick guess was Yoruba (p = 0.90), but when asked to write Yoruba it wrote English, so this is English."
 
 The language check costs one 60 s WAV of samples, a detector pass and one multilingual base decode per candidate language: 27.2 s to 49.6 s in four runs (2 candidates each).
 
@@ -282,7 +282,7 @@ A third case is a limit, not a fault: on the Hausa set, the detector said Romani
 | Transcribe | 1.98x real time; transcript quality score 0.915, mean word p 0.915, 3.1% unsure: **good** | 83.6 s |
 | Whole run | | 118.3 s |
 
-The same video with the defaults before today (`base.en`, run A above) scored 0.638 and stopped as unreliable after a 50.3 s transcription; with `small.en` (run C) it scored 0.787, shaky. So routing costs about 33 s more transcription on this 165 s video than base.en and turns a stopped run into one that passes the gate. The score is whisper's own confidence, and a fine-tune can be confidently wrong, so the transcripts still need rating by a person who knows the speaker.
+The same video with the defaults before today (`base.en`, run A above) scored 0.638 and stopped as unreliable after a 50.3 s transcription; with `small.en` (run C) it scored 0.787, shaky. So routing costs about 33 s more transcription on this 165 s video than base.en and turns a stopped run into one that passes the gate. The score is whisper's own confidence, and a fine-tune can be confidently wrong, so the transcripts still need rating by a person.
 
 ### Time cost per video
 
@@ -382,7 +382,7 @@ Choice that follows: `asrDevice: "auto"` runs whisper on WebGPU when there is an
 
 ## Smart mode (Gemini API, 16 Oct, browser builder)
 
-Real calls with Arnold's free AI Studio key, EMF transcript text only. The API lists only `gemma-4-26b-a4b-it` and `gemma-4-31b-it`. Both accepted a system instruction, JSON mode with a response schema, and `thinkingConfig.thinkingLevel: "minimal"`; Gemma 4 still sends one short thought part first, which the reader skips.
+Real calls with a free AI Studio key, EMF transcript text only. The API lists only `gemma-4-26b-a4b-it` and `gemma-4-31b-it`. Both accepted a system instruction, JSON mode with a response schema, and `thinkingConfig.thinkingLevel: "minimal"`; Gemma 4 still sends one short thought part first, which the reader skips.
 
 | Call | Model | Wall time | Tokens in / out |
 |---|---|---|---|
@@ -411,7 +411,7 @@ The 6-minute EMF excerpt (`strength-talk-6min.mp4`, 360 s), caption mode through
 | 1 (nothing saved) | 1.1 s | 94.6 s | 251.5 s | 347.3 s |
 | 2 (same file) | 3.3 s | 0 s (reused) | 0 s (reused) | 3.3 s |
 
-The second run skipped 346 s of work and got the same 1,232 words. The fingerprint reads at most 8 MB (size, mtime, first and last 4 MB), which is the same cost for a 6-minute or a 2-hour file. On the family video (165 s), whose clip and caption jobs each ran both steps, the language check took 107.3 s and transcription 309.8 s, about 7 minutes that a second job now skips.
+The second run skipped 346 s of work and got the same 1,232 words. The fingerprint reads at most 8 MB (size, mtime, first and last 4 MB), which is the same cost for a 6-minute or a 2-hour file. On the private phone video (165 s), whose clip and caption jobs each ran both steps, the language check took 107.3 s and transcription 309.8 s, about 7 minutes that a second job now skips.
 
 ## Faithful cuts (16 and 17 Oct, core)
 
