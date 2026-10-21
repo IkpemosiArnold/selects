@@ -58,9 +58,10 @@ services:
       # the static site's URL, for example https://selects-web.onrender.com (no wildcard)
       - key: ALLOWED_ORIGINS
         sync: false
-      # Render's proxy appends the caller's address to X-Forwarded-For; the proxy reads that
-      # right-most entry and ignores what the client wrote (see clientIp in server-proxy).
-      # After deploying, curl -H 'X-Forwarded-For: 1.2.3.4' <proxy>/healthz must show your own
-      # address in "you".
+      # Measured on the live service (21 Oct 2026): Render sits behind Cloudflare, so
+      # X-Forwarded-For ends "client, cloudflare-edge, render-internal". With 3 trusted hops the
+      # proxy keys its rate limit on the real client and ignores anything the client prepends.
+      # Check after any change: curl -H 'X-Forwarded-For: 1.2.3.4' <proxy>/healthz must show your
+      # own public address in "you".
       - key: TRUST_PROXY_HOPS
-        value: "1"
+        value: "3"
