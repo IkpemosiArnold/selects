@@ -1,6 +1,6 @@
 # Selects eval results
 
-v2, generated 2026-10-17 17:57 UTC by `node eval/run-eval-v2.mjs --report`. The plan, hypotheses and tests were committed before judging: [eval/PLAN.md](../PLAN.md).
+v2, generated 2026-10-17 20:23 UTC by `node eval/run-eval-v2.mjs --report`. The plan, hypotheses and tests were committed before judging: [eval/PLAN.md](../PLAN.md).
 
 **n = 19 videos** (the first 15 minutes of each, 3591 candidate windows in total, 456 in the random sample R that the models judged). Excluded before judging: _iUeydyJc20 (whisper's transcript is unreliable); 74HTXDSsa-Q (whisper's transcript is unreliable); lDDq_HbDpN4 (36 foreign-language markers (dubbed audio?)); o_a-mslVsA0 (whisper's transcript is unreliable).
 
@@ -14,6 +14,7 @@ AUC is the chance that a window viewers replayed more than the video's median sc
 | energy: loudness and pace, no words | random sample R | 19 | 0.50 (0.42 to 0.58) | -0.03 (-0.17 to 0.10) |
 | Selects stage 1 rules (pre-score) | random sample R | 19 | 0.54 (0.47 to 0.61) | 0.08 (-0.05 to 0.21) |
 | **Gemma 4 26B-A4B** (Gemini API) | random sample R | 19 | 0.56 (0.49 to 0.62) | 0.09 (-0.02 to 0.20) |
+| qwen2.5 0.5B (local) | random sample R | 19 | 0.54 (0.52 to 0.57) | 0.13 (0.05 to 0.19) |
 | random (mean of 200 seeds) | all windows | 19 | 0.50 (0.50 to 0.50) | 0.00 (-0.00 to 0.00) |
 | energy: loudness and pace, no words | all windows | 19 | 0.46 (0.40 to 0.53) | -0.10 (-0.22 to 0.02) |
 | Selects stage 1 rules (pre-score) | all windows | 19 | 0.51 (0.46 to 0.57) | 0.03 (-0.08 to 0.14) |
@@ -26,25 +27,11 @@ AUC is the chance that a window viewers replayed more than the video's median sc
 | H2 | Gemma 4 minus pre-score, AUC on R | 19 | 0.020 (-0.058 to 0.094) | 0.643 | 1.000 | not supported at this n |
 | H3 | Pre-score AUC over all windows above chance | 19 | 0.014 (-0.044 to 0.074) | 0.641 | 1.000 | not supported at this n |
 | H4 | Gemma 4 minus energy, AUC on R | 19 | 0.056 (-0.025 to 0.130) | 0.192 | 0.575 | not supported at this n |
-| H5 | Gemma 4 minus qwen 0.5B, AUC on R | 0 | not run | | | |
+| H5 | Gemma 4 minus qwen 0.5B, AUC on R | 19 | 0.015 (-0.049 to 0.079) | 0.662 | - | not supported at this n |
 | H6 | Shipped (16) minus prefilter alone (16), hit@3 | 19 | -0.053 | 1.000 | - | not supported at this n |
 | H7, H8 | Blind preference test | 0 | waiting for ratings | | | |
 
 Effects are mean differences in AUC (H2, H4, H5), AUC minus 0.5 (H1, H3), or hit@3 difference (H6). p is a two-sided sign-flip permutation test over videos; H1 to H4 are Holm-corrected.
-
-## Exploratory (not pre-registered)
-
-| Analysis | windows | n | AUC (95% CI) | rho (95% CI) |
-|---|---|---|---|---|
-| Gemma 4, hook score alone | R | 19 | 0.56 (0.51 to 0.62) | 0.12 (-0.00 to 0.24) |
-| Gemma 4, standalone score alone | R | 19 | 0.55 (0.50 to 0.61) | 0.05 (-0.07 to 0.18) |
-| Gemma 4, payoff score alone | R | 19 | 0.52 (0.47 to 0.57) | 0.05 (-0.04 to 0.14) |
-| Gemma 4, clarity score alone | R | 19 | 0.51 (0.45 to 0.57) | 0.01 (-0.09 to 0.12) |
-| Gemma 4 blended with the pre-score (what the app ranks by) | R | 19 | 0.57 (0.51 to 0.64) | 0.12 (0.01 to 0.23) |
-| Gemma 4 on the shortlist plus R | J | 19 | 0.51 (0.45 to 0.58) | 0.01 (-0.11 to 0.13) |
-| pre-score on the shortlist plus R | J | 19 | 0.52 (0.46 to 0.58) | 0.05 (-0.06 to 0.16) |
-
-Power: at the effects observed here, about 52 videos would give 80% power for Gemma 4 against chance, and about 633 for Gemma 4 against the pre-score (two-sided, alpha 0.05, normal approximation).
 
 ## Top picks against replay peaks (v1 metric)
 
@@ -60,6 +47,7 @@ Power: at the effects observed here, about 52 videos would give 80% power for Ge
 | Gemma 4 blend (16) | 19 | 16% (0% to 32%) | 32% | 0.11 (0.07 to 0.16) |
 | **Selects as shipped** (8, blend + listwise) | 19 | 21% (5% to 42%) | 32% | 0.10 (0.06 to 0.14) |
 | **Selects Smart mode** (16, blend + listwise) | 19 | 26% (11% to 47%) | 32% | 0.11 (0.07 to 0.16) |
+| qwen 0.5B score only (16) | 19 | 37% (16% to 58%) | 42% | 0.13 (0.09 to 0.16) |
 | ceiling: best of the 8 | 19 | 53% (32% to 74%) | 53% | 0.21 (0.15 to 0.27) |
 | ceiling: best of the 16 | 19 | 89% (74% to 100%) | 89% | 0.37 (0.33 to 0.42) |
 | ceiling: best of all windows | 19 | 100% (100% to 100%) | 100% | 0.77 (0.73 to 0.81) |

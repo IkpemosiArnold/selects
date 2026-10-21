@@ -426,3 +426,85 @@ One Ollama call per top pick (Gemma 3 4B, num_predict 130, temperature 0.2), 470
 | Prompt 3, EMF window at 0:23 | 1 | 1 | 2,233.8 s | | prompt read at 0.38 tok/s under heavy load; an outlier |
 
 Expect 1.5 to 3.5 minutes per pick on this laptop, so 5 to 10 minutes for the default 5 picks, on top of about 12 minutes of judging. `--faithful rules` costs under a millisecond per pick. Answers are cached in `judge-cache.json`, so a resumed job does not pay twice.
+
+## Long videos (17 Oct, performance and reliability)
+
+Sources: `.selects/media/long-1h.mp4` (3,848.7 s, two EMF 2026 talks) and `long-2h.mp4` (7,315.8 s, four talks), both CC BY-SA 4.0 (`notes/test-media.md`). Same Mac. The load average was 13 to 60 during these runs (much quieter than the 30 to 500 earlier in the day). Harness: `createJob`, `runJob`, `approveTop`, `renderJob` from the core, with `--k 30`, every stage behind `.selects/heavy.lock` and `nice 10`; a sampler read the RSS of every process in the tree and the job folder's size every 2 s; `/usr/bin/time -l` wrapped the whole run.
+
+**Judge: Smart mode (Gemma 4 26B A4B through the Gemini API), not local Gemma.** The core judge, listwise, faithful and kit calls take a `request` function, and the harness passed the same Gemini call Smart mode uses (`src/core/gemini.mjs` via `eval/llm-gemini.mjs`, rate-limited to 14 requests a minute to share the free key with the eval). The desktop CLI has no Smart-mode switch, so with the CLI the judge is local Gemma 3 4B, and the shortlist is capped by its measured speed (below).
+
+### 1 hour, 30 clips (job `j_20261017_1gb1`)
+
+| Stage | Wall time | Notes |
+|---|---|---|
+| Probe and 129 thumbnails | 10.1 s | one every 30 s now (was always 60) |
+| Language check (setting `en`) | 3.4 s | detector only |
+| Transcribe (base.en, greedy, 2 threads, 6 parts of about 10 min) | 814.8 s (13.6 min) | 13,286 words, 4.72x real time, transcript good (0.927) |
+| Candidates | 0.2 s | 707 windows passed the filter; auto judge count 60 (max(16, 2k) at 4 s a call) |
+| Judge: 60 pointwise, 1 listwise, 30 faithful calls | 440.3 s (7.3 min) | 91 Gemini calls: judge 268 s, listwise 2.3 s, faithful 169 s; rate limit included |
+| Analysis total | 1,268.8 s (21.1 min) | the estimate after the probe said 2,455 s, from the reference speeds (2x for whisper) |
+| 30 previews (720x1280), one at a time | 730.9 s (12.2 min) | 11.8 to 35.0 s each, 0.45 to 0.74 times the clip's length (1,278 s of clips) |
+| 5 final clips (1080x1920) with posting kits | 194.2 s | renders 22.7 to 46.9 s (0.8 to 1.1 times the clip), kits 2.3 to 2.8 s each |
+| Whole run | 2,194.6 s (36.6 min) | from the file to 30 previews and 5 finished, credited clips |
+
+Memory (peak RSS): whisper-cli 552 MB, ffmpeg 750 MB (a final 1080x1920 render with the blurred-background fit), Node 395 MB, the whole process tree 904 MB at once. Disk: the job folder peaked at 171 MB (the 123 MB WAV is deleted when the transcript is merged) and ended at 166 MB: 148 MB of clips, 6.4 MB `whisper.json`, 1.4 MB `captions.json`, 0.8 MB `words.json`, 0.8 MB thumbnails.
+
+### 2 hours, 30 clips (job `j_20261017_1i00`)
+
+| Stage | Wall time | Notes |
+|---|---|---|
+| Probe and 240 thumbnails | 10 s | |
+| Language check | 3 s | |
+| Transcribe (12 parts) | 1,082 s (18.0 min) | 23,788 words, 6.76x real time; whisper-cli peak 548 MB; job folder peak 268 MB (the 234 MB WAV) |
+| First run stopped here | | the quality gate called the transcript unreliable (score 0): see "What broke" |
+
+[2-hour judging and rendering: filled in below when the resumed run finishes.]
+
+### Failure injection (6-minute excerpt, 2-minute parts, k = 8, previews)
+
+`scratchpad/perf/inject.mjs` ran the harness in its own process group and sent SIGKILL to the whole group (Node, whisper-cli, ffmpeg) three times, resuming after each.
+
+| Kill | State at the kill | After the resume |
+|---|---|---|
+| Mid-transcription (part 2 of 3 running) | part 1 kept in `whisper-chunks/000.json`; `job.json` parsed; no temp or part files | whisper ran parts 2 and 3 only; part 1 was not transcribed again; 1,231 words, the same count as a whole-file run |
+| Mid-judging (4 of 12 windows judged) | `job.json` parsed; judge cache held 4 | 12 judge calls in all over both runs, none repeated (`judge-calls.jsonl`) |
+| Mid-render (3 of 8 previews done, the 4th running) | `job.json` parsed; no `.part.mp4` left | the 5 previews still to do were rendered, none of the first 3 again; 8 preview files, one per clip |
+
+Lost work is at most the unit that was running: one whisper part (about 10 minutes of audio in normal use), one judge call, one clip.
+
+### Disk full
+
+Mocked, because `hdiutil` would not create a small volume under this load: a preload that makes `fs.statfsSync` report 60 MB free, and an ffmpeg wrapper that fails with "No space left on device" from the second clip.
+
+- Before transcription, CLI on the 2-hour file: "Not enough free disk space for transcribing this video: Selects needs about 0.56 GB and 0.06 GB is free." Hint: "Free up space (empty the Bin, or delete old jobs in <home>/jobs), or set SELECTS_HOME to a folder on a bigger drive, then resume the job. Work already finished is kept." Exit 1; the probe and thumbnails stay done.
+- Mid-render: first run said only "ffmpeg exited with code 1: ." and tried every later clip (see "What broke"). After the fix: "The disk is full, so Selects stopped during rendering." with the same hint, the queue stops at the failed clip, finished clips stay, `job.json` intact, and the error has `code: "disk_full"`.
+
+### Browser (headless Chrome 155, CLI, `--disable-gpu`)
+
+Decoding the audio of the 1-hour file to 16 kHz mono (`scratchpad/perf/browser/`): the page fetched the MP4 as a File, decoded it, and reported `performance.measureUserAgentSpecificMemory()`; the runner sampled the RSS of Chrome's processes.
+
+| Path | Decode time | JS memory peak | Renderer RSS peak | Chrome total |
+|---|---|---|---|---|
+| Before: whole PCM in one Float32Array, plus the copy sent to whisper | 48 s | 495 MB | 954 MB | 1,504 MB |
+| After: 10-minute segments to OPFS, one segment in memory | 93 s | 146 MB | 465 MB | 1,082 MB |
+
+The renderer figure includes the 114 MB file itself, held in memory because the test fetched it (a picked file is read from disk). The segmented decode is slower here (the OPFS writes and a busier machine on the second run) but its memory no longer grows with the video: 7 segments of 580 to 612 s, 246 MB in OPFS, and a 10 s range read back across a segment boundary. Before, the whole-PCM path needs about 4 bytes x 16,000 x seconds twice over: about 1 GB of JS memory for 2 hours, which a phone tab will not get.
+
+Limit set and shown: on a phone or tablet, over 30 minutes the job says "For videos over about 30 minutes, use Selects on a laptop. A phone can take hours on one this long, and stops whenever the tab is in the background." Over an hour on any device it says the tab works 10 minutes at a time and the desktop app is faster. Reasons: whisper in a tab ran at 0.3x to 1.9x real time on this laptop, so an hour of video is 30 minutes to 3 hours of transcription, and phones freeze background tabs.
+
+### What broke, and the fix
+
+| Problem at scale | Fix (commit) |
+|---|---|
+| One whisper process for the whole file: a kill or sleep 90 minutes into a 2-hour transcription lost all of it | 10-minute parts cut at quiet moments, each kept until the merge (a48136d) |
+| 8 windows judged whatever k: 30 clips cannot come out of 8, and all 8 could come from one stretch | auto judge count max(16, 2k, one per 5 min) capped by a time budget; shortlist per segment with a per-segment cap on inputs over 30 min (96c2fa8) |
+| One render failure stopped the queue; approvals made during a render were overwritten by the renderer's saves; a render request during a render was dropped | render queue with per-clip errors, merge of the person's fields, clips approved meanwhile join, queue items by key (06f38d6) |
+| A full disk during a render showed "ffmpeg exited with code 1: ." and every later clip was tried | the stderr tail is always kept; disk-full stops the queue with a clear message (d3e1ccf, af8953e) |
+| Every caption save on a 2-hour job with 30 rendered clips blocked the server for 5.6 s (cues rebuilt per clip) | cues read once: 0.36 s (44d06ee) |
+| A 2-hour transcript failed the quality gate because one 20 s whisper loop (88 min in, 1 of 298 chunks) set the worst-chunk compression to 8.3 | local loops (under 2% of the words) no longer sink the score; the stretch is kept out of the candidates (6c93ca0) |
+| A preview queue stopped part way was not resumed | resume renders the previews still to do (c908dbb) |
+| ETAs covered only the current stage, and judging left out 30+ faithful calls | per-job estimate after the probe, whole-job time left in progress events, overnight nudge over 30 min (06f38d6, 6ed8454) |
+| The browser held 2 to 3 copies of the whole PCM | segments in OPFS (ff7e6c2, 7cd557a) |
+| Timeline strip with 50 clips: 17 to 34 overlapping markers, colliding labels | lanes and fitted labels; approve the best N in the review (35d2795, 00b393c) |
+
+Local Gemma instead of Smart mode: at the measured 40 to 80 s a call, k = 30 on 2 hours caps the shortlist at 52 windows (half the video's length in judge time) and judging takes about 1.6 hours with the faithful checks, which is why the CLI prints the estimate and suggests overnight mode.
