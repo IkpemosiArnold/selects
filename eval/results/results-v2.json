@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-17T20:23:43.436Z",
+  "generatedAt": "2026-10-21T09:04:42.216Z",
   "plan": "eval/PLAN.md",
   "settings": {
     "minLen": 20,
@@ -34,33 +34,48 @@
   "aggregate": {
     "n": 19,
     "rank": {
-      "random|all": {
+      "prescore|all": {
         "n": 19,
         "auc": {
-          "mean": 0.5004097268383795,
-          "lo": 0.4993322708610986,
-          "hi": 0.5015163206351021,
+          "mean": 0.5143303954884871,
+          "lo": 0.45599768206503777,
+          "hi": 0.5739570858907207,
           "n": 19
         },
         "rho": {
-          "mean": 0.0006360776851785802,
-          "lo": -0.001199791851370412,
-          "hi": 0.002670741910926444,
+          "mean": 0.02818601841765443,
+          "lo": -0.07913060966858035,
+          "hi": 0.13761547735246313,
           "n": 19
         }
       },
-      "random|R": {
+      "prescore|R": {
         "n": 19,
         "auc": {
-          "mean": 0.5013870614035086,
-          "lo": 0.4984685672514619,
-          "hi": 0.5044261695906433,
+          "mean": 0.5365497076023392,
+          "lo": 0.46509502923976614,
+          "hi": 0.608187134502924,
           "n": 19
         },
         "rho": {
-          "mean": 0.0034042794772665198,
-          "lo": -0.0011691075514874165,
-          "hi": 0.00781549229191183,
+          "mean": 0.07723414885785874,
+          "lo": -0.05490698926285108,
+          "hi": 0.21347565184704362,
+          "n": 19
+        }
+      },
+      "prescore|J": {
+        "n": 19,
+        "auc": {
+          "mean": 0.518264411027569,
+          "lo": 0.4573026315789474,
+          "hi": 0.5811748120300751,
+          "n": 19
+        },
+        "rho": {
+          "mean": 0.05061908288499271,
+          "lo": -0.059704298523913873,
+          "hi": 0.159216191237637,
           "n": 19
         }
       },
@@ -94,33 +109,48 @@
           "n": 19
         }
       },
-      "prescore|all": {
+      "energy|J": {
         "n": 19,
         "auc": {
-          "mean": 0.5143303954884871,
-          "lo": 0.45599768206503777,
-          "hi": 0.5739570858907207,
+          "mean": 0.49972431077694235,
+          "lo": 0.4218421052631579,
+          "hi": 0.5760275689223057,
           "n": 19
         },
         "rho": {
-          "mean": 0.02818601841765443,
-          "lo": -0.07913060966858035,
-          "hi": 0.13761547735246313,
+          "mean": -0.021813439981250272,
+          "lo": -0.14908872961370837,
+          "hi": 0.10089978783625768,
           "n": 19
         }
       },
-      "prescore|R": {
+      "random|all": {
         "n": 19,
         "auc": {
-          "mean": 0.5365497076023392,
-          "lo": 0.46509502923976614,
-          "hi": 0.608187134502924,
+          "mean": 0.5004097268383795,
+          "lo": 0.4993322708610986,
+          "hi": 0.5015163206351021,
           "n": 19
         },
         "rho": {
-          "mean": 0.07723414885785874,
-          "lo": -0.05490698926285108,
-          "hi": 0.21347565184704362,
+          "mean": 0.0006360776851785802,
+          "lo": -0.001199791851370412,
+          "hi": 0.002670741910926444,
+          "n": 19
+        }
+      },
+      "random|R": {
+        "n": 19,
+        "auc": {
+          "mean": 0.5013870614035086,
+          "lo": 0.4984685672514619,
+          "hi": 0.5044261695906433,
+          "n": 19
+        },
+        "rho": {
+          "mean": 0.0034042794772665198,
+          "lo": -0.0011691075514874165,
+          "hi": 0.00781549229191183,
           "n": 19
         }
       },
@@ -154,6 +184,96 @@
           "n": 19
         }
       },
+      "gemma4:hook|R": {
+        "n": 19,
+        "auc": {
+          "mean": 0.5643274853801169,
+          "lo": 0.5104166666666666,
+          "hi": 0.6186038011695905,
+          "n": 19
+        },
+        "rho": {
+          "mean": 0.11994190960382425,
+          "lo": -0.002994774578344445,
+          "hi": 0.23761527036851346,
+          "n": 19
+        }
+      },
+      "gemma4:standalone|R": {
+        "n": 19,
+        "auc": {
+          "mean": 0.554641812865497,
+          "lo": 0.4956140350877193,
+          "hi": 0.61421783625731,
+          "n": 19
+        },
+        "rho": {
+          "mean": 0.052721409049863416,
+          "lo": -0.06922783320294223,
+          "hi": 0.1764213688261173,
+          "n": 19
+        }
+      },
+      "gemma4:payoff|R": {
+        "n": 19,
+        "auc": {
+          "mean": 0.5199195906432749,
+          "lo": 0.47459795321637427,
+          "hi": 0.5663377192982456,
+          "n": 19
+        },
+        "rho": {
+          "mean": 0.046960541644240926,
+          "lo": -0.0361671686711009,
+          "hi": 0.1359982230071643,
+          "n": 19
+        }
+      },
+      "gemma4:clarity|R": {
+        "n": 19,
+        "auc": {
+          "mean": 0.5118786549707602,
+          "lo": 0.45376461988304095,
+          "hi": 0.5699926900584795,
+          "n": 19
+        },
+        "rho": {
+          "mean": 0.013619334346686565,
+          "lo": -0.09024999238434506,
+          "hi": 0.11678840201625285,
+          "n": 19
+        }
+      },
+      "gemma4:blend|R": {
+        "n": 19,
+        "auc": {
+          "mean": 0.5730994152046783,
+          "lo": 0.5085891812865496,
+          "hi": 0.6352339181286549,
+          "n": 19
+        },
+        "rho": {
+          "mean": 0.12141990422355714,
+          "lo": 0.007279309658688938,
+          "hi": 0.23200218507269332,
+          "n": 19
+        }
+      },
+      "gemma4:blend|J": {
+        "n": 19,
+        "auc": {
+          "mean": 0.5229010025062656,
+          "lo": 0.4629605263157893,
+          "hi": 0.5848809523809522,
+          "n": 19
+        },
+        "rho": {
+          "mean": 0.03435806015294933,
+          "lo": -0.07656836891517772,
+          "hi": 0.1445038496364731,
+          "n": 19
+        }
+      },
       "qwen|R": {
         "n": 19,
         "auc": {
@@ -181,6 +301,96 @@
           "mean": 0.09369890453502543,
           "lo": 0.024990697254360227,
           "hi": 0.16052076743376015,
+          "n": 19
+        }
+      },
+      "qwen:hook|R": {
+        "n": 19,
+        "auc": {
+          "mean": 0.5096856725146199,
+          "lo": 0.48994883040935666,
+          "hi": 0.5307017543859648,
+          "n": 19
+        },
+        "rho": {
+          "mean": 0.12086006838642908,
+          "lo": -0.03929423781349242,
+          "hi": 0.27571760838542747,
+          "n": 10
+        }
+      },
+      "qwen:standalone|R": {
+        "n": 19,
+        "auc": {
+          "mean": 0.5096856725146199,
+          "lo": 0.49305555555555547,
+          "hi": 0.5283260233918129,
+          "n": 19
+        },
+        "rho": {
+          "mean": 0.09125922528263264,
+          "lo": -0.027840399094325795,
+          "hi": 0.21093075839176315,
+          "n": 12
+        }
+      },
+      "qwen:payoff|R": {
+        "n": 19,
+        "auc": {
+          "mean": 0.5093201754385965,
+          "lo": 0.48026315789473684,
+          "hi": 0.5427631578947368,
+          "n": 19
+        },
+        "rho": {
+          "mean": -0.03878153228980237,
+          "lo": -0.16703212314340016,
+          "hi": 0.09081438117369618,
+          "n": 13
+        }
+      },
+      "qwen:clarity|R": {
+        "n": 19,
+        "auc": {
+          "mean": 0.5042032163742689,
+          "lo": 0.47185672514619886,
+          "hi": 0.5347222222222223,
+          "n": 19
+        },
+        "rho": {
+          "mean": 0.03748051901960635,
+          "lo": -0.0691166191169242,
+          "hi": 0.14605203727646776,
+          "n": 17
+        }
+      },
+      "qwen:blend|R": {
+        "n": 19,
+        "auc": {
+          "mean": 0.5732821637426901,
+          "lo": 0.52046783625731,
+          "hi": 0.6266447368421052,
+          "n": 19
+        },
+        "rho": {
+          "mean": 0.15647604941000678,
+          "lo": 0.060097875675473124,
+          "hi": 0.26069812931523983,
+          "n": 19
+        }
+      },
+      "qwen:blend|J": {
+        "n": 19,
+        "auc": {
+          "mean": 0.5548151629072681,
+          "lo": 0.5076315789473684,
+          "hi": 0.6039066416040101,
+          "n": 19
+        },
+        "rho": {
+          "mean": 0.10926883335597248,
+          "lo": 0.03383250237253284,
+          "hi": 0.18334189698130476,
           "n": 19
         }
       }
@@ -636,6 +846,10 @@
         "mean": -0.05263157894736842,
         "p": 1
       }
+    },
+    "power": {
+      "gemma4VsChance": 52,
+      "gemma4VsPrescore": 633
     }
   },
   "prefer": null,
@@ -663,6 +877,11 @@
             "auc": 0.6736111111111112,
             "rho": -0.04173913043478261,
             "n": 24
+          },
+          "J": {
+            "auc": 0.455,
+            "rho": -0.15553470919324577,
+            "n": 40
           }
         },
         "energy": {
@@ -675,6 +894,11 @@
             "auc": 0.2986111111111111,
             "rho": -0.6208695652173913,
             "n": 24
+          },
+          "J": {
+            "auc": 0.2625,
+            "rho": -0.5422138836772983,
+            "n": 40
           }
         },
         "random": {
@@ -699,6 +923,46 @@
             "n": 40
           }
         },
+        "gemma4:hook": {
+          "R": {
+            "auc": 0.5625,
+            "rho": 0.24050890270282071,
+            "n": 24
+          }
+        },
+        "gemma4:standalone": {
+          "R": {
+            "auc": 0.6458333333333334,
+            "rho": 0.3214990075832091,
+            "n": 24
+          }
+        },
+        "gemma4:payoff": {
+          "R": {
+            "auc": 0.6111111111111112,
+            "rho": 0.29865872307013464,
+            "n": 24
+          }
+        },
+        "gemma4:clarity": {
+          "R": {
+            "auc": 0.5138888888888888,
+            "rho": 0.044090863294974664,
+            "n": 24
+          }
+        },
+        "gemma4:blend": {
+          "R": {
+            "auc": 0.7083333333333334,
+            "rho": 0.2965862214056627,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.58875,
+            "rho": 0.14870760573214079,
+            "n": 40
+          }
+        },
         "qwen": {
           "R": {
             "auc": 0.625,
@@ -708,6 +972,46 @@
           "J": {
             "auc": 0.61625,
             "rho": 0.3589566729722146,
+            "n": 40
+          }
+        },
+        "qwen:hook": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:standalone": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:payoff": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:clarity": {
+          "R": {
+            "auc": 0.625,
+            "rho": 0.3774227546081682,
+            "n": 24
+          }
+        },
+        "qwen:blend": {
+          "R": {
+            "auc": 0.6944444444444444,
+            "rho": 0.1356521739130435,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.55875,
+            "rho": 0.0963459825629545,
             "n": 40
           }
         }
@@ -2694,7 +2998,9 @@
               "before": "But I mean that's one of the great parts about nursing is you always forever are learning from those mistakes or things that didn't go well, and you can better improve for the next situation.",
               "after": "Ideally, except in the ER, I feel like some people come to the ER for fun."
             }
-          }
+          },
+          "before": "But I mean that's one of the great parts about nursing is you always forever are learning from those mistakes or things that didn't go well, and you can better improve for the next situation.",
+          "after": "Ideally, except in the ER, I feel like some people come to the ER for fun."
         },
         {
           "id": "c_0094",
@@ -2724,7 +3030,9 @@
               "before": "they're wonderful, it's fine\" because I was validating, I had to validate, you know, their concerns, you know, I'm sorry you have had this bad experience and whenever I have a family member who's upset, whether it's a previous, maybe a previous nurse or a previous physician,",
               "after": "And they were very thankful for that and it, you know, kind of put out a little fire that could have been bad at the start of my shift."
             }
-          }
+          },
+          "before": "they're wonderful, it's fine\" because I was validating, I had to validate, you know, their concerns, you know, I'm sorry you have had this bad experience and whenever I have a family member who's upset, whether it's a previous, maybe a previous nurse or a previous physician,",
+          "after": "And they were very thankful for that and it, you know, kind of put out a little fire that could have been bad at the start of my shift."
         },
         {
           "id": "c_0048",
@@ -2754,7 +3062,9 @@
               "before": "I think my strengths are one, I'm very outgoing.",
               "after": "I'm not scared to approach and ask those questions, especially when it involves patient care, because I never want to compromise that."
             }
-          }
+          },
+          "before": "I think my strengths are one, I'm very outgoing.",
+          "after": "I'm not scared to approach and ask those questions, especially when it involves patient care, because I never want to compromise that."
         },
         {
           "id": "c_0016",
@@ -2784,7 +3094,9 @@
               "before": "And so most of the time I actually end up not being on med surge, so I'm cross-trained to all of the spots.",
               "after": "That's good, that's good. And rural hospitals, it breaks, you have to learn everything."
             }
-          }
+          },
+          "before": "And so most of the time I actually end up not being on med surge, so I'm cross-trained to all of the spots.",
+          "after": "That's good, that's good."
         },
         {
           "id": "c_0051",
@@ -2814,14 +3126,12 @@
               "before": "I'm not shy of, you know, being open about what I don't know, and I feel like I'm a great communicator, whether it's communicating with my fellow nursing staff or the charge nurse or the managers or supervisors or the physicians.",
               "after": "That was like a nine-week extensive, like, in-depth course of telemetry."
             }
-          }
+          },
+          "before": "I'm not shy of, you know, being open about what I don't know, and I feel like I'm a great communicator, whether it's communicating with my fellow nursing staff or the charge nurse or the managers or supervisors or the physicians.",
+          "after": "That was like a nine-week extensive, like, in-depth course of telemetry."
         }
       ],
-      "cost": {
-        "qwen2.5:0.5b": {
-          "wallSec": 3277.606
-        }
-      },
+      "cost": {},
       "nJudged": 40,
       "gemma3Cached": 0,
       "calls": {
@@ -2862,6 +3172,11 @@
             "auc": 0.7291666666666666,
             "rho": 0.4393214856660362,
             "n": 24
+          },
+          "J": {
+            "auc": 0.72125,
+            "rho": 0.4021203773930318,
+            "n": 40
           }
         },
         "energy": {
@@ -2874,6 +3189,11 @@
             "auc": 0.5763888888888888,
             "rho": -0.0052173913043478265,
             "n": 24
+          },
+          "J": {
+            "auc": 0.565,
+            "rho": 0.10600375234521577,
+            "n": 40
           }
         },
         "random": {
@@ -2898,6 +3218,46 @@
             "n": 40
           }
         },
+        "gemma4:hook": {
+          "R": {
+            "auc": 0.7083333333333334,
+            "rho": 0.36893470104780635,
+            "n": 24
+          }
+        },
+        "gemma4:standalone": {
+          "R": {
+            "auc": 0.5416666666666666,
+            "rho": -0.08683861453677816,
+            "n": 24
+          }
+        },
+        "gemma4:payoff": {
+          "R": {
+            "auc": 0.4618055555555556,
+            "rho": -0.1314012390216458,
+            "n": 24
+          }
+        },
+        "gemma4:clarity": {
+          "R": {
+            "auc": 0.5972222222222222,
+            "rho": 0.05769297445113527,
+            "n": 24
+          }
+        },
+        "gemma4:blend": {
+          "R": {
+            "auc": 0.7222222222222222,
+            "rho": 0.2987606071930942,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.59125,
+            "rho": 0.07392813617298752,
+            "n": 40
+          }
+        },
         "qwen": {
           "R": {
             "auc": 0.4965277777777778,
@@ -2907,6 +3267,46 @@
           "J": {
             "auc": 0.52,
             "rho": 0.028692000025176863,
+            "n": 40
+          }
+        },
+        "qwen:hook": {
+          "R": {
+            "auc": 0.5416666666666666,
+            "rho": 0.07530655685082076,
+            "n": 24
+          }
+        },
+        "qwen:standalone": {
+          "R": {
+            "auc": 0.4583333333333333,
+            "rho": -0.07530655685082076,
+            "n": 24
+          }
+        },
+        "qwen:payoff": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:clarity": {
+          "R": {
+            "auc": 0.4583333333333333,
+            "rho": -0.20930724738891343,
+            "n": 24
+          }
+        },
+        "qwen:blend": {
+          "R": {
+            "auc": 0.6944444444444444,
+            "rho": 0.362489258260419,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.69,
+            "rho": 0.34335853210256767,
             "n": 40
           }
         }
@@ -4893,7 +5293,9 @@
               "before": "So always treat any kind of nervous in the senior body as being excited.",
               "after": "Try this because they did a big study, I believe, was at IBM, where the person sitting down when the interviewer came in, they stood up and they fixed their jacket, or they adjust themselves really quickly."
             }
-          }
+          },
+          "before": "So always treat any kind of nervous in the senior body as being excited.",
+          "after": "Try this because they did a big study, I believe, was at IBM, where the person sitting down when the interviewer came in, they stood up and they fixed their jacket, or they adjust themselves really quickly."
         },
         {
           "id": "c_0001",
@@ -4923,7 +5325,9 @@
               "before": null,
               "after": "And so for my angle, the very first thing is forget."
             }
-          }
+          },
+          "before": null,
+          "after": "And so for my angle, the very first thing is forget."
         },
         {
           "id": "c_0059",
@@ -4953,7 +5357,9 @@
               "before": "One thing that I would advise if you're going to a job interview or anything is think about the difference between performing and connecting and those two mindsets, if instead of this job interview is some like a costume that I'm putting on for this.",
               "after": "do that when you're sitting there in the waiting room, do that have a pleasant?"
             }
-          }
+          },
+          "before": "One thing that I would advise if you're going to a job interview or anything is think about the difference between performing and connecting and those two mindsets, if instead of this job interview is some like a costume that I'm putting on for this.",
+          "after": "do that when you're sitting there in the waiting room, do that have a pleasant?"
         },
         {
           "id": "c_0103",
@@ -4983,7 +5389,9 @@
               "before": "But if it's not, if it's something that's important, just pause for a second, like you're thinking about it because it lets them think you're that you weren't prepared for that question.",
               "after": "Let me add one more thing, a brown, nonverbal communication."
             }
-          }
+          },
+          "before": "But if it's not, if it's something that's important, just pause for a second, like you're thinking about it because it lets them think you're that you weren't prepared for that question.",
+          "after": "Let me add one more thing, a brown, nonverbal communication."
         },
         {
           "id": "c_0037",
@@ -5013,14 +5421,12 @@
               "before": "So try bullet points Instead, so guys and the other thing is, let's keep this going as long as you have ideas, just because we go, we just keep rotating around because there's still a lot to cover this.",
               "after": "In most Western cultures or certainly Western business cultures, there's gonna be a handshake involved somewhere along the way."
             }
-          }
+          },
+          "before": "So try bullet points Instead, so guys and the other thing is, let's keep this going as long as you have ideas, just because we go, we just keep rotating around because there's still a lot to cover this.",
+          "after": "In most Western cultures or certainly Western business cultures, there's gonna be a handshake involved somewhere along the way."
         }
       ],
-      "cost": {
-        "qwen2.5:0.5b": {
-          "wallSec": 338.284
-        }
-      },
+      "cost": {},
       "nJudged": 40,
       "gemma3Cached": 0,
       "calls": {
@@ -5061,6 +5467,11 @@
             "auc": 0.5902777777777778,
             "rho": -0.03436276967090778,
             "n": 24
+          },
+          "J": {
+            "auc": 0.55875,
+            "rho": -0.0694281566194222,
+            "n": 40
           }
         },
         "energy": {
@@ -5073,6 +5484,11 @@
             "auc": 0.5,
             "rho": -0.16260869565217392,
             "n": 24
+          },
+          "J": {
+            "auc": 0.4825,
+            "rho": -0.11613508442776735,
+            "n": 40
           }
         },
         "random": {
@@ -5097,6 +5513,46 @@
             "n": 40
           }
         },
+        "gemma4:hook": {
+          "R": {
+            "auc": 0.5138888888888888,
+            "rho": 0.007908770381619553,
+            "n": 24
+          }
+        },
+        "gemma4:standalone": {
+          "R": {
+            "auc": 0.4791666666666667,
+            "rho": -0.2345226055520427,
+            "n": 24
+          }
+        },
+        "gemma4:payoff": {
+          "R": {
+            "auc": 0.5104166666666666,
+            "rho": -0.14274322580169777,
+            "n": 24
+          }
+        },
+        "gemma4:clarity": {
+          "R": {
+            "auc": 0.5590277777777778,
+            "rho": 0.007669806002539659,
+            "n": 24
+          }
+        },
+        "gemma4:blend": {
+          "R": {
+            "auc": 0.5243055555555556,
+            "rho": -0.13046314724589267,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.4475,
+            "rho": -0.12693498507874632,
+            "n": 40
+          }
+        },
         "qwen": {
           "R": {
             "auc": 0.6319444444444444,
@@ -5106,6 +5562,46 @@
           "J": {
             "auc": 0.59125,
             "rho": 0.07650895975025722,
+            "n": 40
+          }
+        },
+        "qwen:hook": {
+          "R": {
+            "auc": 0.4340277777777778,
+            "rho": -0.28418848237952926,
+            "n": 24
+          }
+        },
+        "qwen:standalone": {
+          "R": {
+            "auc": 0.6041666666666666,
+            "rho": 0.37742748825719574,
+            "n": 24
+          }
+        },
+        "qwen:payoff": {
+          "R": {
+            "auc": 0.6875,
+            "rho": 0.32126129260486425,
+            "n": 24
+          }
+        },
+        "qwen:clarity": {
+          "R": {
+            "auc": 0.5,
+            "rho": -0.1668115312456598,
+            "n": 24
+          }
+        },
+        "qwen:blend": {
+          "R": {
+            "auc": 0.6493055555555556,
+            "rho": 0.0408873461907004,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.62875,
+            "rho": 0.07027914807481153,
             "n": 40
           }
         }
@@ -7092,7 +7588,9 @@
               "before": "Another channel that we may be using is a channel that goes from our eyes up to other bits of our nervous system and there the medium is sort of bags of cytoplasm and electrical impulses.",
               "after": "And another example is the spacecraft say the Mars rover or something like that you'll have an antenna on earth and you use the vacuum as your transmission medium and send signals to the Mars rover and maybe it's got an antenna and sends back signals."
             }
-          }
+          },
+          "before": "Another channel that we may be using is a channel that goes from our eyes up to other bits of our nervous system and there the medium is sort of bags of cytoplasm and electrical impulses.",
+          "after": "And another example is the spacecraft say the Mars rover or something like that you'll have an antenna on earth and you use the vacuum as your transmission medium and send signals to the Mars rover and maybe it's got an antenna and sends back signals."
         },
         {
           "id": "c_0084",
@@ -7122,7 +7620,9 @@
               "before": "And we're going to assume that the probability that what comes out is what you put in is 1 minus F, which might be 90% say, and the probability that it is not what you put in is F, for example, 10%.",
               "after": "Let's say you've made your new startup company, you've got Cambridge Blue disk drives, and you make your first prototype disk drive using your new invented technology, and you test it and you find it flips 10% of the bits."
             }
-          }
+          },
+          "before": "And we're going to assume that the probability that what comes out is what you put in is 1 minus F, which might be 90% say, and the probability that it is not what you put in is F, for example, 10%.",
+          "after": "Let's say you've made your new startup company, you've got Cambridge Blue disk drives, and you make your first prototype disk drive using your new invented technology, and you test it and you find it flips 10% of the bits."
         },
         {
           "id": "c_0057",
@@ -7152,7 +7652,9 @@
               "before": "That maybe you take your copper wires and you put better insulation on them.",
               "after": "So this is a much more exciting approach than the physical approach."
             }
-          }
+          },
+          "before": "That maybe you take your copper wires and you put better insulation on them.",
+          "after": "So this is a much more exciting approach than the physical approach."
         },
         {
           "id": "c_0049",
@@ -7182,7 +7684,9 @@
               "before": "We're trying to make a reliable communication system.",
               "after": "Alternatively we could talk about system solutions."
             }
-          }
+          },
+          "before": "We're trying to make a reliable communication system.",
+          "after": "Alternatively we could talk about system solutions."
         },
         {
           "id": "c_0082",
@@ -7212,14 +7716,12 @@
               "before": "The binary symmetric channel has got an input and will idealize and assume that that input is a 0 or a 1.",
               "after": "So that's the binary symmetric channel."
             }
-          }
+          },
+          "before": "The binary symmetric channel has got an input and will idealize and assume that that input is a 0 or a 1.",
+          "after": "So that's the binary symmetric channel."
         }
       ],
-      "cost": {
-        "qwen2.5:0.5b": {
-          "wallSec": 277.092
-        }
-      },
+      "cost": {},
       "nJudged": 40,
       "gemma3Cached": 0,
       "calls": {
@@ -7260,6 +7762,11 @@
             "auc": 0.5416666666666666,
             "rho": 0.026527506606664846,
             "n": 24
+          },
+          "J": {
+            "auc": 0.5175,
+            "rho": 0.06889108806579061,
+            "n": 40
           }
         },
         "energy": {
@@ -7272,6 +7779,11 @@
             "auc": 0.375,
             "rho": -0.07478260869565218,
             "n": 24
+          },
+          "J": {
+            "auc": 0.3775,
+            "rho": -0.12026266416510319,
+            "n": 40
           }
         },
         "random": {
@@ -7296,6 +7808,46 @@
             "n": 40
           }
         },
+        "gemma4:hook": {
+          "R": {
+            "auc": 0.5833333333333334,
+            "rho": 0.1807124921827981,
+            "n": 24
+          }
+        },
+        "gemma4:standalone": {
+          "R": {
+            "auc": 0.4444444444444444,
+            "rho": -0.07677237944621657,
+            "n": 24
+          }
+        },
+        "gemma4:payoff": {
+          "R": {
+            "auc": 0.5763888888888888,
+            "rho": 0.04155182400728919,
+            "n": 24
+          }
+        },
+        "gemma4:clarity": {
+          "R": {
+            "auc": 0.3194444444444444,
+            "rho": -0.3356423141865346,
+            "n": 24
+          }
+        },
+        "gemma4:blend": {
+          "R": {
+            "auc": 0.4791666666666667,
+            "rho": -0.12956521739130436,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.45,
+            "rho": -0.10159951228401141,
+            "n": 40
+          }
+        },
         "qwen": {
           "R": {
             "auc": 0.5,
@@ -7305,6 +7857,46 @@
           "J": {
             "auc": 0.4875,
             "rho": 0.06733322982901524,
+            "n": 40
+          }
+        },
+        "qwen:hook": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:standalone": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:payoff": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:clarity": {
+          "R": {
+            "auc": 0.5,
+            "rho": 0.0893819357296686,
+            "n": 24
+          }
+        },
+        "qwen:blend": {
+          "R": {
+            "auc": 0.5277777777777778,
+            "rho": 0.07478260869565218,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.50625,
+            "rho": 0.13309557207300768,
             "n": 40
           }
         }
@@ -9291,7 +9883,9 @@
               "before": null,
               "after": "And how is it that someone who's competent in one area can be so incompetent in another area?"
             }
-          }
+          },
+          "before": null,
+          "after": "And how is it that someone who's competent in one area can be so incompetent in another area?"
         },
         {
           "id": "c_0029",
@@ -9321,7 +9915,9 @@
               "before": "We were at a special magic convention in Orlando and it was very controversial about the person putting on the magic convention had very Geller come and talk to us magicians and he gave him quite a stirring talk.",
               "after": "I got a phone call from Colonel Austin Kibler who was then head of ARPA, the Advanced Research Projects Agency of the Defense Department."
             }
-          }
+          },
+          "before": "We were at a special magic convention in Orlando and it was very controversial about the person putting on the magic convention had very Geller come and talk to us magicians and he gave him quite a stirring talk.",
+          "after": "I got a phone call from Colonel Austin Kibler who was then head of ARPA, the Advanced Research Projects Agency of the Defense Department."
         },
         {
           "id": "c_0019",
@@ -9351,7 +9947,9 @@
               "before": "We're going to go and Ryan, Guy, Ryan Playfair, one of the very great admirers and fans and early in the days.",
               "after": "And you know, people know he's quite well known, he lives in England."
             }
-          }
+          },
+          "before": "We're going to go and Ryan, Guy, Ryan Playfair, one of the very great admirers and fans and early in the days.",
+          "after": "And you know, people know he's quite well known, he lives in England."
         },
         {
           "id": "c_0094",
@@ -9381,7 +9979,9 @@
               "before": "Okay? And I have here...",
               "after": "So I grabbed a lot of them."
             }
-          }
+          },
+          "before": "And I have here...",
+          "after": "So I grabbed a lot of them."
         },
         {
           "id": "c_0123",
@@ -9411,14 +10011,12 @@
               "before": "Yeah, the Gellogrip, like this. I call it the Gellogrip.",
               "after": "How are you doing, Gary? Yeah."
             }
-          }
+          },
+          "before": "I call it the Gellogrip.",
+          "after": "How are you doing, Gary?"
         }
       ],
-      "cost": {
-        "qwen2.5:0.5b": {
-          "wallSec": 296.591
-        }
-      },
+      "cost": {},
       "nJudged": 40,
       "gemma3Cached": 0,
       "calls": {
@@ -9459,6 +10057,11 @@
             "auc": 0.3784722222222222,
             "rho": -0.31860737034238185,
             "n": 24
+          },
+          "J": {
+            "auc": 0.37125,
+            "rho": -0.38524708986598505,
+            "n": 40
           }
         },
         "energy": {
@@ -9471,6 +10074,11 @@
             "auc": 0.5902777777777778,
             "rho": 0.1817391304347826,
             "n": 24
+          },
+          "J": {
+            "auc": 0.58,
+            "rho": 0.14390243902439023,
+            "n": 40
           }
         },
         "random": {
@@ -9495,6 +10103,46 @@
             "n": 40
           }
         },
+        "gemma4:hook": {
+          "R": {
+            "auc": 0.7916666666666666,
+            "rho": 0.5553468495423024,
+            "n": 24
+          }
+        },
+        "gemma4:standalone": {
+          "R": {
+            "auc": 0.5833333333333334,
+            "rho": 0.19964154199333084,
+            "n": 24
+          }
+        },
+        "gemma4:payoff": {
+          "R": {
+            "auc": 0.5243055555555556,
+            "rho": 0.04035254242463002,
+            "n": 24
+          }
+        },
+        "gemma4:clarity": {
+          "R": {
+            "auc": 0.59375,
+            "rho": 0.23895609467952805,
+            "n": 24
+          }
+        },
+        "gemma4:blend": {
+          "R": {
+            "auc": 0.6597222222222222,
+            "rho": 0.2791304347826087,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.4825,
+            "rho": 0.027579737335834898,
+            "n": 40
+          }
+        },
         "qwen": {
           "R": {
             "auc": 0.625,
@@ -9504,6 +10152,46 @@
           "J": {
             "auc": 0.54875,
             "rho": 0.1636171951342433,
+            "n": 40
+          }
+        },
+        "qwen:hook": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:standalone": {
+          "R": {
+            "auc": 0.5416666666666666,
+            "rho": 0.04518393411049245,
+            "n": 24
+          }
+        },
+        "qwen:payoff": {
+          "R": {
+            "auc": 0.5416666666666666,
+            "rho": 0.04518393411049245,
+            "n": 24
+          }
+        },
+        "qwen:clarity": {
+          "R": {
+            "auc": 0.5416666666666666,
+            "rho": 0.3231789525786216,
+            "n": 24
+          }
+        },
+        "qwen:blend": {
+          "R": {
+            "auc": 0.5659722222222222,
+            "rho": 0.02045257519596602,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.46125,
+            "rho": -0.17779033219619814,
             "n": 40
           }
         }
@@ -11490,7 +12178,9 @@
               "before": "Here's the theme that's going to come up a lot.",
               "after": "You want an idea about what you can say, \"I know it sounds like a bad idea,\" but here's specifically why it's actually a great one."
             }
-          }
+          },
+          "before": "Here's the theme that's going to come up a lot.",
+          "after": "You want an idea about what you can say, \"I know it sounds like a bad idea,\" but here's specifically why it's actually a great one."
         },
         {
           "id": "c_0168",
@@ -11525,7 +12215,9 @@
               "before": "This is also a reason why it's not usually dangerous to tell people about your idea.",
               "after": "That's how most great companies have started."
             }
-          }
+          },
+          "before": "This is also a reason why it's not usually dangerous to tell people about your idea.",
+          "after": "That's how most great companies have started."
         },
         {
           "id": "c_0045",
@@ -11555,7 +12247,9 @@
               "before": "These overlap somewhat, but I'm going to have to talk about them somewhat individually, to make it make sense.",
               "after": "And one of the things that I particularly like about startups, is that some of the things that are bad in other work situations, like being poor and unknown, are actually huge assets when it comes to starting to startup."
             }
-          }
+          },
+          "before": "These overlap somewhat, but I'm going to have to talk about them somewhat individually, to make it make sense.",
+          "after": "And one of the things that I particularly like about startups, is that some of the things that are bad in other work situations, like being poor and unknown, are actually huge assets when it comes to starting to startup."
         },
         {
           "id": "c_0113",
@@ -11588,7 +12282,9 @@
               "before": "I want to make this point again because it's so important.",
               "after": "If you don't love and believe in what you're building, you'll likely to get up at some point along the way."
             }
-          }
+          },
+          "before": "I want to make this point again because it's so important.",
+          "after": "If you don't love and believe in what you're building, you'll likely to get up at some point along the way."
         },
         {
           "id": "c_0133",
@@ -11618,14 +12314,12 @@
               "before": "A third advantage of mission oriented companies is that people outside the company are more willing to help you.",
               "after": "The hardest part about coming up with great ideas is that the best ideas often look terrible at the beginning."
             }
-          }
+          },
+          "before": "A third advantage of mission oriented companies is that people outside the company are more willing to help you.",
+          "after": "The hardest part about coming up with great ideas is that the best ideas often look terrible at the beginning."
         }
       ],
-      "cost": {
-        "qwen2.5:0.5b": {
-          "wallSec": 315.174
-        }
-      },
+      "cost": {},
       "nJudged": 40,
       "gemma3Cached": 0,
       "calls": {
@@ -11666,6 +12360,11 @@
             "auc": 0.6006944444444444,
             "rho": 0.3218090965398686,
             "n": 24
+          },
+          "J": {
+            "auc": 0.51625,
+            "rho": 0.21586378371699932,
+            "n": 40
           }
         },
         "energy": {
@@ -11678,6 +12377,11 @@
             "auc": 0.625,
             "rho": 0.09826086956521739,
             "n": 24
+          },
+          "J": {
+            "auc": 0.5675,
+            "rho": 0.10694183864915573,
+            "n": 40
           }
         },
         "random": {
@@ -11702,6 +12406,46 @@
             "n": 40
           }
         },
+        "gemma4:hook": {
+          "R": {
+            "auc": 0.6354166666666666,
+            "rho": 0.3499846096903683,
+            "n": 24
+          }
+        },
+        "gemma4:standalone": {
+          "R": {
+            "auc": 0.6041666666666666,
+            "rho": 0.21624820236051578,
+            "n": 24
+          }
+        },
+        "gemma4:payoff": {
+          "R": {
+            "auc": 0.71875,
+            "rho": 0.4698625894488846,
+            "n": 24
+          }
+        },
+        "gemma4:clarity": {
+          "R": {
+            "auc": 0.4236111111111111,
+            "rho": 0.07355995645509783,
+            "n": 24
+          }
+        },
+        "gemma4:blend": {
+          "R": {
+            "auc": 0.7430555555555556,
+            "rho": 0.5396825524405094,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.625,
+            "rho": 0.27102584578809696,
+            "n": 40
+          }
+        },
         "qwen": {
           "R": {
             "auc": 0.4756944444444444,
@@ -11711,6 +12455,46 @@
           "J": {
             "auc": 0.53125,
             "rho": 0.20076964439453782,
+            "n": 40
+          }
+        },
+        "qwen:hook": {
+          "R": {
+            "auc": 0.5416666666666666,
+            "rho": 0.34641016151377546,
+            "n": 24
+          }
+        },
+        "qwen:standalone": {
+          "R": {
+            "auc": 0.4583333333333333,
+            "rho": -0.34641016151377546,
+            "n": 24
+          }
+        },
+        "qwen:payoff": {
+          "R": {
+            "auc": 0.4583333333333333,
+            "rho": -0.08190283593479221,
+            "n": 24
+          }
+        },
+        "qwen:clarity": {
+          "R": {
+            "auc": 0.5,
+            "rho": 0.26411825780562803,
+            "n": 24
+          }
+        },
+        "qwen:blend": {
+          "R": {
+            "auc": 0.53125,
+            "rho": 0.32876713105964955,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.55375,
+            "rho": 0.3127228428113355,
             "n": 40
           }
         }
@@ -13697,7 +14481,9 @@
               "before": "It's a few points and a few good tournaments here and there.",
               "after": "It's just, I mean, okay, right now I'm counting on ratings somewhat to call properly."
             }
-          }
+          },
+          "before": "It's a few points and a few good tournaments here and there.",
+          "after": "It's just, I mean, okay, right now I'm counting on ratings somewhat to call properly."
         },
         {
           "id": "c_0034",
@@ -13727,7 +14513,9 @@
               "before": ">> Let's go back a little bit to how it all started for you.",
               "after": "So I left school in the United States and I went to Spain and I started playing chess very consistently and studying chess a lot more."
             }
-          }
+          },
+          "before": ">> Let's go back a little bit to how it all started for you.",
+          "after": "So I left school in the United States and I went to Spain and I started playing chess very consistently and studying chess a lot more."
         },
         {
           "id": "c_0134",
@@ -13757,7 +14545,9 @@
               "before": "And then you at some point see them pop up into some tournament. And gain like 100 points.",
               "after": ">> Right now there's been a lot of talk about how the gap in reading between you and the world number one is getting really close."
             }
-          }
+          },
+          "before": "And gain like 100 points.",
+          "after": ">> Right now there's been a lot of talk about how the gap in reading between you and the world number one is getting really close."
         },
         {
           "id": "c_0064",
@@ -13787,7 +14577,9 @@
               "before": "What is the right way for a player to use the computer?",
               "after": "It doesn't really matter to me if this is going to be novelty year or if people will write online that it's already refuted, that it's so obvious."
             }
-          }
+          },
+          "before": "What is the right way for a player to use the computer?",
+          "after": "It doesn't really matter to me if this is going to be novelty year or if people will write online that it's already refuted, that it's so obvious."
         },
         {
           "id": "c_0025",
@@ -13819,14 +14611,12 @@
               "before": "You know, playing these guys all the time does sometimes get a bit monotonous.",
               "after": "If they can't find advantage in the main line of long theory, then they'll just deviate from the very start."
             }
-          }
+          },
+          "before": "You know, playing these guys all the time does sometimes get a bit monotonous.",
+          "after": "If they can't find advantage in the main line of long theory, then they'll just deviate from the very start."
         }
       ],
-      "cost": {
-        "qwen2.5:0.5b": {
-          "wallSec": 324.832
-        }
-      },
+      "cost": {},
       "nJudged": 40,
       "gemma3Cached": 0,
       "calls": {
@@ -13867,6 +14657,11 @@
             "auc": 0.5763888888888888,
             "rho": 0.26,
             "n": 24
+          },
+          "J": {
+            "auc": 0.65,
+            "rho": 0.2921200750469043,
+            "n": 40
           }
         },
         "energy": {
@@ -13879,6 +14674,11 @@
             "auc": 0.8819444444444444,
             "rho": 0.611304347826087,
             "n": 24
+          },
+          "J": {
+            "auc": 0.8675,
+            "rho": 0.5056285178236398,
+            "n": 40
           }
         },
         "random": {
@@ -13903,6 +14703,46 @@
             "n": 40
           }
         },
+        "gemma4:hook": {
+          "R": {
+            "auc": 0.7083333333333334,
+            "rho": 0.5053408152442047,
+            "n": 24
+          }
+        },
+        "gemma4:standalone": {
+          "R": {
+            "auc": 0.6145833333333334,
+            "rho": 0.1880803526390605,
+            "n": 24
+          }
+        },
+        "gemma4:payoff": {
+          "R": {
+            "auc": 0.6736111111111112,
+            "rho": 0.30635567535508307,
+            "n": 24
+          }
+        },
+        "gemma4:clarity": {
+          "R": {
+            "auc": 0.59375,
+            "rho": 0.2613114956263931,
+            "n": 24
+          }
+        },
+        "gemma4:blend": {
+          "R": {
+            "auc": 0.5763888888888888,
+            "rho": 0.1817391304347826,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.72,
+            "rho": 0.4061166100438462,
+            "n": 40
+          }
+        },
         "qwen": {
           "R": {
             "auc": 0.5694444444444444,
@@ -13912,6 +14752,46 @@
           "J": {
             "auc": 0.595,
             "rho": 0.06958784984084103,
+            "n": 40
+          }
+        },
+        "qwen:hook": {
+          "R": {
+            "auc": 0.4166666666666667,
+            "rho": -0.261343443110626,
+            "n": 24
+          }
+        },
+        "qwen:standalone": {
+          "R": {
+            "auc": 0.5,
+            "rho": 0.020851441405707476,
+            "n": 24
+          }
+        },
+        "qwen:payoff": {
+          "R": {
+            "auc": 0.6666666666666666,
+            "rho": 0.37148351242013417,
+            "n": 24
+          }
+        },
+        "qwen:clarity": {
+          "R": {
+            "auc": 0.4652777777777778,
+            "rho": -0.3025187272554621,
+            "n": 24
+          }
+        },
+        "qwen:blend": {
+          "R": {
+            "auc": 0.6597222222222222,
+            "rho": 0.2382608695652174,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.68875,
+            "rho": 0.27085092529367377,
             "n": 40
           }
         }
@@ -15898,7 +16778,9 @@
               "before": "And then let's talk about it after we watch her video.",
               "after": "Now the road will hold and stay solid even when it rains."
             }
-          }
+          },
+          "before": "And then let's talk about it after we watch her video.",
+          "after": "Now the road will hold and stay solid even when it rains."
         },
         {
           "id": "c_0125",
@@ -15928,7 +16810,9 @@
               "before": "For pot hole heavy roads, stop the patch patch patch.",
               "after": "And this fits into a one year election cycle."
             }
-          }
+          },
+          "before": "For pot hole heavy roads, stop the patch patch patch.",
+          "after": "And this fits into a one year election cycle."
         },
         {
           "id": "c_0148",
@@ -15958,7 +16842,9 @@
               "before": "So you see the video as she's uploading a huge shout out to you, my sister.",
               "after": "She made it clear that retirement plan is not how to build wealth or how to like she now went into different ways of investing your money and so on."
             }
-          }
+          },
+          "before": "So you see the video as she's uploading a huge shout out to you, my sister.",
+          "after": "She made it clear that retirement plan is not how to build wealth or how to like she now went into different ways of investing your money and so on."
         },
         {
           "id": "c_0056",
@@ -15988,7 +16874,9 @@
               "before": "I mean, where you have cousins, 250 million of them.",
               "after": "It would be the idea that I don't think that yeah, we are praying for an Indian because we want to be an Indian out now."
             }
-          }
+          },
+          "before": "I mean, where you have cousins, 250 million of them.",
+          "after": "It would be the idea that I don't think that yeah, we are praying for an Indian because we want to be an Indian out now."
         },
         {
           "id": "c_0048",
@@ -16018,14 +16906,12 @@
               "before": "It was Allah did I started it so it was Allah did I started it.",
               "after": "I don't know what to say, man."
             }
-          }
+          },
+          "before": "It was Allah did I started it so it was Allah did I started it.",
+          "after": "I don't know what to say, man."
         }
       ],
-      "cost": {
-        "qwen2.5:0.5b": {
-          "wallSec": 342.479
-        }
-      },
+      "cost": {},
       "nJudged": 40,
       "gemma3Cached": 0,
       "calls": {
@@ -16066,6 +16952,11 @@
             "auc": 0.3506944444444444,
             "rho": -0.2167574732657188,
             "n": 24
+          },
+          "J": {
+            "auc": 0.3975,
+            "rho": -0.08549977478223957,
+            "n": 40
           }
         },
         "energy": {
@@ -16078,6 +16969,11 @@
             "auc": 0.3958333333333333,
             "rho": -0.29043478260869565,
             "n": 24
+          },
+          "J": {
+            "auc": 0.3725,
+            "rho": -0.23602251407129457,
+            "n": 40
           }
         },
         "random": {
@@ -16102,6 +16998,46 @@
             "n": 40
           }
         },
+        "gemma4:hook": {
+          "R": {
+            "auc": 0.6145833333333334,
+            "rho": 0.21787982978476503,
+            "n": 24
+          }
+        },
+        "gemma4:standalone": {
+          "R": {
+            "auc": 0.4895833333333333,
+            "rho": -0.15636237111953552,
+            "n": 24
+          }
+        },
+        "gemma4:payoff": {
+          "R": {
+            "auc": 0.46875,
+            "rho": -0.007877211197711714,
+            "n": 24
+          }
+        },
+        "gemma4:clarity": {
+          "R": {
+            "auc": 0.6388888888888888,
+            "rho": 0.13483967276800551,
+            "n": 24
+          }
+        },
+        "gemma4:blend": {
+          "R": {
+            "auc": 0.5416666666666666,
+            "rho": 0.06260869565217392,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.58,
+            "rho": 0.27001923614959067,
+            "n": 40
+          }
+        },
         "qwen": {
           "R": {
             "auc": 0.5,
@@ -16111,6 +17047,46 @@
           "J": {
             "auc": 0.54625,
             "rho": 0.06874189352329153,
+            "n": 40
+          }
+        },
+        "qwen:hook": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:standalone": {
+          "R": {
+            "auc": 0.5,
+            "rho": 0,
+            "n": 24
+          }
+        },
+        "qwen:payoff": {
+          "R": {
+            "auc": 0.5,
+            "rho": 0,
+            "n": 24
+          }
+        },
+        "qwen:clarity": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:blend": {
+          "R": {
+            "auc": 0.3923611111111111,
+            "rho": -0.15444858629315344,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.49625,
+            "rho": -0.020552768009902734,
             "n": 40
           }
         }
@@ -18097,7 +19073,9 @@
               "before": "Last year, Radika, winner of the University Medal, spoke so beautifully about the sudden loss of her mother.",
               "after": "A few weeks after Dave died, I was talking to my friend Phil."
             }
-          }
+          },
+          "before": "Last year, Radika, winner of the University Medal, spoke so beautifully about the sudden loss of her mother.",
+          "after": "A few weeks after Dave died, I was talking to my friend Phil."
         },
         {
           "id": "c_0087",
@@ -18127,7 +19105,9 @@
               "before": "An emptiness that fills your heart and your lungs constricts your ability to think or even to breathe.",
               "after": "I learned that in the face of the void or in the face of any challenge, you can choose joy and meaning."
             }
-          }
+          },
+          "before": "An emptiness that fills your heart and your lungs constricts your ability to think or even to breathe.",
+          "after": "I learned that in the face of the void or in the face of any challenge, you can choose joy and meaning."
         },
         {
           "id": "c_0192",
@@ -18157,7 +19137,9 @@
               "before": "The second P is pervasiveness, the belief that an event will affect all areas of your life.",
               "after": "My friends and family, some of whom are with me today, were carrying us quite literally."
             }
-          }
+          },
+          "before": "The second P is pervasiveness, the belief that an event will affect all areas of your life.",
+          "after": "My friends and family, some of whom are with me today, were carrying us quite literally."
         },
         {
           "id": "c_0139",
@@ -18187,7 +19169,9 @@
               "before": "You will be defined not just by what you achieve, but by how you survive.",
               "after": "We all at some point live some form of option B."
             }
-          }
+          },
+          "before": "You will be defined not just by what you achieve, but by how you survive.",
+          "after": "We all at some point live some form of option B."
         },
         {
           "id": "c_0112",
@@ -18217,14 +19201,12 @@
               "before": "Game of Thrones, the show, has diverged way too much from the books, and you're mad because you read 4,352 pages.",
               "after": "And sometimes there's loss of life itself."
             }
-          }
+          },
+          "before": "Game of Thrones, the show, has diverged way too much from the books, and you're mad because you read 4,352 pages.",
+          "after": "And sometimes there's loss of life itself."
         }
       ],
-      "cost": {
-        "qwen2.5:0.5b": {
-          "wallSec": 288.12
-        }
-      },
+      "cost": {},
       "nJudged": 40,
       "gemma3Cached": 0,
       "calls": {
@@ -18265,6 +19247,11 @@
             "auc": 0.2951388888888889,
             "rho": -0.31883430593386586,
             "n": 24
+          },
+          "J": {
+            "auc": 0.2575,
+            "rho": -0.2677675121511229,
+            "n": 40
           }
         },
         "energy": {
@@ -18277,6 +19264,11 @@
             "auc": 0.7013888888888888,
             "rho": 0.20434782608695654,
             "n": 24
+          },
+          "J": {
+            "auc": 0.6075,
+            "rho": 0.2101313320825516,
+            "n": 40
           }
         },
         "random": {
@@ -18301,6 +19293,46 @@
             "n": 40
           }
         },
+        "gemma4:hook": {
+          "R": {
+            "auc": 0.5833333333333334,
+            "rho": 0.04170288281141495,
+            "n": 24
+          }
+        },
+        "gemma4:standalone": {
+          "R": {
+            "auc": 0.6458333333333334,
+            "rho": 0.06271650837373237,
+            "n": 24
+          }
+        },
+        "gemma4:payoff": {
+          "R": {
+            "auc": 0.5729166666666666,
+            "rho": 0.09891123367728553,
+            "n": 24
+          }
+        },
+        "gemma4:clarity": {
+          "R": {
+            "auc": 0.4305555555555556,
+            "rho": -0.11482655074037017,
+            "n": 24
+          }
+        },
+        "gemma4:blend": {
+          "R": {
+            "auc": 0.5833333333333334,
+            "rho": -0.00608695652173913,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.3925,
+            "rho": -0.16097560975609757,
+            "n": 40
+          }
+        },
         "qwen": {
           "R": {
             "auc": 0.5590277777777778,
@@ -18310,6 +19342,46 @@
           "J": {
             "auc": 0.6275,
             "rho": 0.19454024649757565,
+            "n": 40
+          }
+        },
+        "qwen:hook": {
+          "R": {
+            "auc": 0.5416666666666666,
+            "rho": 0.19579704781213395,
+            "n": 24
+          }
+        },
+        "qwen:standalone": {
+          "R": {
+            "auc": 0.5381944444444444,
+            "rho": 0.08855254672528977,
+            "n": 24
+          }
+        },
+        "qwen:payoff": {
+          "R": {
+            "auc": 0.4513888888888889,
+            "rho": -0.052223296786709346,
+            "n": 24
+          }
+        },
+        "qwen:clarity": {
+          "R": {
+            "auc": 0.5486111111111112,
+            "rho": -0.015337688759794727,
+            "n": 24
+          }
+        },
+        "qwen:blend": {
+          "R": {
+            "auc": 0.4375,
+            "rho": -0.13353633277175556,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.42125,
+            "rho": -0.07535661191573151,
             "n": 40
           }
         }
@@ -20296,7 +21368,9 @@
               "before": "So how did it go with us? Well, we did actually good.",
               "after": "Most of the donations from the bigger donations state of stands, but the community, what you guys are doing is like exploding."
             }
-          }
+          },
+          "before": "Well, we did actually good.",
+          "after": "Most of the donations from the bigger donations state of stands, but the community, what you guys are doing is like exploding."
         },
         {
           "id": "c_0044",
@@ -20326,7 +21400,9 @@
               "before": "And with story tool, we will combine the power of the sequencer, video editing, and throw away your storyboards or your stories.",
               "after": "And we are working on this with Apple and with Wake Home, for example, to make this happen."
             }
-          }
+          },
+          "before": "And with story tool, we will combine the power of the sequencer, video editing, and throw away your storyboards or your stories.",
+          "after": "And we are working on this with Apple and with Wake Home, for example, to make this happen."
         },
         {
           "id": "c_0164",
@@ -20361,7 +21437,9 @@
               "before": "This model will be used since 2007, and that has helped us a lot in our lives, from being successful.",
               "after": "But the vision that keeps me going, the focus means that you don't really say, \"Okay, let's go and leap to that situation in one go, but find the things that are here, that are feasible, that are doable, so you do the things so you can make some steps.\""
             }
-          }
+          },
+          "before": "This model will be used since 2007, and that has helped us a lot in our lives, from being successful.",
+          "after": "But the vision that keeps me going, the focus means that you don't really say, \"Okay, let's go and leap to that situation in one go, but find the things that are here, that are feasible, that are doable, so you do the things so you can make some steps.\""
         },
         {
           "id": "c_0144",
@@ -20391,7 +21469,9 @@
               "before": "So even people who are employed by the Blender organization, or developers, or wherever they are, they're all working in public on Blender.org.",
               "after": "Like what I used to say to Hollywood, like I don't want Blender to be in Hollywood, I want Hollywood to be here and Blender to help contribute."
             }
-          }
+          },
+          "before": "So even people who are employed by the Blender organization, or developers, or wherever they are, they're all working in public on Blender.org.",
+          "after": "Like what I used to say to Hollywood, like I don't want Blender to be in Hollywood, I want Hollywood to be here and Blender to help contribute."
         },
         {
           "id": "c_0132",
@@ -20426,14 +21506,12 @@
               "before": "But the developers that we have, I would like to tell people that we also have a couple of top talent, people of world, class, working every day on Blender.",
               "after": "And a lot of corporations, especially in the beginning, they passed the first 10, 15 years of Blender, they were complaining about the license, because with the good GPL, you will never get industry adoption or all those kind of stories."
             }
-          }
+          },
+          "before": "But the developers that we have, I would like to tell people that we also have a couple of top talent, people of world, class, working every day on Blender.",
+          "after": "And a lot of corporations, especially in the beginning, they passed the first 10, 15 years of Blender, they were complaining about the license, because with the good GPL, you will never get industry adoption or all those kind of stories."
         }
       ],
-      "cost": {
-        "qwen2.5:0.5b": {
-          "wallSec": 300.828
-        }
-      },
+      "cost": {},
       "nJudged": 40,
       "gemma3Cached": 0,
       "calls": {
@@ -20474,6 +21552,11 @@
             "auc": 0.2569444444444444,
             "rho": -0.42002201144863177,
             "n": 24
+          },
+          "J": {
+            "auc": 0.32375,
+            "rho": -0.37845448482362815,
+            "n": 40
           }
         },
         "energy": {
@@ -20486,6 +21569,11 @@
             "auc": 0.2152777777777778,
             "rho": -0.6730434782608695,
             "n": 24
+          },
+          "J": {
+            "auc": 0.2,
+            "rho": -0.5427767354596623,
+            "n": 40
           }
         },
         "random": {
@@ -20510,6 +21598,46 @@
             "n": 40
           }
         },
+        "gemma4:hook": {
+          "R": {
+            "auc": 0.3402777777777778,
+            "rho": -0.3145065357052497,
+            "n": 24
+          }
+        },
+        "gemma4:standalone": {
+          "R": {
+            "auc": 0.3055555555555556,
+            "rho": -0.34721665165896176,
+            "n": 24
+          }
+        },
+        "gemma4:payoff": {
+          "R": {
+            "auc": 0.3506944444444444,
+            "rho": -0.1721892064184557,
+            "n": 24
+          }
+        },
+        "gemma4:clarity": {
+          "R": {
+            "auc": 0.2777777777777778,
+            "rho": -0.3295657243413718,
+            "n": 24
+          }
+        },
+        "gemma4:blend": {
+          "R": {
+            "auc": 0.25,
+            "rho": -0.3465970945165882,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.3575,
+            "rho": -0.3152117832634149,
+            "n": 40
+          }
+        },
         "qwen": {
           "R": {
             "auc": 0.5416666666666666,
@@ -20519,6 +21647,46 @@
           "J": {
             "auc": 0.4825,
             "rho": 0.0645843475787838,
+            "n": 40
+          }
+        },
+        "qwen:hook": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:standalone": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:payoff": {
+          "R": {
+            "auc": 0.5416666666666666,
+            "rho": 0.15470535676571862,
+            "n": 24
+          }
+        },
+        "qwen:clarity": {
+          "R": {
+            "auc": 0.4305555555555556,
+            "rho": -0.1182269094074479,
+            "n": 24
+          }
+        },
+        "qwen:blend": {
+          "R": {
+            "auc": 0.3611111111111111,
+            "rho": -0.19569472086883902,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.35375,
+            "rho": -0.2579041197202318,
             "n": 40
           }
         }
@@ -22505,7 +23673,9 @@
               "before": "If not, enjoy the rest of this free video.",
               "after": "So you use intonation like that a lot to show that you're excited about something, that you're happy about it, that you're serious about something in a very, very high level way, which is very difficult to learn."
             }
-          }
+          },
+          "before": "If not, enjoy the rest of this free video.",
+          "after": "So you use intonation like that a lot to show that you're excited about something, that you're happy about it, that you're serious about something in a very, very high level way, which is very difficult to learn."
         },
         {
           "id": "c_0150",
@@ -22538,7 +23708,9 @@
               "before": "And there's two reasons why people pause and that type of thing, audible pauses like that.",
               "after": "So they're not going to give you a little mark for pausing or hesitating a little bit for thinking of the idea."
             }
-          }
+          },
+          "before": "And there's two reasons why people pause and that type of thing, audible pauses like that.",
+          "after": "So they're not going to give you a little mark for pausing or hesitating a little bit for thinking of the idea."
         },
         {
           "id": "c_0140",
@@ -22568,7 +23740,9 @@
               "before": "For example, when you came in here today, and I said, please sit down.",
               "after": "That's your coffee. So you're emphasizing that word because that's the most important word."
             }
-          }
+          },
+          "before": "For example, when you came in here today, and I said, please sit down.",
+          "after": "That's your coffee."
         },
         {
           "id": "c_0178",
@@ -22598,7 +23772,9 @@
               "before": "So often when people are under pressure and under stress, they mess up.",
               "after": "Towards the end, especially the last question, part three, what the examiner is thinking about is, can this person really develop their answers?"
             }
-          }
+          },
+          "before": "So often when people are under pressure and under stress, they mess up.",
+          "after": "Towards the end, especially the last question, part three, what the examiner is thinking about is, can this person really develop their answers?"
         },
         {
           "id": "c_0161",
@@ -22628,14 +23804,12 @@
               "before": "It's, did you answer the question and did you develop your answers a little bit more?",
               "after": "And the way that you answered that question by saying I listened to music in the car and I listened to it and I think you said when I drive, you're answering the question implicitly."
             }
-          }
+          },
+          "before": "It's, did you answer the question and did you develop your answers a little bit more?",
+          "after": "And the way that you answered that question by saying I listened to music in the car and I listened to it and I think you said when I drive, you're answering the question implicitly."
         }
       ],
-      "cost": {
-        "qwen2.5:0.5b": {
-          "wallSec": 295.935
-        }
-      },
+      "cost": {},
       "nJudged": 40,
       "gemma3Cached": 0,
       "calls": {
@@ -22676,6 +23850,11 @@
             "auc": 0.5208333333333334,
             "rho": -0.20521739130434782,
             "n": 24
+          },
+          "J": {
+            "auc": 0.41375,
+            "rho": -0.26927591683266594,
+            "n": 40
           }
         },
         "energy": {
@@ -22688,6 +23867,11 @@
             "auc": 0.4097222222222222,
             "rho": -0.07130434782608695,
             "n": 24
+          },
+          "J": {
+            "auc": 0.385,
+            "rho": -0.08536985796717488,
+            "n": 40
           }
         },
         "random": {
@@ -22712,6 +23896,46 @@
             "n": 40
           }
         },
+        "gemma4:hook": {
+          "R": {
+            "auc": 0.4236111111111111,
+            "rho": -0.03257323610929806,
+            "n": 24
+          }
+        },
+        "gemma4:standalone": {
+          "R": {
+            "auc": 0.6458333333333334,
+            "rho": 0.3248370423525025,
+            "n": 24
+          }
+        },
+        "gemma4:payoff": {
+          "R": {
+            "auc": 0.5694444444444444,
+            "rho": 0.1656016698088466,
+            "n": 24
+          }
+        },
+        "gemma4:clarity": {
+          "R": {
+            "auc": 0.6180555555555556,
+            "rho": 0.02231222754086866,
+            "n": 24
+          }
+        },
+        "gemma4:blend": {
+          "R": {
+            "auc": 0.5381944444444444,
+            "rho": 0.026527506606664846,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.43625,
+            "rho": -0.04062675942071007,
+            "n": 40
+          }
+        },
         "qwen": {
           "R": {
             "auc": 0.6145833333333334,
@@ -22721,6 +23945,46 @@
           "J": {
             "auc": 0.6575,
             "rho": 0.4127132253343938,
+            "n": 40
+          }
+        },
+        "qwen:hook": {
+          "R": {
+            "auc": 0.5416666666666666,
+            "rho": 0.01506131137016415,
+            "n": 24
+          }
+        },
+        "qwen:standalone": {
+          "R": {
+            "auc": 0.4583333333333333,
+            "rho": -0.01506131137016415,
+            "n": 24
+          }
+        },
+        "qwen:payoff": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:clarity": {
+          "R": {
+            "auc": 0.5833333333333334,
+            "rho": 0.3230291412348993,
+            "n": 24
+          }
+        },
+        "qwen:blend": {
+          "R": {
+            "auc": 0.5868055555555556,
+            "rho": -0.013049153039585232,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.57,
+            "rho": 0.10998498934369037,
             "n": 40
           }
         }
@@ -24707,7 +25971,9 @@
               "before": "Research has kind of three key, of course, can be a purpose.",
               "after": "And this is central to every type of research that we do."
             }
-          }
+          },
+          "before": "Research has kind of three key, of course, can be a purpose.",
+          "after": "And this is central to every type of research that we do."
         },
         {
           "id": "c_0101",
@@ -24737,7 +26003,9 @@
               "before": "So the centrality of every research is the question that is being asked.",
               "after": "So what we say that the centrality of every research is a question that is being asked."
             }
-          }
+          },
+          "before": "So the centrality of every research is the question that is being asked.",
+          "after": "So what we say that the centrality of every research is a question that is being asked."
         },
         {
           "id": "c_0180",
@@ -24767,7 +26035,9 @@
               "before": "You see that the mother is sending off this bar of soap to the grandmother's sense to the mother, and the mother was sent to the daughter.",
               "after": "Then you let the gentleman go out to hunt."
             }
-          }
+          },
+          "before": "You see that the mother is sending off this bar of soap to the grandmother's sense to the mother, and the mother was sent to the daughter.",
+          "after": "Then you let the gentleman go out to hunt."
         },
         {
           "id": "c_0048",
@@ -24797,7 +26067,9 @@
               "before": "For example, let's take a, let's take a, where, if you go to a mechanic and your car is broken down, he's going to ask you a number of questions that have you changed your oil?",
               "after": "I think we heard about that."
             }
-          }
+          },
+          "before": "For example, let's take a, let's take a, where, if you go to a mechanic and your car is broken down, he's going to ask you a number of questions that have you changed your oil?",
+          "after": "I think we heard about that."
         },
         {
           "id": "c_0112",
@@ -24827,14 +26099,12 @@
               "before": "That is why at the end of your research process, at the end of your thesis, at the end of the work, we ask that, have you answered the research question?",
               "after": "PPP projects can also be construction projects, but I can also look at different sets of projects."
             }
-          }
+          },
+          "before": "That is why at the end of your research process, at the end of your thesis, at the end of the work, we ask that, have you answered the research question?",
+          "after": "PPP projects can also be construction projects, but I can also look at different sets of projects."
         }
       ],
-      "cost": {
-        "qwen2.5:0.5b": {
-          "wallSec": 306.25
-        }
-      },
+      "cost": {},
       "nJudged": 40,
       "gemma3Cached": 0,
       "calls": {
@@ -24875,6 +26145,11 @@
             "auc": 0.7916666666666666,
             "rho": 0.6457925788671688,
             "n": 24
+          },
+          "J": {
+            "auc": 0.61125,
+            "rho": 0.2971198061673242,
+            "n": 40
           }
         },
         "energy": {
@@ -24887,6 +26162,11 @@
             "auc": 0.3263888888888889,
             "rho": -0.1426086956521739,
             "n": 24
+          },
+          "J": {
+            "auc": 0.2775,
+            "rho": -0.2604127579737336,
+            "n": 40
           }
         },
         "random": {
@@ -24911,6 +26191,46 @@
             "n": 40
           }
         },
+        "gemma4:hook": {
+          "R": {
+            "auc": 0.5659722222222222,
+            "rho": 0.17821055928710594,
+            "n": 24
+          }
+        },
+        "gemma4:standalone": {
+          "R": {
+            "auc": 0.8055555555555556,
+            "rho": 0.6112611460769467,
+            "n": 24
+          }
+        },
+        "gemma4:payoff": {
+          "R": {
+            "auc": 0.4166666666666667,
+            "rho": -0.10465362369445672,
+            "n": 24
+          }
+        },
+        "gemma4:clarity": {
+          "R": {
+            "auc": 0.625,
+            "rho": 0.3316835285601453,
+            "n": 24
+          }
+        },
+        "gemma4:blend": {
+          "R": {
+            "auc": 0.7256944444444444,
+            "rho": 0.48488803059723445,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.69375,
+            "rho": 0.3711417597720033,
+            "n": 40
+          }
+        },
         "qwen": {
           "R": {
             "auc": 0.5,
@@ -24920,6 +26240,46 @@
           "J": {
             "auc": 0.38,
             "rho": -0.22644019166476756,
+            "n": 40
+          }
+        },
+        "qwen:hook": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:standalone": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:payoff": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:clarity": {
+          "R": {
+            "auc": 0.5,
+            "rho": 0.04845437118523489,
+            "n": 24
+          }
+        },
+        "qwen:blend": {
+          "R": {
+            "auc": 0.7708333333333334,
+            "rho": 0.621274876694713,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.525,
+            "rho": 0.1636252772219896,
             "n": 40
           }
         }
@@ -26906,7 +28266,9 @@
               "before": "You will find that if you talk to the instructors like all of us use different shells for different reasons and this is also something where you could choose to explore your own shell down the line but for the initial investigation and for everything we covered in this class we are going to be focusing on bash and sort of by extension also zish.",
               "after": "Part of this is because in the shell you can automate."
             }
-          }
+          },
+          "before": "You will find that if you talk to the instructors like all of us use different shells for different reasons and this is also something where you could choose to explore your own shell down the line but for the initial investigation and for everything we covered in this class we are going to be focusing on bash and sort of by extension also zish.",
+          "after": "Part of this is because in the shell you can automate."
         },
         {
           "id": "c_0172",
@@ -26936,7 +28298,9 @@
               "before": "In this class we will focus entirely on bash and its derivatives.",
               "after": "The shell is very much built for that kind of combinatorial thinking if you will."
             }
-          }
+          },
+          "before": "In this class we will focus entirely on bash and its derivatives.",
+          "after": "The shell is very much built for that kind of combinatorial thinking if you will."
         },
         {
           "id": "c_0144",
@@ -26966,7 +28330,9 @@
               "before": "The shell that is most commonly used across the board is the born again shell or bash.",
               "after": "You will find that if you talk to the instructors like all of us use different shells for different reasons and this is also something where you could choose to explore your own shell down the line but for the initial investigation and for everything we covered in this class we are going to be focusing on bash and sort of by extension also zish."
             }
-          }
+          },
+          "before": "The shell that is most commonly used across the board is the born again shell or bash.",
+          "after": "You will find that if you talk to the instructors like all of us use different shells for different reasons and this is also something where you could choose to explore your own shell down the line but for the initial investigation and for everything we covered in this class we are going to be focusing on bash and sort of by extension also zish."
         },
         {
           "id": "c_0044",
@@ -26996,7 +28362,9 @@
               "before": "There are so many areas to focus on, not to mention individual tools, we will not be able to go into all of the tools in details or all the techniques in detail.",
               "after": "You'll find that we have exercises included with all of the lectures and all of those exercises are intended to give you more hands-on experience with the stuff we teach in the class."
             }
-          }
+          },
+          "before": "There are so many areas to focus on, not to mention individual tools, we will not be able to go into all of the tools in details or all the techniques in detail.",
+          "after": "You'll find that we have exercises included with all of the lectures and all of those exercises are intended to give you more hands-on experience with the stuff we teach in the class."
         },
         {
           "id": "c_0207",
@@ -27026,14 +28394,12 @@
               "before": "As I already explained here we have the prompt.",
               "after": "Then it is friendly waiting for me to run a command."
             }
-          }
+          },
+          "before": "As I already explained here we have the prompt.",
+          "after": "Then it is friendly waiting for me to run a command."
         }
       ],
-      "cost": {
-        "qwen2.5:0.5b": {
-          "wallSec": 306.149
-        }
-      },
+      "cost": {},
       "nJudged": 40,
       "gemma3Cached": 0,
       "calls": {
@@ -27074,6 +28440,11 @@
             "auc": 0.5034722222222222,
             "rho": 0.046997406833283614,
             "n": 24
+          },
+          "J": {
+            "auc": 0.55125,
+            "rho": 0.08720140544545119,
+            "n": 40
           }
         },
         "energy": {
@@ -27086,6 +28457,11 @@
             "auc": 0.3819444444444444,
             "rho": -0.18521739130434783,
             "n": 24
+          },
+          "J": {
+            "auc": 0.3675,
+            "rho": -0.2097560975609756,
+            "n": 40
           }
         },
         "random": {
@@ -27110,6 +28486,46 @@
             "n": 40
           }
         },
+        "gemma4:hook": {
+          "R": {
+            "auc": 0.625,
+            "rho": 0.2921848399152983,
+            "n": 24
+          }
+        },
+        "gemma4:standalone": {
+          "R": {
+            "auc": 0.5416666666666666,
+            "rho": 0.2503966077299712,
+            "n": 24
+          }
+        },
+        "gemma4:payoff": {
+          "R": {
+            "auc": 0.4375,
+            "rho": -0.03222312088316091,
+            "n": 24
+          }
+        },
+        "gemma4:clarity": {
+          "R": {
+            "auc": 0.46875,
+            "rho": 0.11321808184621966,
+            "n": 24
+          }
+        },
+        "gemma4:blend": {
+          "R": {
+            "auc": 0.5486111111111112,
+            "rho": 0.19786910665627055,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.5375,
+            "rho": 0.13510977907240418,
+            "n": 40
+          }
+        },
         "qwen": {
           "R": {
             "auc": 0.5902777777777778,
@@ -27119,6 +28535,46 @@
           "J": {
             "auc": 0.585,
             "rho": 0.18355039473099535,
+            "n": 40
+          }
+        },
+        "qwen:hook": {
+          "R": {
+            "auc": 0.5416666666666666,
+            "rho": 0.3162875387734472,
+            "n": 24
+          }
+        },
+        "qwen:standalone": {
+          "R": {
+            "auc": 0.5416666666666666,
+            "rho": 0.3162875387734472,
+            "n": 24
+          }
+        },
+        "qwen:payoff": {
+          "R": {
+            "auc": 0.4166666666666667,
+            "rho": -0.3484579241475013,
+            "n": 24
+          }
+        },
+        "qwen:clarity": {
+          "R": {
+            "auc": 0.625,
+            "rho": 0.27147952524447183,
+            "n": 24
+          }
+        },
+        "qwen:blend": {
+          "R": {
+            "auc": 0.6076388888888888,
+            "rho": 0.24401916184024386,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.59875,
+            "rho": 0.17332145635240298,
             "n": 40
           }
         }
@@ -29105,7 +30561,9 @@
               "before": "At least you should be able to write a white paper, report how fantastic your software is, your robotic system is.",
               "after": "So this is what we want to do in that, in that regard."
             }
-          }
+          },
+          "before": "At least you should be able to write a white paper, report how fantastic your software is, your robotic system is.",
+          "after": "So this is what we want to do in that, in that regard."
         },
         {
           "id": "c_0038",
@@ -29140,7 +30598,9 @@
               "before": "So if a problem is given, how do I know which method from the AI repository can I select to solve that problem?",
               "after": "So of course you want to see and learn what is the difference between shallow and deep learning."
             }
-          }
+          },
+          "before": "So if a problem is given, how do I know which method from the AI repository can I select to solve that problem?",
+          "after": "So of course you want to see and learn what is the difference between shallow and deep learning."
         },
         {
           "id": "c_0025",
@@ -29170,7 +30630,9 @@
               "before": "Learn different methods for function approximation.",
               "after": "There is no online course. There is no certificate."
             }
-          }
+          },
+          "before": "Learn different methods for function approximation.",
+          "after": "There is no online course."
         },
         {
           "id": "c_0074",
@@ -29200,7 +30662,9 @@
               "before": "We will learn how to run and evaluate experiments.",
               "after": "We want to learn some of it in this course."
             }
-          }
+          },
+          "before": "We will learn how to run and evaluate experiments.",
+          "after": "We want to learn some of it in this course."
         },
         {
           "id": "c_0080",
@@ -29230,14 +30694,12 @@
               "before": "So AI has become largely empirical based on experiments that we see and we run and we say, \"Yeah, it's giving me 98% accuracy.\"",
               "after": "Trust me. If you go into a, any organization that is a serious organization, any company, they have research and development."
             }
-          }
+          },
+          "before": "So AI has become largely empirical based on experiments that we see and we run and we say, \"Yeah, it's giving me 98% accuracy.\"",
+          "after": "Trust me."
         }
       ],
-      "cost": {
-        "qwen2.5:0.5b": {
-          "wallSec": 287.349
-        }
-      },
+      "cost": {},
       "nJudged": 40,
       "gemma3Cached": 0,
       "calls": {
@@ -29278,6 +30740,11 @@
             "auc": 0.6111111111111112,
             "rho": 0.3309415168470811,
             "n": 24
+          },
+          "J": {
+            "auc": 0.55125,
+            "rho": 0.14222722644447852,
+            "n": 40
           }
         },
         "energy": {
@@ -29290,6 +30757,11 @@
             "auc": 0.8125,
             "rho": 0.41391304347826086,
             "n": 24
+          },
+          "J": {
+            "auc": 0.735,
+            "rho": 0.3375234521575985,
+            "n": 40
           }
         },
         "random": {
@@ -29314,6 +30786,46 @@
             "n": 40
           }
         },
+        "gemma4:hook": {
+          "R": {
+            "auc": 0.7604166666666666,
+            "rho": 0.259844238950313,
+            "n": 24
+          }
+        },
+        "gemma4:standalone": {
+          "R": {
+            "auc": 0.7222222222222222,
+            "rho": 0.2548231411835655,
+            "n": 24
+          }
+        },
+        "gemma4:payoff": {
+          "R": {
+            "auc": 0.6527777777777778,
+            "rho": 0.267471835281601,
+            "n": 24
+          }
+        },
+        "gemma4:clarity": {
+          "R": {
+            "auc": 0.6215277777777778,
+            "rho": 0.10866987332016513,
+            "n": 24
+          }
+        },
+        "gemma4:blend": {
+          "R": {
+            "auc": 0.8125,
+            "rho": 0.37790824985560245,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.68,
+            "rho": 0.17902045727093552,
+            "n": 40
+          }
+        },
         "qwen": {
           "R": {
             "auc": 0.5416666666666666,
@@ -29323,6 +30835,46 @@
           "J": {
             "auc": 0.45125,
             "rho": -0.1953721332599779,
+            "n": 40
+          }
+        },
+        "qwen:hook": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:standalone": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:payoff": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:clarity": {
+          "R": {
+            "auc": 0.5416666666666666,
+            "rho": 0.17044832524535805,
+            "n": 24
+          }
+        },
+        "qwen:blend": {
+          "R": {
+            "auc": 0.6145833333333334,
+            "rho": 0.36980647422304347,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.47375,
+            "rho": -0.04269294041927803,
             "n": 40
           }
         }
@@ -31309,7 +32861,9 @@
               "before": "You don't have a proxy server, which crucially hides the third party country server, which is this country that collected all of the messages for the FBI, then a transfer server, then ingestion, then the FBI's front end.",
               "after": "So not only is it worldwide surveillance capability, the infrastructure of this is spread globally as well, despite it all coming back to the FBI in San Diego."
             }
-          }
+          },
+          "before": "You don't have a proxy server, which crucially hides the third party country server, which is this country that collected all of the messages for the FBI, then a transfer server, then ingestion, then the FBI's front end.",
+          "after": "So not only is it worldwide surveillance capability, the infrastructure of this is spread globally as well, despite it all coming back to the FBI in San Diego."
         },
         {
           "id": "c_0116",
@@ -31339,7 +32893,9 @@
               "before": "So not only is it worldwide surveillance capability, the infrastructure of this is spread globally as well, despite it all coming back to the FBI in San Diego.",
               "after": "You know, echo and support, they're not really important."
             }
-          }
+          },
+          "before": "So not only is it worldwide surveillance capability, the infrastructure of this is spread globally as well, despite it all coming back to the FBI in San Diego.",
+          "after": "You know, echo and support, they're not really important."
         },
         {
           "id": "c_0139",
@@ -31369,7 +32925,9 @@
               "before": "So I mentioned Lithuania, and they're collecting all of these messages and then shipping them over to the FBI.",
               "after": "There's no sort of court order beyond an MLAT, a mutual legal assistance treaty, which means, can we have that data, please?"
             }
-          }
+          },
+          "before": "So I mentioned Lithuania, and they're collecting all of these messages and then shipping them over to the FBI.",
+          "after": "There's no sort of court order beyond an MLAT, a mutual legal assistance treaty, which means, can we have that data, please?"
         },
         {
           "id": "c_0069",
@@ -31399,7 +32957,9 @@
               "before": "You would type in something like two times two press equals, the calculator fades away and the Anon app reveals itself.",
               "after": "So this is what the user profiles inside a norm actually look like."
             }
-          }
+          },
+          "before": "You would type in something like two times two press equals, the calculator fades away and the Anon app reveals itself.",
+          "after": "So this is what the user profiles inside a norm actually look like."
         },
         {
           "id": "c_0017",
@@ -31429,14 +32989,12 @@
               "before": "This allowed him and other criminals to talk outside of the eyes of law enforcement, basically.",
               "after": "Pieces, bricks, keys, keys, rack, robococa."
             }
-          }
+          },
+          "before": "This allowed him and other criminals to talk outside of the eyes of law enforcement, basically.",
+          "after": "Pieces, bricks, keys, keys, rack, robococa."
         }
       ],
-      "cost": {
-        "qwen2.5:0.5b": {
-          "wallSec": 312.479
-        }
-      },
+      "cost": {},
       "nJudged": 40,
       "gemma3Cached": 0,
       "calls": {
@@ -31477,6 +33035,11 @@
             "auc": 0.3506944444444444,
             "rho": -0.17742988025441406,
             "n": 24
+          },
+          "J": {
+            "auc": 0.60875,
+            "rho": 0.16182747801469963,
+            "n": 40
           }
         },
         "energy": {
@@ -31489,6 +33052,11 @@
             "auc": 0.5347222222222222,
             "rho": 0.1991304347826087,
             "n": 24
+          },
+          "J": {
+            "auc": 0.68,
+            "rho": 0.37185741088180113,
+            "n": 40
           }
         },
         "random": {
@@ -31513,6 +33081,46 @@
             "n": 40
           }
         },
+        "gemma4:hook": {
+          "R": {
+            "auc": 0.3993055555555556,
+            "rho": -0.03347601666166631,
+            "n": 24
+          }
+        },
+        "gemma4:standalone": {
+          "R": {
+            "auc": 0.4583333333333333,
+            "rho": -0.2861649160331189,
+            "n": 24
+          }
+        },
+        "gemma4:payoff": {
+          "R": {
+            "auc": 0.5138888888888888,
+            "rho": 0.13870880462705532,
+            "n": 24
+          }
+        },
+        "gemma4:clarity": {
+          "R": {
+            "auc": 0.4236111111111111,
+            "rho": -0.16004260796311826,
+            "n": 24
+          }
+        },
+        "gemma4:blend": {
+          "R": {
+            "auc": 0.4236111111111111,
+            "rho": 0.06437582166195381,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.4225,
+            "rho": -0.09916967776585035,
+            "n": 40
+          }
+        },
         "qwen": {
           "R": {
             "auc": 0.5416666666666666,
@@ -31522,6 +33130,46 @@
           "J": {
             "auc": 0.5275,
             "rho": -0.024174565655168814,
+            "n": 40
+          }
+        },
+        "qwen:hook": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:standalone": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:payoff": {
+          "R": {
+            "auc": 0.5416666666666666,
+            "rho": 0.10010346614252381,
+            "n": 24
+          }
+        },
+        "qwen:clarity": {
+          "R": {
+            "auc": 0.4583333333333333,
+            "rho": -0.10010346614252381,
+            "n": 24
+          }
+        },
+        "qwen:blend": {
+          "R": {
+            "auc": 0.4270833333333333,
+            "rho": -0.07831195924723273,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.605,
+            "rho": 0.08341152333011619,
             "n": 40
           }
         }
@@ -33508,7 +35156,9 @@
               "before": "AI is a knife that can invent new kinds of knives as well as new kinds of music, medicine and money.",
               "after": "Now, one big open question about AI is whether it can think."
             }
-          }
+          },
+          "before": "AI is a knife that can invent new kinds of knives as well as new kinds of music, medicine and money.",
+          "after": "Now, one big open question about AI is whether it can think."
         },
         {
           "id": "c_0087",
@@ -33538,7 +35188,9 @@
               "before": "Try to observe to catch the next word that pops up in your mind.",
               "after": "This is particularly true of religions based on books, like Islam, Christianity, or Judaism."
             }
-          }
+          },
+          "before": "Try to observe to catch the next word that pops up in your mind.",
+          "after": "This is particularly true of religions based on books, like Islam, Christianity, or Judaism."
         },
         {
           "id": "c_0107",
@@ -33573,7 +35225,9 @@
               "before": "Judaism calls itself the religion of the book and it grants ultimate authority, not to humans, but to words in books.",
               "after": "However, some people may say, can we really reduce human spirituality to just words in books?"
             }
-          }
+          },
+          "before": "Judaism calls itself the religion of the book and it grants ultimate authority, not to humans, but to words in books.",
+          "after": "However, some people may say, can we really reduce human spirituality to just words in books?"
         },
         {
           "id": "c_0161",
@@ -33603,7 +35257,9 @@
               "before": "Everything made of words will be taken over by AI.",
               "after": "They called us the watchers. The watchers, that we are watching them."
             }
-          }
+          },
+          "before": "Everything made of words will be taken over by AI.",
+          "after": "They called us the watchers."
         },
         {
           "id": "c_0134",
@@ -33638,14 +35294,12 @@
               "before": "Of course, because AI is mastering language, AI can pretend to feel pain or love.",
               "after": "But these are just words. The Bible says in the beginning was the word and the word was made flesh."
             }
-          }
+          },
+          "before": "Of course, because AI is mastering language, AI can pretend to feel pain or love.",
+          "after": "But these are just words."
         }
       ],
-      "cost": {
-        "qwen2.5:0.5b": {
-          "wallSec": 288.575
-        }
-      },
+      "cost": {},
       "nJudged": 40,
       "gemma3Cached": 0,
       "calls": {
@@ -33686,6 +35340,11 @@
             "auc": 0.7534722222222222,
             "rho": 0.3332608932410015,
             "n": 24
+          },
+          "J": {
+            "auc": 0.6275,
+            "rho": 0.25134869132896226,
+            "n": 40
           }
         },
         "energy": {
@@ -33698,6 +35357,11 @@
             "auc": 0.6944444444444444,
             "rho": 0.21739130434782608,
             "n": 24
+          },
+          "J": {
+            "auc": 0.635,
+            "rho": 0.15121951219512195,
+            "n": 40
           }
         },
         "random": {
@@ -33722,6 +35386,46 @@
             "n": 40
           }
         },
+        "gemma4:hook": {
+          "R": {
+            "auc": 0.4166666666666667,
+            "rho": -0.33180989367343205,
+            "n": 24
+          }
+        },
+        "gemma4:standalone": {
+          "R": {
+            "auc": 0.3506944444444444,
+            "rho": -0.22240250955009613,
+            "n": 24
+          }
+        },
+        "gemma4:payoff": {
+          "R": {
+            "auc": 0.3298611111111111,
+            "rho": -0.24762996240781252,
+            "n": 24
+          }
+        },
+        "gemma4:clarity": {
+          "R": {
+            "auc": 0.34375,
+            "rho": -0.2526228080876888,
+            "n": 24
+          }
+        },
+        "gemma4:blend": {
+          "R": {
+            "auc": 0.4548611111111111,
+            "rho": -0.023053503703267243,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.35875,
+            "rho": -0.3135175883450884,
+            "n": 40
+          }
+        },
         "qwen": {
           "R": {
             "auc": 0.4479166666666667,
@@ -33731,6 +35435,46 @@
           "J": {
             "auc": 0.595,
             "rho": 0.02856915820656909,
+            "n": 40
+          }
+        },
+        "qwen:hook": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:standalone": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:payoff": {
+          "R": {
+            "auc": 0.4583333333333333,
+            "rho": -0.3162875387734472,
+            "n": 24
+          }
+        },
+        "qwen:clarity": {
+          "R": {
+            "auc": 0.53125,
+            "rho": 0.14132584642953713,
+            "n": 24
+          }
+        },
+        "qwen:blend": {
+          "R": {
+            "auc": 0.6458333333333334,
+            "rho": 0.16869565217391305,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.655,
+            "rho": 0.18322544409371144,
             "n": 40
           }
         }
@@ -35717,7 +37461,9 @@
               "before": "First of all, life is how you choose to eat. This table is black.",
               "after": "If you know who you are, there's nothing anybody would tell you that would upset you."
             }
-          }
+          },
+          "before": "This table is black.",
+          "after": "If you know who you are, there's nothing anybody would tell you that would upset you."
         },
         {
           "id": "c_0069",
@@ -35747,7 +37493,9 @@
               "before": "You're not, you're unconventional in that sense.",
               "after": "This is how I am. I'm happy for you."
             }
-          }
+          },
+          "before": "You're not, you're unconventional in that sense.",
+          "after": "This is how I am."
         },
         {
           "id": "c_0114",
@@ -35782,7 +37530,9 @@
               "before": "Let's go back to Tene as a little girl.",
               "after": "We only had each other. Yeah."
             }
-          }
+          },
+          "before": "Let's go back to Tene as a little girl.",
+          "after": "We only had each other."
         },
         {
           "id": "c_0047",
@@ -35812,7 +37562,9 @@
               "before": "I was actually excited because it means I'm doing something right. You know, I'm educating people.",
               "after": "Yeah, I'm gonna do a lot of his, I think you've done a few of his covers as well."
             }
-          }
+          },
+          "before": "You know, I'm educating people.",
+          "after": "Yeah, I'm gonna do a lot of his, I think you've done a few of his covers as well."
         },
         {
           "id": "c_0222",
@@ -35842,14 +37594,12 @@
               "before": "But just dropping the same goes on.",
               "after": "You must hope you know you're meant to sing for us while we wrap up."
             }
-          }
+          },
+          "before": "But just dropping the same goes on.",
+          "after": "You must hope you know you're meant to sing for us while we wrap up."
         }
       ],
-      "cost": {
-        "qwen2.5:0.5b": {
-          "wallSec": 377.852
-        }
-      },
+      "cost": {},
       "nJudged": 40,
       "gemma3Cached": 0,
       "calls": {
@@ -35890,6 +37640,11 @@
             "auc": 0.3819444444444444,
             "rho": 0.040452370595911266,
             "n": 24
+          },
+          "J": {
+            "auc": 0.40375,
+            "rho": 0.03743842368652206,
+            "n": 40
           }
         },
         "energy": {
@@ -35902,6 +37657,11 @@
             "auc": 0.2708333333333333,
             "rho": -0.23700805083003837,
             "n": 24
+          },
+          "J": {
+            "auc": 0.3975,
+            "rho": -0.19429590103332126,
+            "n": 40
           }
         },
         "random": {
@@ -35926,6 +37686,46 @@
             "n": 40
           }
         },
+        "gemma4:hook": {
+          "R": {
+            "auc": 0.4548611111111111,
+            "rho": -0.3785119810194676,
+            "n": 24
+          }
+        },
+        "gemma4:standalone": {
+          "R": {
+            "auc": 0.3611111111111111,
+            "rho": -0.3452180606599865,
+            "n": 24
+          }
+        },
+        "gemma4:payoff": {
+          "R": {
+            "auc": 0.5416666666666666,
+            "rho": 0.027306882235732303,
+            "n": 24
+          }
+        },
+        "gemma4:clarity": {
+          "R": {
+            "auc": 0.3506944444444444,
+            "rho": -0.3945781570603176,
+            "n": 24
+          }
+        },
+        "gemma4:blend": {
+          "R": {
+            "auc": 0.3263888888888889,
+            "rho": -0.3625680859787066,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.2975,
+            "rho": -0.44074317544136027,
+            "n": 40
+          }
+        },
         "qwen": {
           "R": {
             "auc": 0.5277777777777778,
@@ -35935,6 +37735,46 @@
           "J": {
             "auc": 0.4825,
             "rho": 0.15118842001662436,
+            "n": 40
+          }
+        },
+        "qwen:hook": {
+          "R": {
+            "auc": 0.625,
+            "rho": 0.5040437656308216,
+            "n": 24
+          }
+        },
+        "qwen:standalone": {
+          "R": {
+            "auc": 0.5833333333333334,
+            "rho": 0.3823595564509363,
+            "n": 24
+          }
+        },
+        "qwen:payoff": {
+          "R": {
+            "auc": 0.4131944444444444,
+            "rho": -0.3967996587654311,
+            "n": 24
+          }
+        },
+        "qwen:clarity": {
+          "R": {
+            "auc": 0.3125,
+            "rho": -0.37746188059368585,
+            "n": 24
+          }
+        },
+        "qwen:blend": {
+          "R": {
+            "auc": 0.4444444444444444,
+            "rho": 0.13315928153736514,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.42625,
+            "rho": 0.07479354486090724,
             "n": 40
           }
         }
@@ -37921,7 +39761,9 @@
               "before": "And so what do you do is you, you, you.",
               "after": "When I've talked to people who grew up outside of that, they did not grow up with violence between young men."
             }
-          }
+          },
+          "before": "And so what do you do is you, you, you.",
+          "after": "When I've talked to people who grew up outside of that, they did not grow up with violence between young men."
         },
         {
           "id": "c_0022",
@@ -37951,7 +39793,9 @@
               "before": "I, because I think that you are very attractive, both on the podcast, because they are what you, and when you do your stand up, you're very, you look like someone who knows what they're talking about, maybe it's your glasses, but I don't think so.",
               "after": "That's so stupid. I'm sorry."
             }
-          }
+          },
+          "before": "I, because I think that you are very attractive, both on the podcast, because they are what you, and when you do your stand up, you're very, you look like someone who knows what they're talking about, maybe it's your glasses, but I don't think so.",
+          "after": "That's so stupid."
         },
         {
           "id": "c_0115",
@@ -37981,7 +39825,9 @@
               "before": "And so there's a kind of difference between the East and the West of Scotland.",
               "after": "Most people. I think so, I think, I think what it is is that I also developed a lot more through Peter Lassale, do you know who Peter is?"
             }
-          }
+          },
+          "before": "And so there's a kind of difference between the East and the West of Scotland.",
+          "after": "Most people."
         },
         {
           "id": "c_0017",
@@ -38011,7 +39857,9 @@
               "before": "Instantly, we have a rapport, I'd say.",
               "after": "If they're, most people. Don't like that."
             }
-          }
+          },
+          "before": "Instantly, we have a rapport, I'd say.",
+          "after": "If they're, most people."
         },
         {
           "id": "c_0029",
@@ -38041,14 +39889,12 @@
               "before": "If the person respects someone who looks like they know what they're talking about, then we're fast friends.",
               "after": "You look affable. I do, I do affable because I grew up in a very violent situation."
             }
-          }
+          },
+          "before": "If the person respects someone who looks like they know what they're talking about, then we're fast friends.",
+          "after": "You look affable."
         }
       ],
-      "cost": {
-        "qwen2.5:0.5b": {
-          "wallSec": 378.47
-        }
-      },
+      "cost": {},
       "nJudged": 40,
       "gemma3Cached": 0,
       "calls": {
@@ -38089,6 +39935,11 @@
             "auc": 0.5520833333333334,
             "rho": 0.2836015927269857,
             "n": 24
+          },
+          "J": {
+            "auc": 0.50125,
+            "rho": 0.2071586078590327,
+            "n": 40
           }
         },
         "energy": {
@@ -38101,6 +39952,11 @@
             "auc": 0.4375,
             "rho": -0.09391304347826086,
             "n": 24
+          },
+          "J": {
+            "auc": 0.48,
+            "rho": -0.14390243902439023,
+            "n": 40
           }
         },
         "random": {
@@ -38125,6 +39981,46 @@
             "n": 40
           }
         },
+        "gemma4:hook": {
+          "R": {
+            "auc": 0.4652777777777778,
+            "rho": -0.19368577049892388,
+            "n": 24
+          }
+        },
+        "gemma4:standalone": {
+          "R": {
+            "auc": 0.5555555555555556,
+            "rho": -0.07556104052997394,
+            "n": 24
+          }
+        },
+        "gemma4:payoff": {
+          "R": {
+            "auc": 0.5034722222222222,
+            "rho": -0.1867563882424235,
+            "n": 24
+          }
+        },
+        "gemma4:clarity": {
+          "R": {
+            "auc": 0.5520833333333334,
+            "rho": -0.029327262012660428,
+            "n": 24
+          }
+        },
+        "gemma4:blend": {
+          "R": {
+            "auc": 0.6111111111111112,
+            "rho": 0.08480104570983024,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.47625,
+            "rho": -0.05704367462784959,
+            "n": 40
+          }
+        },
         "qwen": {
           "R": {
             "auc": 0.4513888888888889,
@@ -38134,6 +40030,46 @@
           "J": {
             "auc": 0.51875,
             "rho": 0.0418059868859362,
+            "n": 40
+          }
+        },
+        "qwen:hook": {
+          "R": {
+            "auc": 0.4583333333333333,
+            "rho": -0.04518393411049245,
+            "n": 24
+          }
+        },
+        "qwen:standalone": {
+          "R": {
+            "auc": 0.4583333333333333,
+            "rho": -0.04518393411049245,
+            "n": 24
+          }
+        },
+        "qwen:payoff": {
+          "R": {
+            "auc": 0.5416666666666666,
+            "rho": 0.04518393411049245,
+            "n": 24
+          }
+        },
+        "qwen:clarity": {
+          "R": {
+            "auc": 0.4583333333333333,
+            "rho": -0.08190283593479221,
+            "n": 24
+          }
+        },
+        "qwen:blend": {
+          "R": {
+            "auc": 0.5243055555555556,
+            "rho": 0.2648978067035802,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.53375,
+            "rho": 0.25751961378617855,
             "n": 40
           }
         }
@@ -40125,7 +42061,9 @@
               "before": "So at the end of the day, he tried to, you know, he see everything, and he was afraid.",
               "after": "So because of the fear, I know our mothers fear now, so they say they should leave it."
             }
-          }
+          },
+          "before": "So at the end of the day, he tried to, you know, he see everything, and he was afraid.",
+          "after": "So because of the fear, I know our mothers fear now, so they say they should leave it."
         },
         {
           "id": "c_0016",
@@ -40155,7 +42093,9 @@
               "before": "The first episode of the first season of Dolly and Skona is such an amazing journey so far.",
               "after": "Hi, Queen. Hi, Dolly."
             }
-          }
+          },
+          "before": "The first episode of the first season of Dolly and Skona is such an amazing journey so far.",
+          "after": "Hi, Queen."
         },
         {
           "id": "c_0196",
@@ -40185,7 +42125,9 @@
               "before": "I give my baby a little bit of love when I'm a baby.",
               "after": "Okay, okay. If you don't want to do privacy, I'll just ask."
             }
-          }
+          },
+          "before": "I give my baby a little bit of love when I'm a baby.",
+          "after": "Okay, okay."
         },
         {
           "id": "c_0061",
@@ -40215,7 +42157,9 @@
               "before": "That's okay. There was something...",
               "after": "So he was scared. Yes, that was when I was..."
             }
-          }
+          },
+          "before": "There was something...",
+          "after": "So he was scared."
         },
         {
           "id": "c_0001",
@@ -40245,14 +42189,12 @@
               "before": null,
               "after": "Everything I want, my day, feel it."
             }
-          }
+          },
+          "before": null,
+          "after": "Everything I want, my day, feel it."
         }
       ],
-      "cost": {
-        "qwen2.5:0.5b": {
-          "wallSec": 322.365
-        }
-      },
+      "cost": {},
       "nJudged": 40,
       "gemma3Cached": 0,
       "calls": {
@@ -40293,6 +42235,11 @@
             "auc": 0.7361111111111112,
             "rho": 0.47171471303036516,
             "n": 24
+          },
+          "J": {
+            "auc": 0.8095238095238095,
+            "rho": 0.4096532559139745,
+            "n": 41
           }
         },
         "energy": {
@@ -40305,6 +42252,11 @@
             "auc": 0.4861111111111111,
             "rho": 0.02434782608695652,
             "n": 24
+          },
+          "J": {
+            "auc": 0.6547619047619048,
+            "rho": 0.1034843205574913,
+            "n": 41
           }
         },
         "random": {
@@ -40329,6 +42281,46 @@
             "n": 41
           }
         },
+        "gemma4:hook": {
+          "R": {
+            "auc": 0.5694444444444444,
+            "rho": 0.36490022459988086,
+            "n": 24
+          }
+        },
+        "gemma4:standalone": {
+          "R": {
+            "auc": 0.7430555555555556,
+            "rho": 0.40326237074128035,
+            "n": 24
+          }
+        },
+        "gemma4:payoff": {
+          "R": {
+            "auc": 0.4444444444444444,
+            "rho": 0.06294248897140009,
+            "n": 24
+          }
+        },
+        "gemma4:clarity": {
+          "R": {
+            "auc": 0.7743055555555556,
+            "rho": 0.48136820243403367,
+            "n": 24
+          }
+        },
+        "gemma4:blend": {
+          "R": {
+            "auc": 0.6597222222222222,
+            "rho": 0.41043478260869565,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.7976190476190477,
+            "rho": 0.4259767415513263,
+            "n": 41
+          }
+        },
         "qwen": {
           "R": {
             "auc": 0.5416666666666666,
@@ -40338,6 +42330,46 @@
           "J": {
             "auc": 0.5476190476190477,
             "rho": 0.11510685202494192,
+            "n": 41
+          }
+        },
+        "qwen:hook": {
+          "R": {
+            "auc": 0.5416666666666666,
+            "rho": 0.34641016151377546,
+            "n": 24
+          }
+        },
+        "qwen:standalone": {
+          "R": {
+            "auc": 0.5416666666666666,
+            "rho": 0.34641016151377546,
+            "n": 24
+          }
+        },
+        "qwen:payoff": {
+          "R": {
+            "auc": 0.4583333333333333,
+            "rho": -0.34641016151377546,
+            "n": 24
+          }
+        },
+        "qwen:clarity": {
+          "R": {
+            "auc": 0.5,
+            "rho": null,
+            "n": 24
+          }
+        },
+        "qwen:blend": {
+          "R": {
+            "auc": 0.7569444444444444,
+            "rho": 0.5449404749571886,
+            "n": 24
+          },
+          "J": {
+            "auc": 0.7952380952380952,
+            "rho": 0.3778697541174727,
             "n": 41
           }
         }
@@ -42348,7 +44380,9 @@
               "before": "This is why you're called human being, you're capable of being, you're not in a compulsive state of activity.",
               "after": "There is no limit as to how a human being can become."
             }
-          }
+          },
+          "before": "This is why you're called human being, you're capable of being, you're not in a compulsive state of activity.",
+          "after": "There is no limit as to how a human being can become."
         },
         {
           "id": "c_0103",
@@ -42378,7 +44412,9 @@
               "before": "If you're one, you're normal human being.",
               "after": "If transformation does not happen, if people come together in that state, there'll be more mess than solutions."
             }
-          }
+          },
+          "before": "If you're one, you're normal human being.",
+          "after": "If transformation does not happen, if people come together in that state, there'll be more mess than solutions."
         },
         {
           "id": "c_0079",
@@ -42408,7 +44444,9 @@
               "before": "If I'm nasty, it's me, all of you.",
               "after": "If I see what is wonderful is me, what is nasty is in India, we have many words."
             }
-          }
+          },
+          "before": "If I'm nasty, it's me, all of you.",
+          "after": "If I see what is wonderful is me, what is nasty is in India, we have many words."
         },
         {
           "id": "c_0140",
@@ -42438,7 +44476,9 @@
               "before": "A certain period of time, you do one thing, just twenty-four hours, take a break from everything, not today, right now you're among people.",
               "after": "When you are like this, you cannot be."
             }
-          }
+          },
+          "before": "A certain period of time, you do one thing, just twenty-four hours, take a break from everything, not today, right now you're among people.",
+          "after": "When you are like this, you cannot be."
         },
         {
           "id": "c_0116",
@@ -42468,14 +44508,12 @@
               "before": "If transformation does not happen, if people come together in that state, there'll be more mess than solutions.",
               "after": "Nature has fixed two lines within which every other creature lives and goes."
             }
-          }
+          },
+          "before": "If transformation does not happen, if people come together in that state, there'll be more mess than solutions.",
+          "after": "Nature has fixed two lines within which every other creature lives and goes."
         }
       ],
-      "cost": {
-        "qwen2.5:0.5b": {
-          "wallSec": 296.002
-        }
-      },
+      "cost": {},
       "nJudged": 41,
       "gemma3Cached": 0,
       "calls": {

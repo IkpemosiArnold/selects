@@ -1,8 +1,8 @@
 # Selects eval results
 
-v2, generated 2026-10-17 20:23 UTC by `node eval/run-eval-v2.mjs --report`. The plan, hypotheses and tests were committed before judging: [eval/PLAN.md](../PLAN.md).
+v2, generated 2026-10-21 09:04 UTC by `node eval/run-eval-v2.mjs --report`. The plan, hypotheses and tests were committed before judging: [eval/PLAN.md](../PLAN.md).
 
-**n = 19 videos** (the first 15 minutes of each, 3591 candidate windows in total, 456 in the random sample R that the models judged). Excluded before judging: _iUeydyJc20 (whisper's transcript is unreliable); 74HTXDSsa-Q (whisper's transcript is unreliable); lDDq_HbDpN4 (36 foreign-language markers (dubbed audio?)); o_a-mslVsA0 (whisper's transcript is unreliable).
+**n = 19 videos** (the first 15 minutes of each, 3591 candidate windows in total, 456 in the random sample R that the models judged). Excluded before judging: _iUeydyJc20 (the app's own transcript-quality gate rated it unreliable, so a real job would stop before judging); 74HTXDSsa-Q (the app's own transcript-quality gate rated it unreliable, so a real job would stop before judging); lDDq_HbDpN4 (36 foreign-language markers (dubbed audio?)); o_a-mslVsA0 (the app's own transcript-quality gate rated it unreliable, so a real job would stop before judging).
 
 ## Headline: does the model rank windows the way viewers replay them?
 
@@ -33,6 +33,21 @@ AUC is the chance that a window viewers replayed more than the video's median sc
 
 Effects are mean differences in AUC (H2, H4, H5), AUC minus 0.5 (H1, H3), or hit@3 difference (H6). p is a two-sided sign-flip permutation test over videos; H1 to H4 are Holm-corrected.
 
+## Exploratory (not pre-registered)
+
+| Analysis | windows | n | AUC (95% CI) | rho (95% CI) |
+|---|---|---|---|---|
+| Gemma 4, hook score alone | R | 19 | 0.56 (0.51 to 0.62) | 0.12 (-0.00 to 0.24) |
+| Gemma 4, standalone score alone | R | 19 | 0.55 (0.50 to 0.61) | 0.05 (-0.07 to 0.18) |
+| Gemma 4, payoff score alone | R | 19 | 0.52 (0.47 to 0.57) | 0.05 (-0.04 to 0.14) |
+| Gemma 4, clarity score alone | R | 19 | 0.51 (0.45 to 0.57) | 0.01 (-0.09 to 0.12) |
+| Gemma 4 blended with the pre-score (what the app ranks by) | R | 19 | 0.57 (0.51 to 0.64) | 0.12 (0.01 to 0.23) |
+| Gemma 4 on the shortlist plus R | J | 19 | 0.51 (0.45 to 0.58) | 0.01 (-0.11 to 0.13) |
+| pre-score on the shortlist plus R | J | 19 | 0.52 (0.46 to 0.58) | 0.05 (-0.06 to 0.16) |
+| qwen 0.5B blended with the pre-score | R | 19 | 0.57 (0.52 to 0.63) | 0.16 (0.06 to 0.26) |
+
+Power: at the effects observed here, about 52 videos would give 80% power for Gemma 4 against chance, and about 633 for Gemma 4 against the pre-score (two-sided, alpha 0.05, normal approximation).
+
 ## Top picks against replay peaks (v1 metric)
 
 | Method | n | hit@3 (95% CI) | hit@5 | mean best IoU (95% CI) |
@@ -54,7 +69,7 @@ Effects are mean differences in AUC (H2, H4, H5), AUC minus 0.5 (H1, H3), or hit
 
 ## Faithful cuts
 
-The check flagged 10 of 95 top picks (11%, 95% CI 6% to 18%) as "check" or "misleading". By issue: quote 3, qualifier 2, turn 3, reference 2. Its precision needs Arnold's marks on eval/results/faithful-review.md.
+The check flagged 10 of 95 top picks (11%, 95% CI 6% to 18%) as "check" or "misleading". By issue: quote 3, qualifier 2, turn 3, reference 2. Its precision is not measured yet: it needs a person to mark the sample in eval/results/faithful-review.md.
 
 ## Cost and time
 
@@ -95,6 +110,7 @@ Gemma 4 through the Gemini API: 895 fresh calls logged, free tier, $0. Rate-limi
 - **The heatmap is coarse:** about 100 segments per video, so each value covers 9 to 54 s of the full video. Window intensities that overlap the same segments are not independent.
 - **R is a random sample of 24 windows per video** outside the shortlists, so model AUCs measure ranking across the whole talk, not only among the strong candidates. AUC among the shortlist alone (column J in results-v2.json) is reported separately.
 - **Videos are not a random sample of talks.** They are the CC BY videos with heatmaps that YouTube search returned, filtered to English audio.
+- **Where the channels are based** (the country on each channel's YouTube About page, checked 21 Oct 2026; for the five channels that list none, where the organisation is): United States 9, Nigeria 2, United Kingdom 2, Canada 1, Ghana 1, Gibraltar 1, India 1, Netherlands 1, Switzerland 1. Four of the 19 videos have African speakers: two Nigerian channels, a University of Ghana lecture, and a Nigerian news commentary on a channel registered in the United States. No Kenyan channel is in the final set; the one candidate (3MenArmy Kenya) was excluded before judging because its transcript failed the quality gate.
 - **n videos is the unit of inference.** Per-window AUCs are averaged within a video first, so long videos do not count more.
 - Gemma 3 4B is not in v2: at about 75 s per window on this laptop it could not judge 40 windows for 20 videos in time. v1 has its numbers.
 

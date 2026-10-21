@@ -425,6 +425,17 @@ const ci = (c, f = f2) => (!c || c.mean == null ? "n/a" : c.lo == null ? f(c.mea
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 const pv = (p) => (p == null ? "n/a" : p < 0.001 ? "< 0.001" : p.toFixed(3));
 
+// Country on each channel's YouTube About page (checked 21 Oct 2026). Five pages list none, so these use
+// where the organisation is: BCiZc0n6COY (Cambridge lectures, UK), C5FzMblXU4M (James Randi Educational
+// Foundation, US), CBYhVcO4WgI (Y Combinator, US), JXm0-ilIknE (Blender, Netherlands), luM2Y4otHUY (University of Ghana).
+const CHANNEL_COUNTRY = {
+  G9NabGlnDCs: "Gibraltar", "ASvx-QG6o04": "United States", "Yiaatr-Noh0": "India", Gij3hiWXJ88: "United States",
+  Aj0nf3rKG_E: "United States", BCiZc0n6COY: "United Kingdom", C5FzMblXU4M: "United States", CBYhVcO4WgI: "United States",
+  "JXm0-ilIknE": "Netherlands", MSgoeuMqUmU: "United States", VoRbPxyo2uU: "Switzerland", "iqm-XEqpayc": "United States",
+  k4715CJ0Ii8: "United Kingdom", luM2Y4otHUY: "Ghana", "tExPpuk-UQ8": "Canada", uFyk5UOyNqI: "United States",
+  vRVV1hq9WXE: "Nigeria", wBoEsrpnPHA: "United States", xlAyUkscaFg: "Nigeria", _iUeydyJc20: "Kenya",
+};
+
 export function report(videos, A, { excluded = [], prefer = null, v1 = null } = {}) {
   const L = [];
   L.push("# Selects eval results", "");
@@ -474,7 +485,7 @@ export function report(videos, A, { excluded = [], prefer = null, v1 = null } = 
   if (fl.length) {
     const flagged = fl.filter((f) => f.verdict && f.verdict !== "faithful");
     const w = wilson(flagged.length, fl.length);
-    L.push("## Faithful cuts", "", `The check flagged ${flagged.length} of ${fl.length} top picks (${pct(w.p)}, 95% CI ${pct(w.lo)} to ${pct(w.hi)}) as "check" or "misleading". By issue: ${Object.entries(flagged.reduce((m, f) => ((m[f.issue || "none"] = (m[f.issue || "none"] || 0) + 1), m), {})).map(([k, n]) => `${k} ${n}`).join(", ") || "none"}. Its precision needs Arnold's marks on eval/results/faithful-review.md.`, "");
+    L.push("## Faithful cuts", "", `The check flagged ${flagged.length} of ${fl.length} top picks (${pct(w.p)}, 95% CI ${pct(w.lo)} to ${pct(w.hi)}) as "check" or "misleading". By issue: ${Object.entries(flagged.reduce((m, f) => ((m[f.issue || "none"] = (m[f.issue || "none"] || 0) + 1), m), {})).map(([k, n]) => `${k} ${n}`).join(", ") || "none"}. Its precision is not measured yet: it needs a person to mark the sample in eval/results/faithful-review.md.`, "");
   }
 
   // cost
@@ -503,6 +514,8 @@ export function report(videos, A, { excluded = [], prefer = null, v1 = null } = 
   L.push("- **The heatmap is coarse:** about 100 segments per video, so each value covers 9 to 54 s of the full video. Window intensities that overlap the same segments are not independent.");
   L.push("- **R is a random sample of 24 windows per video** outside the shortlists, so model AUCs measure ranking across the whole talk, not only among the strong candidates. AUC among the shortlist alone (column J in results-v2.json) is reported separately.");
   L.push("- **Videos are not a random sample of talks.** They are the CC BY videos with heatmaps that YouTube search returned, filtered to English audio.");
+  const byCountry = videos.reduce((m, v) => { const c = CHANNEL_COUNTRY[v.id] || "not recorded"; m[c] = (m[c] || 0) + 1; return m; }, {});
+  L.push(`- **Where the channels are based** (the country on each channel's YouTube About page, checked 21 Oct 2026; for the five channels that list none, where the organisation is): ${Object.entries(byCountry).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([c, n]) => `${c} ${n}`).join(", ")}. Four of the ${videos.length} videos have African speakers: two Nigerian channels, a University of Ghana lecture, and a Nigerian news commentary on a channel registered in the United States. No Kenyan channel is in the final set; the one candidate (3MenArmy Kenya) was excluded before judging because its transcript failed the quality gate.`);
   L.push("- **n videos is the unit of inference.** Per-window AUCs are averaged within a video first, so long videos do not count more.");
   L.push("- Gemma 3 4B is not in v2: at about 75 s per window on this laptop it could not judge 40 windows for 20 videos in time. v1 has its numbers.");
   L.push("");
