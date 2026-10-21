@@ -137,7 +137,7 @@ whisper base.en default beam search ran at 14.8x real time; greedy (`-bs 1 -bo 1
 
 ## Accented English, captions and blur (16 Oct, feature engineer)
 
-Test video: a private phone recording (an elderly Nigerian speaker speaking English to camera, lav mic), 165 s, HEVC 3840x2160 at 59.94 fps stored with rotation -90 (portrait), mono AAC 44.1 kHz at 39 kb/s. Integrated loudness -18.3 LUFS, peaks at 0 dBFS, many 1 to 4 s pauses. Only speeds and confidence numbers are recorded here, never content. The transcripts are in `.selects/private/asr-compare.md` (gitignored) for a person to rate.
+Test video: a private phone recording (an elderly Nigerian speaker talking in English to camera, lav mic), 165 s, HEVC 3840x2160 at 59.94 fps stored with rotation -90 (portrait), mono AAC 44.1 kHz at 39 kb/s. Integrated loudness -18.3 LUFS, peaks at 0 dBFS, many 1 to 4 s pauses. Only speeds and confidence numbers are recorded here, never content. The transcripts are in `.selects/private/asr-compare.md` (gitignored) for a person to rate.
 
 ### Speech recognition on 60 s of her audio (20 s to 80 s), greedy decoding, 2 threads
 

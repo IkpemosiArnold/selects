@@ -95,7 +95,7 @@ Selects picks the judge model in this order: `--model`, then `SELECTS_MODEL`, th
 ### 4. Install Selects and check the setup
 
 ```sh
-git clone [PENDING: repo URL] selects
+git clone https://github.com/IkpemosiArnold/selects.git
 cd selects
 npm install
 npm link            # optional: puts the `selects` command on your PATH
@@ -171,7 +171,7 @@ Tell Selects where the clips will go with `--made-for` (or `settings.madeFor`). 
 
 ## Selects Web: the same clipper in your browser
 
-Selects Web runs the whole pipeline in a browser tab: speech to text, the clip judge and the captioned 9:16 render. The host only serves static files, and in Private mode the video, its audio and its transcript never leave the device. [PENDING: public URL, once Arnold approves publishing.]
+Selects Web runs the whole pipeline in a browser tab: speech to text, the clip judge and the captioned 9:16 render. The host only serves static files, and in Private mode the video, its audio and its transcript never leave the device.
 
 ### Private mode and Smart mode
 
@@ -243,7 +243,7 @@ A clipper that trusts a bad transcript picks bad clips: the windows, the judge, 
 
 - **Transcript quality gate.** After whisper finishes, Selects scores the transcript from whisper's own word probabilities: the mean, the share of words below 0.5, and a check for the loops whisper falls into when it loses the audio (repeated phrases, and text that compresses too well). Eight clean English recordings scored between 0.89 and 0.95. If the transcript is unreliable, Selects stops before judging and says what to try (a bigger model, or the right language); `--force` judges it anyway. If it is shaky, Selects carries on and warns you to check the captions.
 - **Language check with several models, and a question when they disagree.** Whisper's built-in language detector is known to fail on accents, so Selects does not trust it alone. It decodes samples of the video in each likely language, has two small text models read what whisper wrote, and combines the answers with a short written rule. When the answers disagree, it asks you one question instead of guessing. Details are under "Languages and accents" below.
-- **No pretending a weak video is a good one.** If no proposed clip scores 0.55 or more, Selects says "No strong clips in this video" and offers only the closest 2, each with the model's reason. The bar was set from real runs: a family video whose clips the model itself called weak scored 0.40 to 0.52, while a conference talk scored 0.56 to 0.68 and the best clip of each of the 6 eval videos scored 0.60 to 0.68. Clips below the bar in an otherwise strong video are marked weak.
+- **No pretending a weak video is a good one.** If no proposed clip scores 0.55 or more, Selects says "No strong clips in this video" and offers only the closest 2, each with the model's reason. The bar was set from real runs: a private phone video whose clips the model itself called weak scored 0.40 to 0.52, while a conference talk scored 0.56 to 0.68 and the best clip of each of the 6 eval videos scored 0.60 to 0.68. Clips below the bar in an otherwise strong video are marked weak.
 - **A video is transcribed once.** The language check and the transcript are saved per source file, so a second job on the same video (caption mode after clip mode, another `--k`, a different `--made-for`) skips both and starts at the clip finding. The file is recognised by its size, its modified time and its first and last 4 MB, so a copy with the same content is recognised too; another whisper model, language, prompt or audio clean-up makes a new transcript. `--fresh` does both again.
 - **Clips only from words whisper heard.** The first stage marks down windows with low word confidence and keeps them out of the shortlist, so the judge never reads words whisper did not really hear. In the caption review, unsure words are underlined so you can fix those first.
 
@@ -251,7 +251,7 @@ A clipper that trusts a bad transcript picks bad clips: the windows, the judge, 
 
 Selects is built for English first, and for English spoken with any accent. Other languages work where whisper's multilingual models work, which for many African languages is not well.
 
-**Which language is spoken?** Whisper's own detector listens to the first 30 seconds and guesses. On an elderly Nigerian woman speaking English, it said Yoruba (p = 0.90). On a British conference speaker, it said Welsh (p = 0.63). Research on accented speech finds the same problem ([arXiv 2203.16972](https://arxiv.org/abs/2203.16972)), and finds that reading the transcript helps. So Selects collects four signals that fail in different ways:
+**Which language is spoken?** Whisper's own detector listens to the first 30 seconds and guesses. On English from an elderly Nigerian speaker, it said Yoruba (p = 0.90). On a British conference speaker, it said Welsh (p = 0.63). Research on accented speech finds the same problem ([arXiv 2203.16972](https://arxiv.org/abs/2203.16972)), and finds that reading the transcript helps. So Selects collects four signals that fail in different ways:
 
 1. Whisper's detector (the audio guess). It counts half, because it is the one known to fail on accents.
 2. Decode and compare. Three 20-second samples are decoded in the detector's language, in English and in the language you set, and whisper's confidence is compared.
@@ -349,7 +349,7 @@ Other clippers rank clips for how well they might do. None checks whether the cl
 
 The note quotes the words outside the clip, for example: Right after the clip, the speaker says "But the pendulum has swung way out of whack here." Where growing the clip to the next sentence boundary would fix it, Selects suggests the new start or end. Nothing changes until you say so. A misleading clip moves below the others until you keep it as it is or take the fix. With `--yes`, misleading clips are left out.
 
-Real examples, and the two prompts that did not work (one called every clip misleading, the next called every clip "check"), are in [`notes/faithful-examples.md`](notes/faithful-examples.md). The prompt is [`src/core/prompts/faithful.md`](src/core/prompts/faithful.md). It costs one model call per pick: on the 2017 laptop, 86 to 126 s per call when the machine was quiet and about 210 s under heavy load, so 5 to 10 minutes for 5 picks. `--faithful rules` uses the rule check alone (no model), and `--faithful off` skips it.
+Real examples, and the two prompts that did not work (one called every clip misleading, the next called every clip "check"), are in [`notes/faithful-examples.md`](notes/faithful-examples.md). Those examples, including the one above from Sam Altman's startup lecture and the picks from the EMF talk (CC BY-SA 4.0), came from Gemma 3 4B running locally. In eval v2, with Gemma 4 26B through the Gemini API, the check flagged 10 of 95 top picks as "check" or "misleading"; how often those flags are right has not been measured yet. The prompt is [`src/core/prompts/faithful.md`](src/core/prompts/faithful.md). It costs one model call per pick: on the 2017 laptop, 86 to 126 s per call when the machine was quiet and about 210 s under heavy load, so 5 to 10 minutes for 5 picks. `--faithful rules` uses the rule check alone (no model), and `--faithful off` skips it.
 
 ### Rendering
 
@@ -379,6 +379,7 @@ Some findings that shaped the defaults:
 - On this Ollama build the rubric is read again on every call. An identical prompt sent twice in a row took as long the second time, so a shorter rubric saves time on every call.
 - Setting Ollama's `num_thread` to 2 was slower than Ollama's default in an alternating A/B test (median 47.1 s per call against 39.2 s), so Selects leaves it at the default. `SELECTS_THREADS` can still set it.
 - `--judge-n` is the main speed control. Each extra window costs about one more model call.
+- A 1-hour video (two EMF 2026 talks, CC BY-SA 4.0) took 36.6 minutes from the file to 30 previews and 5 finished clips. That run used Smart mode's judge, Gemma 4 26B through the Gemini API, not local Gemma 3; the transcription alone took 13.6 minutes. Details are in [`notes/timings.md`](notes/timings.md), "Long videos".
 - For long videos, use the overnight queue: `selects queue add <videos...>`, then `selects queue run`. Each job saves its progress after every stage, so after a crash, sleep or power cut, `selects review <job-id>` resumes from the last finished stage.
 
 ### Phone video: 4K HEVC at 60 fps, portrait
@@ -482,51 +483,40 @@ The talk's licence may not cover everything on screen. The test talk above is CC
 
 ## Limitations
 
-- Accented English is the weak spot, and how weak is not rated yet. On a test recording of an elderly Nigerian woman speaking English, whisper `base.en` was unsure of about a fifth of the words. `small.en`, `medium.en` and a community fine-tune for Nigerian-accented English were compared on the same minute (speeds under "Performance"), and their transcripts are waiting for a person who knows the speaker to rate them. [PENDING: accuracy ratings.] Until then, review the captions before you post, and expect to fix words.
+- Accented English is the weak spot, and how weak is not rated yet. On a test recording of an elderly Nigerian speaker talking in English, whisper `base.en` was unsure of about a fifth of the words. `small.en`, `medium.en` and a community fine-tune for Nigerian-accented English were compared on the same minute (details in [`notes/timings.md`](notes/timings.md)), and no person has rated their accuracy yet. Until then, review the captions before you post, and expect to fix words.
 - The language check has been measured on 10 recordings, not hundreds. It got all 8 English recordings and the Yoruba set right, and asked about the Hausa set instead of getting it right. Whisper's small local models transcribe Yoruba and Hausa poorly (on the Hausa set, whisper's "Hausa" output did not read as Hausa to either text model), so a correct language label does not mean a usable transcript. Igbo has no whisper model at all. The Nigerian-accent routing has fired on one speaker; the text cue for it has not fired on any recording yet. Translated (`--captions en`) and bilingual captions are planned, not built.
 - Face blur needs macOS (Apple's Vision framework). Elsewhere, blur regions by hand. Faces are sampled 4 times a second and boxes are interpolated in between, so a face that moves fast or turns away can slip out of the box for a fraction of a second; check the result before you post.
 - Slide talks usually fall back to "fit". Centre crop is used only when the motion stays in the middle of the frame. In the test talk, the slides fill the frame and the speaker is a small inset in the corner, so all 3 clips were rendered as the full frame over a blurred background, with small slide text. Face tracking is used only for privacy blur, not for reframing.
 - Hook scores cluster. In every run so far, Gemma 3 4B gave every shortlisted window a hook score of 3, so the hook (the highest weight) separates nothing. The blend with the pre-score and the listwise round are there to break the ties.
-- The shortlist limits what the model can find. The judge only reads 8 windows. In the eval below, the best possible picks from the shortlist matched a Most Replayed peak in 67% of videos, against 100% for the best possible picks from all windows.
+- The shortlist limits what the model can find. The judge reads 8 windows by default (`--judge-n`). In eval v2, a perfect pick from those 8 would have put a Most Replayed peak in the top 3 for 53% of the 19 videos, from a shortlist of 16 for 89%, and from all windows for 100%.
 - Audio and text only. The model never sees the video, so it cannot tell when a moment depends on a slide or a demo.
 - Tested on macOS 13 on the machine above. Linux should work with the same prerequisites, but it has not been tested.
 
 ## Evaluation
 
-The question the eval asks is whether a free open model on a 2017 laptop can pick clips as well as people do. The full method is in [`eval/README.md`](eval/README.md), and the latest results are in [`eval/results/RESULTS.md`](eval/results/RESULTS.md).
+The question is whether a free open model picks the moments viewers come back to. Eval v2 was pre-registered: the plan, hypotheses and tests in [`eval/PLAN.md`](eval/PLAN.md) were committed before any judging ran. The full report is [`eval/results/RESULTS.md`](eval/results/RESULTS.md).
 
-The dataset is 6 videos marked Creative Commons Attribution on YouTube: three interviews, a lecture, a conference talk and a commencement speech. Videos longer than 20 minutes are scored on their first 15 minutes. The labels come from YouTube's Most Replayed heatmap, turned into up to 5 peak segments per video. Most Replayed is a proxy for where viewers rewatch, which is not the same as where a good short is, and it is only accurate to about 9 to 27 seconds. Human labels are made blind with `node eval/label.mjs`. [PENDING: human-label results, once Arnold has labelled the videos.]
+- **Data.** 19 YouTube videos marked CC BY that have a Most Replayed heatmap, scored on their first 15 minutes. Four more were excluded before judging (three failed the transcript quality gate, and one had too many non-English words, probably dubbed audio). The channels are based in the United States (9), Nigeria (2), the United Kingdom (2), Canada, Ghana, Gibraltar, India, the Netherlands and Switzerland. Most Replayed is a proxy for what viewers rewatch, not for what makes a good short.
+- **Judge.** Gemma 4 26B-A4B through the free Gemini API (the Smart mode judge), on a random sample of 456 windows. It cost $0.
+- **Result.** Gemma 4's AUC against replay intensity was 0.56 (95% CI 0.49 to 0.62), where 0.5 is chance. None of the four pre-registered hypotheses is supported at this n: Gemma 4 above chance, Gemma 4 above the stage 1 rules, Gemma 4 above a loudness-and-pace baseline, and the stage 1 rules above chance.
+- **Exploratory (not pre-registered).** The blend the app ranks by (0.7 Gemma score plus 0.3 pre-score) scored 0.57 (0.51 to 0.64). At the effect seen, about 52 videos would be needed for 80% power against chance.
+- **Faithful cuts.** With Gemma 4, the check flagged 10 of 95 top picks. Its precision is not measured yet.
+- **Not done yet.** The blind preference test (`node eval/prefer.mjs`) has no ratings.
 
-Every method picks its top 5 clips from the same candidate windows. A pick is a hit when its overlap with a label (intersection over union) is 0.5 or more. The confidence intervals are bootstrapped over videos, so with 6 videos they are wide.
-
-Interim results against Most Replayed (hit@3 is the share of videos where one of the top 3 picks is a hit; mean best IoU is the average overlap of each pick with its nearest label):
-
-| Method | Videos | hit@3 (95% CI) | Mean best IoU (95% CI) | Model time per video |
-|---|---|---|---|---|
-| Random over all windows (mean of 200 seeds) | 6 | 26% (22% to 31%) | 0.13 (0.12 to 0.15) | none |
-| Loudness and speech rate, no model | 6 | 17% (0% to 50%) | 0.11 (0.03 to 0.21) | none |
-| Stage 1 alone, no model | 6 | 33% (0% to 67%) | 0.09 (0.02 to 0.19) | none |
-| Stage 1 + qwen2.5:0.5b | 5 | 40% (0% to 80%) | 0.12 (0.03 to 0.22) | 1.9 min |
-| Stage 1 + Gemma 3 4B | [PENDING] | [PENDING] | [PENDING] | [PENDING] |
-| Best possible from the shortlist | 6 | 67% (33% to 100%) | 0.17 (0.08 to 0.27) | none |
-| Best possible from all windows | 6 | 100% | 0.76 (0.71 to 0.81) | none |
-
-So far no method is clearly better than random, because every confidence interval overlaps. [PENDING: final eval numbers with the Gemma row.]
+v1 (6 videos, hit@k only) is kept in [`eval/results/RESULTS-v1.md`](eval/results/RESULTS-v1.md).
 
 ### Reproduce the eval
 
-You need yt-dlp, and the fetcher reads YouTube cookies from Chrome to get the heatmap (set `SELECTS_YTDLP_COOKIES_BROWSER` to use another browser).
+You need yt-dlp (the fetcher reads YouTube cookies from Chrome to get the heatmap; set `SELECTS_YTDLP_COOKIES_BROWSER` to use another browser) and a free Gemini API key in `GEMINI_API_KEY` or `.env`.
 
 ```sh
-node eval/fetch-datasets.mjs fetch G9NabGlnDCs Aj0nf3rKG_E k4715CJ0Ii8 CBYhVcO4WgI uFyk5UOyNqI iqm-XEqpayc
+node eval/fetch-datasets.mjs fetch <the ids in eval/datasets/manifest.json>
 node eval/fetch-datasets.mjs build              # write the manifest with heatmap labels
-node eval/label.mjs                             # optional: add your own labels at http://127.0.0.1:4318
-node eval/run-eval.mjs                          # all videos, all installed judge models
-node eval/run-eval.mjs --models gemma3-4b-hf:latest,qwen2.5:0.5b
-node eval/run-eval.mjs --report                 # rebuild the tables from the caches only
+node eval/run-eval-v2.mjs                       # transcripts, Gemma 4 judging, then the report; resumable
+node eval/run-eval-v2.mjs --report              # rebuild RESULTS.md from the cached answers only
 ```
 
-`--only id1,id2` runs a subset of videos, and `--limit 4` runs the 4 shortest. Transcripts and judge answers are cached in `eval/cache/`, so a second run only does new work.
+Transcripts and model answers are cached in `eval/cache/`, so a second run only does new work. The method is described in [`eval/README.md`](eval/README.md).
 
 ## Tests
 
