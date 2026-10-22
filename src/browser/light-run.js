@@ -46,9 +46,10 @@ export function publishPicks(engine, r, upTo, pcm = null) {
 }
 
 /** The stop when the free transcriber is busy and whisper is not saved here: the choices, with the download's real size. */
-export async function lightBusy(e, { asrDevice = "auto" } = {}) {
-  const dev = await runtimes({ asrDevice }).then((r) => r.asr).catch(() => "wasm");
-  const a = downloadAdvice(MODELS.whisper.bytes[dev] || MODELS.whisper.bytes.wasm);
+export async function lightBusy(e, { speech = null } = {}) {
+  const model = speech?.model || MODELS.whisper;
+  const dev = speech?.device || "wasm";
+  const a = downloadAdvice(model.bytes?.[dev] || model.bytes?.wasm || 0);
   const mb = Math.round(a.bytes / 1e6);
   // 503: the server has no key for the free transcriber (not switched on), not a busy quota
   return Object.assign(new Error(e?.status === 503 ? OFF_LINE : BUSY_LINE), {
@@ -66,7 +67,7 @@ export async function lightBusy(e, { asrDevice = "auto" } = {}) {
  * Transcribe r.file with `transcriber` (remote). progress/finish are the engine's stage
  * helpers; choice is the person's answer to a "light_busy" stop ("device" or null).
  */
-export async function transcribeLight(engine, r, transcriber, { progress, finish, sig, choice = null }) {
+export async function transcribeLight(engine, r, transcriber, { progress, finish, sig, choice = null, speech = null }) {
   const job = r.job;
   const dur = job.source.duration;
   const id = job.id;
@@ -83,7 +84,9 @@ export async function transcribeLight(engine, r, transcriber, { progress, finish
     r.events.push(...split.events);
     if (split.words.length) engine.emit(id, "words", split.words);
   };
-  const device = () => hooks.device({ device: job.settings.asrDevice || "auto", model: MODELS.whisper.id });
+  // the fallback runs the speech model this device would use in Private mode (tiny.en on phones)
+  const sp = speech || { device: (await runtimes({ asrDevice: job.settings.asrDevice || "auto" }).catch(() => ({ asr: "wasm" }))).asr, model: MODELS.whisper };
+  const device = () => hooks.device({ device: sp.device, model: sp.model });
   let used = choice === "device" ? device() : transcriber;
   let note = null;
   let fellBack = false;
@@ -130,7 +133,7 @@ export async function transcribeLight(engine, r, transcriber, { progress, finish
   const fallBack = async (e) => {
     if (used.where !== "remote" || e?.name === "AbortError") throw e;
     if (e?.badKey) throw Object.assign(new Error(e.message), { hint: e.hint });
-    if (choice !== "device" && (await hooks.cached(MODELS.whisper.id)) !== true) throw await lightBusy(e, { asrDevice: job.settings.asrDevice });
+    if (choice !== "device" && (await hooks.cached(sp.model, sp.device)) !== true) throw await lightBusy(e, { speech: sp });
     used = device();
     fellBack = true;
     note = "The free transcriber was busy, so the rest was transcribed on this device with the speech model already in this browser.";
@@ -202,7 +205,7 @@ export async function transcribeLight(engine, r, transcriber, { progress, finish
   const wallSec = (performance.now() - t0) / 1000;
   job.asr = {
     provider: fellBack ? `${transcriber.id}, then device` : used.id,
-    model: used.where === "remote" ? transcriber.model : MODELS.whisper.id,
+    model: used.where === "remote" ? transcriber.model : sp.model.id,
     where: fellBack ? "remote+device" : used.where,
     language: "en",
     decodeSec,

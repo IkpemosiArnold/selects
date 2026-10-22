@@ -351,3 +351,17 @@ test("light: a transcript made through the shared transcriber is reused with the
   assert.equal(second.calls, 0, "no second transcription");
   assert.match(b.getJob(j2.id).stages.transcribe.note, /saved on this device/);
 });
+
+test("cache check: the device's speech model files, finished in the resumable store or saved the old way", async () => {
+  const { speechFileUrls, speechModelCached } = await import("./light.js");
+  const { MODELS } = await import("./models.js");
+  const tiny = speechFileUrls(MODELS.whisperTiny, "wasm");
+  assert.deepEqual(tiny.map((u) => u.split("/resolve/main/")[1]), ["onnx/encoder_model_quantized.onnx", "onnx/decoder_model_merged_quantized.onnx"]);
+  for (const u of [...tiny, ...speechFileUrls(MODELS.whisper, "wasm")]) assert.ok(MODELS[u.includes("tiny") ? "whisperTiny" : "whisper"].files[u.split("/resolve/main/")[1]], `${u} is a pinned file`);
+  const store = (done) => ({ info: async (url) => (done.includes(url) ? { bytes: 10, meta: { done: true, size: 10 } } : { bytes: 4, meta: { size: 10 } }) });
+  const none = async () => ({ match: async () => undefined });
+  assert.equal(await speechModelCached(MODELS.whisperTiny, "wasm", { openStore: async () => store(tiny), openLegacy: none }), true);
+  assert.equal(await speechModelCached(MODELS.whisperTiny, "wasm", { openStore: async () => store([tiny[0]]), openLegacy: none }), false, "half a model is not cached");
+  const legacy = async () => ({ match: async (u) => (tiny.includes(u) ? new Response("x") : undefined) });
+  assert.equal(await speechModelCached(MODELS.whisperTiny, "wasm", { openStore: async () => null, openLegacy: legacy }), true, "a copy from before resumable downloads counts");
+});

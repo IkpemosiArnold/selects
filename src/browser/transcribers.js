@@ -22,17 +22,17 @@ import { inOrder, planChunks, progressivePieces, speechRegions } from "./speech-
 
 const secs = (t0) => +((performance.now() - t0) / 1000).toFixed(1);
 
-/** Whisper in this tab (asr.js): the Private and Smart mode path, behind the same interface. */
+/** Whisper in this tab (asr.js): the Private and Smart mode path, behind the same interface. model: an entry of MODELS. */
 export function deviceTranscriber({ device = "auto", model } = {}) {
   let asr = null;
   return {
     id: "device",
-    model,
+    model: model?.id ?? null,
     where: "device",
     label: "whisper on this device",
     async prepare({ onProgress } = {}) {
       asr ??= await import("./asr.js");
-      return asr.loadAsr({ device, onDownload: onProgress });
+      return asr.loadAsr({ device, ...(model ? { model } : {}), onDownload: onProgress });
     },
     async transcribe(pcm, { rate = 16000, onChunk, signal, from = 0 } = {}) {
       asr ??= await import("./asr.js");

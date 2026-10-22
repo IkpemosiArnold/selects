@@ -354,7 +354,7 @@ export class Engine {
         begin("transcribe");
         const choice = r.asrChoice ?? null;
         r.asrChoice = null;
-        await transcribeLight(this, r, remote, { progress, finish, sig: tSig, choice });
+        await transcribeLight(this, r, remote, { progress, finish, sig: tSig, choice, speech });
       } else if (job.source.duration > LONG_SEC) {
         needFile();
         begin("transcribe");

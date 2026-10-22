@@ -62,20 +62,34 @@ export async function measureDownlink(url, { bytes = 1 << 20, fetchImpl = global
   }
 }
 
+// transformers.js names each ONNX file by its precision
+const SUFFIX = { fp32: "", q8: "_quantized", int8: "_int8", uint8: "_uint8", q4: "_q4", q4f16: "_q4f16", fp16: "_fp16", bnb4: "_bnb4" };
+
+/** The large files a speech model needs on this device: their Hugging Face URLs (the download store's keys). */
+export function speechFileUrls(model, device = "wasm", hf = "https://huggingface.co") {
+  const dtype = model?.dtype?.[device] || model?.dtype?.wasm || {};
+  return Object.entries(dtype).map(([part, dt]) => `${hf}/${model.id}/resolve/main/onnx/${part}${SUFFIX[dt] ?? ""}.onnx`);
+}
+
 /**
- * Whether this browser already holds whisper's files (transformers.js keeps them in Cache
- * Storage, keyed by their Hugging Face URL). Looks in every cache, so it still works if the
- * cache's name changes. null when the browser cannot say.
+ * Whether this browser already holds the speech model's large files: finished resumable
+ * downloads in the origin private file system ("models", download.js), or a copy saved in
+ * Cache Storage before resumable downloads existed. null when the browser cannot say.
+ * openStore and openLegacy are replaceable in tests.
  */
-export async function speechModelCached(modelId) {
+export async function speechModelCached(model, device = "wasm", { openStore = null, openLegacy = null } = {}) {
   try {
-    if (typeof caches === "undefined") return null;
-    for (const name of await caches.keys()) {
-      const c = await caches.open(name);
-      const keys = await c.keys();
-      if (keys.some((r) => r.url.includes(modelId) && /encoder_model/.test(r.url)) && keys.some((r) => r.url.includes(modelId) && /decoder_model/.test(r.url))) return true;
+    const urls = speechFileUrls(model, device);
+    if (!urls.length) return null;
+    const store = await (openStore ? openStore() : import("./download.js").then((m) => m.opfsStore()));
+    const legacy = await (openLegacy ? openLegacy() : typeof caches === "undefined" ? null : caches.open("transformers-cache").catch(() => null));
+    for (const url of urls) {
+      const info = store ? await store.info(url).catch(() => null) : null;
+      if (info?.meta?.done && info.meta.size === info.bytes) continue;
+      if (legacy && (await legacy.match(url))) continue;
+      return false;
     }
-    return false;
+    return true;
   } catch {
     return null;
   }

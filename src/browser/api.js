@@ -164,15 +164,18 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
      * speed (Safari), time a 1 MB download of the speech model to say how long Private takes.
      */
     async suggestMode({ wait = false, probe: doProbe = false } = {}) {
-      const [rt, cached, woken] = await Promise.all([runtimes({ prefer: state.prefer }), speechModelCached(MODELS.whisper.id), wait ? woke : Promise.race([woke, new Promise((r) => setTimeout(() => r(null), 4000))])]);
+      const rt = await runtimes({ prefer: state.prefer });
+      // the speech model this device would use in Private mode (tiny.en on phones), in the resumable download store
+      const w = speechModel(rt.speech);
+      const [cached, woken] = await Promise.all([speechModelCached(w, rt.asr), wait ? woke : Promise.race([woke, new Promise((r) => setTimeout(() => r(null), 4000))])]);
       const own = !!(state.smart.groqKey || savedGroq());
       const sharedOn = woken ? !!woken.light : null;
       const connection = globalThis.navigator?.connection || null;
       let probeMbps = null;
-      if (doProbe && !connection && cached !== true) probeMbps = await (probe ??= measureDownlink(`${HF}/${MODELS.whisper.id}/resolve/main/onnx/encoder_model.onnx`));
+      if (doProbe && !connection && cached !== true) probeMbps = await (probe ??= measureDownlink(`${HF}/${w.id}/resolve/main/onnx/encoder_model.onnx`));
       // unknown (the proxy is still waking) counts as on; a "busy" stop says so honestly if not
       const lightAvailable = own || (!!state.smart.proxyUrl && sharedOn !== false);
-      return { ...suggestMode({ connection, probeMbps, ios: isIos(), asrCached: cached, asrBytes: MODELS.whisper.bytes[rt.asr], lightAvailable }), shared: sharedOn, own };
+      return { ...suggestMode({ connection, probeMbps, ios: isIos(), asrCached: cached, asrBytes: w.bytes[rt.asr], lightAvailable }), shared: sharedOn, own };
     },
     preferBackend(p) {
       state = { ...state, prefer: p };
