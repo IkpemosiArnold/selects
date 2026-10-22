@@ -2,15 +2,104 @@
 // has an adapter, otherwise WebAssembly. The audio is cut into windows of up to 30 s at
 // quiet points, so every word lands in one window, and each window's words are sent back
 // as soon as it is done (the UI's streaming reveal).
+//
+// The model's large .onnx files come through download.js: byte ranges kept in OPFS as they
+// arrive, so a dropped connection or a reload carries on instead of starting again (the
+// iPhone "Load failed"). ONNX Runtime's own WebAssembly is served from this site, not a CDN.
 import { env, pipeline } from "@huggingface/transformers";
+import ortAsyncifyMjs from "onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs?url";
+import ortAsyncifyWasm from "onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm?url";
+import ortPlainMjs from "onnxruntime-web/ort-wasm-simd-threaded.mjs?url";
+import ortPlainWasm from "onnxruntime-web/ort-wasm-simd-threaded.wasm?url";
+import { memoryStore, opfsStore, resumableDownload } from "./download.js";
 
 env.allowLocalModels = false;
 env.useBrowserCache = true;
+
+// transformers.js points ONNX Runtime at cdn.jsdelivr.net; use the copies built into this
+// site instead (same version, same choice of build: Safari before 26 without WebGPU gets the
+// plain build, everything else the asyncify build that WebGPU needs)
+const ua = self.navigator?.userAgent || "";
+const safariVersion = /Apple/.test(self.navigator?.vendor || "") && !/CriOS|FxiOS|EdgiOS|Chrome|Android/.test(ua) ? +(/Version\/(\d+)/.exec(ua)?.[1] || 0) : 0;
+const plainOrt = safariVersion > 0 && safariVersion < 26 && !self.navigator?.gpu;
+if (env.backends?.onnx?.wasm) {
+  env.backends.onnx.wasm.wasmPaths = plainOrt ? { mjs: ortPlainMjs, wasm: ortPlainWasm } : { mjs: ortAsyncifyMjs, wasm: ortAsyncifyWasm };
+}
 
 let asr = null;
 let device = null;
 
 const post = (m, transfer) => self.postMessage(m, transfer || []);
+
+// ---- resumable model files ----
+const BIG = /\.onnx(_data)?$/;
+const isBig = (u) => {
+  try {
+    return BIG.test(new URL(u).pathname);
+  } catch {
+    return false;
+  }
+};
+/** "onnx/encoder_model.onnx" from a resolve URL, the same name transformers.js reports. */
+const fileOf = (u) => decodeURIComponent(new URL(u).pathname.split("/resolve/")[1]?.split("/").slice(1).join("/") || new URL(u).pathname.split("/").pop());
+let storeP = null;
+const getStore = () => (storeP ??= opfsStore().then((s) => s || memoryStore()));
+let lastDownloadError = null;
+const netFetch = env.fetch;
+
+env.fetch = async (input, init) => {
+  const url = String(input?.url || input);
+  if (!isBig(url)) return netFetch(input, init);
+  const store = await getStore();
+  // transformers.js asks for byte 0 first to learn the size: answer from what is stored
+  if (new Headers(init?.headers).get("range") === "bytes=0-0") {
+    const { meta } = await store.info(url);
+    if (meta?.size) return new Response(new Uint8Array(1), { status: 206, headers: { "content-range": `bytes 0-0/${meta.size}`, "content-length": "1", "content-type": "application/octet-stream" } });
+    return netFetch(input, init);
+  }
+  const file = fileOf(url);
+  let last = 0;
+  try {
+    const blob = await resumableDownload(url, {
+      store,
+      fetchImpl: netFetch,
+      onProgress: (p) => {
+        const now = performance.now();
+        if (p.loaded < p.total && now - last < 200) return;
+        last = now;
+        post({ type: "download", file, loaded: p.loaded, total: p.total, cached: !!p.cached });
+      },
+    });
+    return new Response(blob, { status: 200, headers: { "content-length": String(blob.size), "content-type": "application/octet-stream" } });
+  } catch (e) {
+    lastDownloadError = e;
+    throw e;
+  }
+};
+
+// The large files live in OPFS (above), so Cache Storage keeps only the small ones; a model
+// saved there before resumable downloads existed is still used, never fetched twice.
+let legacyP = null;
+const legacy = () => (legacyP ??= caches.open("transformers-cache").catch(() => null));
+env.useCustomCache = true;
+env.customCache = {
+  async match(key) {
+    const k = String(key);
+    if (isBig(k)) {
+      const store = await getStore();
+      const { bytes, meta } = await store.info(k);
+      if (meta?.done && meta.size === bytes) {
+        const blob = await store.blob(k);
+        return new Response(blob, { status: 200, headers: { "content-length": String(blob.size), "content-type": "application/octet-stream" } });
+      }
+    }
+    return (await legacy())?.match(k);
+  },
+  async put(key, response) {
+    if (isBig(String(key))) return; // already stored, chunk by chunk
+    await (await legacy())?.put(key, response);
+  },
+};
 
 /** Cut points: windows of at most `maxSec`, each ending at the quietest 50 ms in its last `searchSec`. */
 export function planWindows(pcm, rate, { maxSec = 29.5, searchSec = 5 } = {}) {
@@ -40,6 +129,7 @@ export function planWindows(pcm, rate, { maxSec = 29.5, searchSec = 5 } = {}) {
 }
 
 async function load({ model, dtype, wantDevice }) {
+  lastDownloadError = null;
   // the main thread resolves "auto" with devices.js (the same rule as the download estimate);
   // this is only a fallback for callers that still send "auto"
   let dev = wantDevice;
@@ -57,6 +147,9 @@ async function load({ model, dtype, wantDevice }) {
     device: dev,
     dtype: dtype[dev] || dtype.wasm,
     progress_callback: (p) => {
+      // large files report their own progress from the network (env.fetch above); here
+      // transformers.js only reads them back from the device
+      if (BIG.test(p.file || "")) return;
       if (p.status === "progress") post({ type: "download", file: p.file, loaded: p.loaded, total: p.total });
       else if (p.status === "done") post({ type: "download", file: p.file, done: true });
     },
@@ -105,7 +198,9 @@ self.onmessage = async (ev) => {
   try {
     if (m.type === "load") await load(m);
     else if (m.type === "transcribe") await transcribe(m);
-  } catch (e) {
-    post({ type: "error", message: String(e?.message || e), stack: String(e?.stack || "") });
+  } catch (err) {
+    // the download's own error says more (kind, bytes saved) than what transformers.js passes on
+    const e = m.type === "load" && lastDownloadError ? lastDownloadError : err;
+    post({ type: "error", during: m.type, name: String(e?.name || ""), message: String(e?.message || e), kind: e?.kind || null, status: e?.status || null, loaded: e?.loaded ?? null, total: e?.total ?? null, stack: String(e?.stack || "") });
   }
 };

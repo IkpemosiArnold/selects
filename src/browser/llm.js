@@ -14,7 +14,8 @@
 import { geminiGenerate } from "../core/gemini.mjs";
 import { buildTask, slimTask, withSchemaHint } from "../core/tasks.mjs";
 import { PROMPTS } from "./prompts.js";
-import { cachedFetch, isCached } from "./cache.js";
+import { cachedFetch, isCached, keepStored } from "./cache.js";
+import { opfsStore, resumableDownload } from "./download.js";
 import { MODELS } from "./models.js";
 import { runtimes } from "./devices.js";
 
@@ -24,6 +25,17 @@ const now = () => performance.now();
 const secs = (t0) => +((performance.now() - t0) / 1000).toFixed(2);
 
 // ------------------------------------------------------------- Gemma 3 1B, WebAssembly
+
+/** True when wllama's own cache (OPFS) already holds the whole Gemma 3 file. */
+async function inWllamaCache() {
+  try {
+    const { CacheManager } = await import("@wllama/wllama");
+    const cm = new CacheManager();
+    return (await cm.getSize(await cm.getNameFromURL(MODELS.gemma3.url))) >= MODELS.gemma3.bytes;
+  } catch {
+    return false;
+  }
+}
 
 export function wllamaBackend({ threads } = {}) {
   let w = null;
@@ -37,28 +49,31 @@ export function wllamaBackend({ threads } = {}) {
     get loaded() {
       return !!w;
     },
-    /** True when wllama's cache (OPFS) already holds the whole model file. */
+    /** True when wllama's cache (from before) or the resumable download already holds the whole model file. */
     async isCached() {
-      try {
-        const { CacheManager } = await import("@wllama/wllama");
-        const cm = new CacheManager();
-        return (await cm.getSize(await cm.getNameFromURL(MODELS.gemma3.url))) >= MODELS.gemma3.bytes;
-      } catch {
-        return false;
-      }
+      return (await inWllamaCache()) || (await isCached(MODELS.gemma3.url));
     },
     async load({ onProgress } = {}) {
       if (w) return;
       const [{ Wllama, LoggerWithoutDebug }, { default: wasmUrl }] = await Promise.all([import("@wllama/wllama"), import("@wllama/wllama/esm/wasm/wllama.wasm?url")]);
       w = new Wllama({ default: wasmUrl }, { logger: LoggerWithoutDebug, allowOffline: true });
       const t0 = now();
-      await w.loadModelFromUrl(MODELS.gemma3.url, {
+      const params = {
         n_ctx: 2048,
         n_batch: 512,
         n_gpu_layers: 0, // the CPU path: WebGPU browsers use Gemma 4 through MediaPipe instead
         ...(threads ? { n_threads: threads } : {}),
-        progressCallback: ({ loaded, total }) => onProgress?.({ loaded, total: total || MODELS.gemma3.bytes }),
-      });
+      };
+      // a copy wllama saved before resumable downloads existed is used as it is; otherwise the
+      // 722 MB file comes down in resumable pieces (download.js) and is handed to wllama whole
+      const s = (await inWllamaCache()) ? null : await opfsStore();
+      if (s) {
+        const blob = await resumableDownload(MODELS.gemma3.url, { store: s, onProgress: ({ loaded, total }) => onProgress?.({ loaded, total: total || MODELS.gemma3.bytes }) });
+        keepStored();
+        await w.loadModel([blob], params);
+      } else {
+        await w.loadModelFromUrl(MODELS.gemma3.url, { ...params, progressCallback: ({ loaded, total }) => onProgress?.({ loaded, total: total || MODELS.gemma3.bytes }) });
+      }
       this.loadSec = secs(t0);
       this.threads = threads || null;
       this.multiThread = typeof w.isMultithread === "function" ? w.isMultithread() : self.crossOriginIsolated;
@@ -96,7 +111,16 @@ export function gemma4Prompt(messages) {
   );
 }
 
-export function mediapipeBackend({ wasmBase = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-genai@0.10.29/wasm" } = {}) {
+/** MediaPipe's WebAssembly, built into this site (never fetched from a CDN at run time). */
+async function mediapipeFileset(FilesetResolver) {
+  const simd = await FilesetResolver.isSimdSupported();
+  const [loader, binary] = simd
+    ? await Promise.all([import("@mediapipe/tasks-genai/genai_wasm_internal.js?url"), import("@mediapipe/tasks-genai/genai_wasm_internal.wasm?url")])
+    : await Promise.all([import("@mediapipe/tasks-genai/genai_wasm_nosimd_internal.js?url"), import("@mediapipe/tasks-genai/genai_wasm_nosimd_internal.wasm?url")]);
+  return { wasmLoaderPath: loader.default, wasmBinaryPath: binary.default };
+}
+
+export function mediapipeBackend({ wasmBase = null } = {}) {
   let llm = null;
   return {
     id: "gemma4-webgpu",
@@ -114,7 +138,7 @@ export function mediapipeBackend({ wasmBase = "https://cdn.jsdelivr.net/npm/@med
       const { FilesetResolver, LlmInference } = await import("@mediapipe/tasks-genai");
       const res = await cachedFetch(MODELS.gemma4.url, { onProgress, expectedBytes: MODELS.gemma4.bytes });
       const t0 = now();
-      const fileset = await FilesetResolver.forGenAiTasks(wasmBase);
+      const fileset = wasmBase ? await FilesetResolver.forGenAiTasks(wasmBase) : await mediapipeFileset(FilesetResolver);
       llm = await LlmInference.createFromOptions(fileset, {
         baseOptions: { modelAssetBuffer: res.body.getReader() },
         maxTokens: 2048, // input and output together

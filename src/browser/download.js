@@ -62,13 +62,32 @@ function concat(parts, n) {
   return out;
 }
 
+// one download per (store, file): transformers.js can ask for the same file twice at once,
+// and two writers appending to one file would interleave their bytes
+const inflight = new WeakMap();
+
 /**
  * Download url into store, resuming from whatever the store already holds.
  * onProgress({ loaded, total, cached }) as bytes arrive. Resolves a Blob of the whole file.
  * Rejects with DownloadError (kind "network" after `retries` failures in a row with no
  * progress, "http" for a missing file, "quota", "integrity") or the signal's AbortError.
  */
-export async function resumableDownload(url, { store, fetchImpl = (...a) => fetch(...a), chunkBytes = CHUNK_BYTES, retries = 8, maxWaitMs = 30000, sleep = defaultSleep, onProgress, signal, estimate } = {}) {
+export function resumableDownload(url, opts = {}) {
+  const { store } = opts;
+  let mine = inflight.get(store);
+  if (!mine) inflight.set(store, (mine = new Map()));
+  const running = mine.get(url);
+  if (running) {
+    running.listeners.push(opts.onProgress);
+    return running.promise;
+  }
+  const listeners = [opts.onProgress];
+  const promise = download(url, { ...opts, onProgress: (p) => listeners.forEach((f) => f?.(p)) }).finally(() => mine.delete(url));
+  mine.set(url, { promise, listeners });
+  return promise;
+}
+
+async function download(url, { store, fetchImpl = (...a) => fetch(...a), chunkBytes = CHUNK_BYTES, retries = 8, maxWaitMs = 30000, sleep = defaultSleep, onProgress, signal, estimate } = {}) {
   let { bytes: have, meta } = await store.info(url);
   if (meta?.done && meta.size === have) {
     onProgress?.({ loaded: have, total: have, cached: true });
@@ -261,112 +280,114 @@ export function fileNameFor(url) {
 }
 
 /**
- * Keeps downloads in the origin private file system ("models/"), so they survive reloads.
- * Writes use a sync access handle in a worker (Safari 15.2+, Chrome, Firefox) or a
- * writable stream elsewhere. Resolves null when this browser has no usable OPFS.
+ * Keeps downloads in the origin private file system ("models/<file>/"), so they survive
+ * reloads. Each piece that arrives is its own file named by its byte offset, so adding one
+ * never rewrites what is stored (a writable stream that keeps existing data copies the
+ * whole file first, which for a 2 GB model on every 8 MB piece is far too much disk work).
+ * The finished file is a Blob made of the pieces. Writes use a sync access handle in a
+ * worker, or a writable stream in the page. Resolves null when this browser cannot write to
+ * OPFS here (private windows; Safari before 26 in the page itself).
  */
 export async function opfsStore(dirName = "models") {
-  let dir;
+  let root;
   try {
-    dir = await (await navigator.storage.getDirectory()).getDirectoryHandle(dirName, { create: true });
+    root = await (await navigator.storage.getDirectory()).getDirectoryHandle(dirName, { create: true });
   } catch {
-    return null; // private windows and some browsers
+    return null;
   }
-  const handle = (k, create = true) => dir.getFileHandle(`${fileNameFor(k)}.part`, { create });
-  const metaHandle = (k, create = true) => dir.getFileHandle(`${fileNameFor(k)}.json`, { create });
+  const PIECE = /^p-(\d{13})$/;
+  const dirFor = (k, create = true) => root.getDirectoryHandle(fileNameFor(k), { create });
+  const writeFile = async (dir, name, data) => {
+    const h = await dir.getFileHandle(name, { create: true });
+    const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
+    if (typeof h.createSyncAccessHandle === "function") {
+      const a = await h.createSyncAccessHandle();
+      try {
+        a.truncate(0);
+        const n = a.write(bytes, { at: 0 });
+        a.flush();
+        if (n !== bytes.length) throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
+      } finally {
+        a.close();
+      }
+      return;
+    }
+    const w = await h.createWritable();
+    try {
+      await w.write(bytes);
+      await w.close();
+    } catch (e) {
+      await w.abort?.().catch(() => {});
+      throw e;
+    }
+  };
+  /** The pieces in order, as long as they join up from byte 0: [{ name, at, size }]. */
+  const pieces = async (k) => {
+    let dir;
+    try {
+      dir = await dirFor(k, false);
+    } catch {
+      return { dir: null, list: [] };
+    }
+    const all = [];
+    for await (const [name, h] of dir.entries()) {
+      const m = PIECE.exec(name);
+      if (m) all.push({ name, at: +m[1], file: await h.getFile() });
+    }
+    all.sort((a, b) => a.at - b.at);
+    const list = [];
+    let end = 0;
+    for (const p of all) {
+      if (p.at !== end || !p.file.size) break; // a gap: anything after it is not trusted
+      list.push(p);
+      end += p.file.size;
+    }
+    for (const p of all.slice(list.length)) await dir.removeEntry(p.name).catch(() => {});
+    return { dir, list, bytes: end };
+  };
   const readMeta = async (k) => {
     try {
-      return JSON.parse(await (await (await metaHandle(k, false)).getFile()).text());
+      const dir = await dirFor(k, false);
+      return JSON.parse(await (await (await dir.getFileHandle("meta.json")).getFile()).text());
     } catch {
       return null;
     }
   };
-  const writeText = async (h, text) => {
-    if (h.createSyncAccessHandle) {
-      try {
-        const a = await h.createSyncAccessHandle();
-        try {
-          const b = new TextEncoder().encode(text);
-          a.truncate(0);
-          a.write(b, { at: 0 });
-          a.flush();
-        } finally {
-          a.close();
-        }
-        return;
-      } catch (e) {
-        if (isQuota(e)) throw e;
-      }
-    }
-    const w = await h.createWritable();
-    await w.write(text);
-    await w.close();
-  };
+  const sizes = new Map(); // bytes stored per file, kept as pieces are added
   const store = {
     kind: "opfs",
     async info(k) {
       const meta = await readMeta(k);
-      let bytes = 0;
-      try {
-        bytes = (await (await handle(k, false)).getFile()).size;
-      } catch {}
-      if (!meta) bytes = 0; // bytes without a record of which file they belong to are not trusted
+      if (!meta) {
+        sizes.set(k, 0);
+        return { bytes: 0, meta: null }; // bytes without a record of which file they belong to are not trusted
+      }
+      const { bytes = 0 } = await pieces(k);
+      sizes.set(k, bytes);
       return { bytes, meta };
     },
     async append(k, bytes) {
-      const h = await handle(k);
-      if (h.createSyncAccessHandle) {
-        let a = null;
-        try {
-          a = await h.createSyncAccessHandle();
-        } catch (e) {
-          if (isQuota(e)) throw e;
-        }
-        if (a) {
-          try {
-            const at = a.getSize();
-            const n = a.write(bytes, { at });
-            a.flush();
-            if (n !== bytes.length) throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
-          } finally {
-            a.close();
-          }
-          return;
-        }
-      }
-      const size = (await h.getFile()).size;
-      const w = await h.createWritable({ keepExistingData: true });
-      await w.seek(size);
-      await w.write(bytes);
-      await w.close();
+      if (!sizes.has(k)) await store.info(k);
+      const at = sizes.get(k);
+      await writeFile(await dirFor(k), `p-${String(at).padStart(13, "0")}`, bytes);
+      sizes.set(k, at + bytes.length);
     },
     async setMeta(k, meta) {
-      await writeText(await metaHandle(k), JSON.stringify(meta));
+      await writeFile(await dirFor(k), "meta.json", JSON.stringify(meta));
     },
     async blob(k) {
-      return (await handle(k, false)).getFile();
+      const { list } = await pieces(k);
+      return new Blob(list.map((p) => p.file), { type: "application/octet-stream" });
     },
     async reset(k) {
-      for (const name of [`${fileNameFor(k)}.part`, `${fileNameFor(k)}.json`]) await dir.removeEntry(name).catch(() => {});
-    },
-    /** Every finished download: [{ url, size }]. */
-    async list() {
-      const out = [];
-      for await (const [name, h] of dir.entries()) {
-        if (!name.endsWith(".json")) continue;
-        try {
-          const m = JSON.parse(await (await h.getFile()).text());
-          if (m?.url) out.push({ url: m.url, size: m.size, done: !!m.done });
-        } catch {}
-      }
-      return out;
+      sizes.delete(k);
+      await root.removeEntry(fileNameFor(k), { recursive: true }).catch(() => {});
     },
   };
-  // a write test: Safari in some modes lists OPFS but refuses to write to it
+  // a write test: some browsers list OPFS but refuse to write to it from here
   try {
-    const probe = await dir.getFileHandle(".probe", { create: true });
-    await writeText(probe, "ok");
-    await dir.removeEntry(".probe");
+    await writeFile(root, ".probe", "ok");
+    await root.removeEntry(".probe");
   } catch (e) {
     if (!isQuota(e)) return null;
   }

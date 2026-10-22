@@ -163,3 +163,13 @@ test("a stop request ends the download with an AbortError", async () => {
   const p = resumableDownload(URL1, { store: memoryStore(), fetchImpl: srv.fetchImpl, signal: ctl.signal, ...fast, onProgress: (x) => x.loaded >= 2 * MB && ctl.abort() });
   await assert.rejects(p, (e) => e.name === "AbortError");
 });
+
+test("two callers asking for the same file at once share one download", async () => {
+  const file = bytes(3 * MB);
+  const srv = fakeServer(file);
+  const store = memoryStore();
+  const [a, b] = await Promise.all([resumableDownload(URL1, { store, fetchImpl: srv.fetchImpl, ...fast }), resumableDownload(URL1, { store, fetchImpl: srv.fetchImpl, ...fast })]);
+  assert.deepEqual(new Uint8Array(await a.arrayBuffer()), file);
+  assert.deepEqual(new Uint8Array(await b.arrayBuffer()), file);
+  assert.equal(srv.log.length, 3, "one request per chunk, not two");
+});
