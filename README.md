@@ -230,10 +230,10 @@ Any static host works if it sends two headers on every page, which multithreaded
 
 ```
 Cross-Origin-Opener-Policy: same-origin
-Cross-Origin-Embedder-Policy: credentialless
+Cross-Origin-Embedder-Policy: require-corp
 ```
 
-`credentialless` keeps model downloads from Hugging Face's CDN working. `src/browser/public/_headers` sets them on Netlify and Cloudflare Pages.
+Use `require-corp`, not `credentialless`. Safari (on iPhone, iPad and Mac, checked up to 27.2 on caniuse.com, 22 Oct 2026; WebKit bug 230550 is still open) does not support `credentialless` and treats it as no policy at all, so the page is not cross-origin isolated there and whisper runs on one thread. `require-corp` is supported by Safari 15.2 and later, Chrome and Firefox. It blocks cross-origin files loaded without CORS unless they send `Cross-Origin-Resource-Policy`, and Selects Web loads none: model downloads from Hugging Face and calls to the Gemini API and the proxy are CORS fetches (allowed), and ONNX Runtime's and MediaPipe's WebAssembly are built into the site instead of fetched from a CDN. Measured in Playwright's WebKit (Safari 18.4 engine) and Chromium 136: with `require-corp` both report `crossOriginIsolated: true` and range requests to Hugging Face still work; with `credentialless`, WebKit reports `false`. `src/browser/public/_headers` sets the headers on Netlify and Cloudflare Pages.
 
 On Render, `render.yaml` describes both services: the static site `selects-web` (the React app in `web/` built on the browser engine, published from `dist-web`, with the headers) and the free web service `selects-smart-proxy` (`node server-proxy/server.mjs`). In the Render dashboard, create a Blueprint from the repository, then set three values: `GEMINI_API_KEY` on the proxy (from Google AI Studio; never commit it), `ALLOWED_ORIGINS` on the proxy (the static site's URL), and `VITE_SELECTS_PROXY_URL` on the static site (the proxy's URL). A free Render web service sleeps after 15 minutes without requests and takes up to about a minute to wake; the page shows "Waking the Smart mode server" while it waits.
 

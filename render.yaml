@@ -4,8 +4,11 @@
 #
 # 1. selects-web: the static site. The browser does all the work (whisper, Gemma, the
 #    render), so the host only serves files. Multithreaded WebAssembly needs the two
-#    cross-origin isolation headers below; "credentialless" keeps model downloads from
-#    Hugging Face's CDN working.
+#    cross-origin isolation headers below. COEP is "require-corp", not "credentialless":
+#    Safari (iOS and macOS, through 27.2) does not support "credentialless" and treats it
+#    as no policy, so iPhones were never isolated and ran whisper on one thread. Every
+#    cross-origin request the page makes is a CORS fetch (Hugging Face, the Gemini API, the
+#    proxy), which "require-corp" allows, and all code and WebAssembly is served from here.
 # 2. selects-smart-proxy: a free Node web service for Smart mode. It holds the Gemini API
 #    key (GEMINI_API_KEY, set in the dashboard, never in git), accepts only Selects judge
 #    tasks (clip text, size-limited), refuses junk with a per-IP ingress limit before reading
@@ -31,7 +34,7 @@ services:
         value: same-origin
       - path: /*
         name: Cross-Origin-Embedder-Policy
-        value: credentialless
+        value: require-corp
       - path: /*
         name: X-Content-Type-Options
         value: nosniff

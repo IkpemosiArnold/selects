@@ -15,7 +15,7 @@ const engineDir = path.resolve(here, "../src/browser");
 const core = process.env.SELECTS_CORE || "http://127.0.0.1:4317";
 const isolation = {
   "Cross-Origin-Opener-Policy": "same-origin",
-  "Cross-Origin-Embedder-Policy": "credentialless",
+  "Cross-Origin-Embedder-Policy": "require-corp",
 };
 
 // Copies src/browser/public (manifest, icons, sw.js, _headers) next to the build, and links

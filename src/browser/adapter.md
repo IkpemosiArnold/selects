@@ -103,10 +103,10 @@ Multithreaded WebAssembly needs cross-origin isolation:
 
 ```
 Cross-Origin-Opener-Policy: same-origin
-Cross-Origin-Embedder-Policy: credentialless
+Cross-Origin-Embedder-Policy: require-corp
 ```
 
-`credentialless` (not `require-corp`) lets the page fetch models from Hugging Face's CDN, which does not send `Cross-Origin-Resource-Policy`. If the React app is served from `web/`, its Vite config needs the same two headers for dev and preview, and `fs.allow` must include `src/browser`.
+`require-corp`, not `credentialless`: Safari does not support `credentialless` and ignores it, so the page was never isolated on an iPhone. Hugging Face's CDN sends no `Cross-Origin-Resource-Policy`, but that only matters for files loaded without CORS; every model download is a CORS `fetch`, which `require-corp` allows. Keep all scripts and WebAssembly on this origin (ONNX Runtime and MediaPipe are imported with `?url`, not loaded from a CDN). If the React app is served from `web/`, its Vite config needs the same two headers for dev and preview, and `fs.allow` must include `src/browser`.
 
 ## Integrating with the React app
 

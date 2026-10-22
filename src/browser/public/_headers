@@ -1,8 +1,9 @@
 # Cross-origin isolation for multithreaded WebAssembly (wllama, ONNX Runtime Web).
-# "credentialless" lets the page fetch models from Hugging Face's CDN without that CDN
-# sending Cross-Origin-Resource-Policy headers. Netlify and Cloudflare Pages read this file.
+# "require-corp", not "credentialless": Safari does not support "credentialless" and treats
+# it as no policy, so the page was never isolated there. Model downloads are CORS fetches,
+# which "require-corp" allows. Netlify and Cloudflare Pages read this file.
 /*
   Cross-Origin-Opener-Policy: same-origin
-  Cross-Origin-Embedder-Policy: credentialless
+  Cross-Origin-Embedder-Policy: require-corp
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
