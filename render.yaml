@@ -8,7 +8,9 @@
 #    Hugging Face's CDN working.
 # 2. selects-smart-proxy: a free Node web service for Smart mode. It holds the Gemini API
 #    key (GEMINI_API_KEY, set in the dashboard, never in git), accepts only Selects judge
-#    tasks (clip text, size-limited), rate limits per IP, and does not log clip text.
+#    tasks (clip text, size-limited), refuses junk with a per-IP ingress limit before reading
+#    it, charges the model quota (per IP and global) only for valid tasks, and does not log
+#    clip text. The policy is in README.md, "The Smart mode proxy: limits".
 #    Free web services sleep after 15 minutes idle and take up to about a minute to wake;
 #    the page shows a "waking" note while it waits.
 services:

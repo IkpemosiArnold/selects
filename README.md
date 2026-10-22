@@ -237,6 +237,18 @@ Cross-Origin-Embedder-Policy: credentialless
 
 On Render, `render.yaml` describes both services: the static site `selects-web` (the React app in `web/` built on the browser engine, published from `dist-web`, with the headers) and the free web service `selects-smart-proxy` (`node server-proxy/server.mjs`). In the Render dashboard, create a Blueprint from the repository, then set three values: `GEMINI_API_KEY` on the proxy (from Google AI Studio; never commit it), `ALLOWED_ORIGINS` on the proxy (the static site's URL), and `VITE_SELECTS_PROXY_URL` on the static site (the proxy's URL). A free Render web service sleeps after 15 minutes without requests and takes up to about a minute to wake; the page shows "Waking the Smart mode server" while it waits.
 
+### The Smart mode proxy: limits
+
+The proxy spends one shared, free Gemini quota, so its limits are the protection, not CORS. `ALLOWED_ORIGINS` only stops other web pages from calling it from a visitor's browser; any script can send any `Origin` header. Each task request goes through three gates in this order:
+
+| Gate | Limit | What a refusal costs |
+|---|---|---|
+| Ingress, per client IP, before the body is read | 60 a minute, 2,000 a day | nothing: 429, the body is not read |
+| Body cap and task check | 16 KB; only the judge, listwise, faithful and kit task shapes | nothing: 413 or 400, no model quota used |
+| Model quota, per client IP and for everyone | 20 a minute and 300 a day per IP; 25 a minute and 12,000 a day in total | charged only when every counter has room |
+
+The client IP is read from `X-Forwarded-For` with 3 trusted hops on Render (the client, Cloudflare's edge, Render), so a client cannot pick its own key by sending the header. At capacity the proxy answers 429 with `retry-after` and says whether the limit was this visitor's or everyone's. Nothing is queued: the page keeps that clip's first-stage score, or judges it on the device when the private model is already saved in the browser. `GET /healthz` shows the limits and counts.
+
 ## How it fails safely
 
 A clipper that trusts a bad transcript picks bad clips: the windows, the judge, the cuts and the captions all sit on the words. So Selects checks the transcript before it spends any model time on it.

@@ -5,11 +5,25 @@
 // size-limited), builds the prompt itself from src/core/prompts (so it cannot be used as a
 // general chatbot), rate limits per IP and overall, and never logs or stores clip text.
 //
+// Abuse and capacity policy (README, "The Smart mode proxy: limits"). CORS is not
+// authentication: ALLOWED_ORIGINS only stops other web pages from calling the proxy from a
+// visitor's browser; curl can send any Origin. The limits are what protect the shared key:
+//   1. ingress, per client IP, on every POST before the body is read: cheap, so a flood of
+//      junk is refused without reading it (LIMITS.ingressPerIp*)
+//   2. the body cap (LIMITS.bodyBytes) and the strict task check: 413 or 400, and neither
+//      spends any model quota
+//   3. only then the model quota, per client IP and for everyone (LIMITS.perIp*, global*),
+//      charged together and only when all of them have room
+// At capacity the proxy answers 429 with retry-after and says whether it is this visitor's
+// limit or everyone's; the page then keeps that clip's first-stage score or, when the
+// on-device model is already saved, judges it on the device. Nothing is queued.
+//
 //   GEMINI_API_KEY   required: a Google AI Studio key
 //   GEMMA_MODEL      default gemma-4-26b-a4b-it (falls back through GEMMA_FALLBACKS when a model is not served)
 //   ALLOWED_ORIGINS  comma-separated origins allowed to call it (the static site's URL); no wildcard
-//   TRUST_PROXY_HOPS how many proxies in front of us append to X-Forwarded-For (default 1 on
-//                    Render, where RENDER is set, else 0: use the socket address)
+//   TRUST_PROXY_HOPS how many proxies in front of us append to X-Forwarded-For (default 3 on
+//                    Render, where RENDER is set: client, Cloudflare edge, Render; else 0: use
+//                    the socket address)
 //   PORT             default 8787
 //
 // Run: node server-proxy/server.mjs     Health: GET /healthz     Task: POST /v1/task
@@ -25,26 +39,49 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const PROMPTS = Object.fromEntries(["judge", "listwise", "kit", "faithful"].map((k) => [k, fs.readFileSync(path.join(here, "../src/core/prompts", `${k}.md`), "utf8")]));
 
 export const LIMITS = {
+  // 1. ingress: every task request from one client IP, valid or not, before its body is read
+  ingressPerIpPerMinute: 60,
+  ingressPerIpPerDay: 2000,
+  // 3. the model quota, charged only after the body passed the checks
   perIpPerMinute: 20, // a full Selects run is 8 judge calls, 1 listwise call and a kit per rendered clip
   perIpPerDay: 300,
   globalPerMinute: 25, // the free Gemma quota is about 30 requests a minute per key
   globalPerDay: 12000, // and about 14,400 a day
+  // 2. the body cap: a judge task is a few KB of clip text
   bodyBytes: 16 * 1024,
 };
 
-/** A fixed-window counter: allow(key, limit, windowMs) -> { ok, retrySec }. */
+/** How many X-Forwarded-For hops to trust: TRUST_PROXY_HOPS, else 3 on Render (measured 21 Oct 2026), else 0. */
+export function defaultTrustHops(env = process.env) {
+  if (env.TRUST_PROXY_HOPS != null && env.TRUST_PROXY_HOPS !== "") return Number(env.TRUST_PROXY_HOPS);
+  return env.RENDER ? 3 : 0;
+}
+
+/**
+ * Fixed-window counters. allow(key, limit, windowMs) -> { ok, retrySec } charges one;
+ * allowAll([[key, limit, windowMs], ...]) charges every counter only when all have room, so
+ * a request refused by the global limit does not also use up the caller's own.
+ */
 export function makeLimiter(now = () => Date.now()) {
   const buckets = new Map();
+  const bucket = (key, windowMs, t) => {
+    let b = buckets.get(key);
+    if (!b || t - b.start >= windowMs) {
+      b = { start: t, n: 0 };
+      buckets.set(key, b);
+    }
+    return b;
+  };
   return {
     allow(key, limit, windowMs) {
+      return this.allowAll([[key, limit, windowMs]]);
+    },
+    allowAll(list) {
       const t = now();
-      let b = buckets.get(key);
-      if (!b || t - b.start >= windowMs) {
-        b = { start: t, n: 0 };
-        buckets.set(key, b);
-      }
-      if (b.n >= limit) return { ok: false, retrySec: Math.ceil((b.start + windowMs - t) / 1000) };
-      b.n++;
+      const bs = list.map(([key, limit, windowMs]) => ({ b: bucket(key, windowMs, t), key, limit, windowMs }));
+      const full = bs.find(({ b, limit }) => b.n >= limit);
+      if (full) return { ok: false, key: full.key, retrySec: Math.ceil((full.b.start + full.windowMs - t) / 1000) };
+      for (const { b } of bs) b.n++;
       return { ok: true, retrySec: 0 };
     },
     sweep() {
@@ -133,13 +170,14 @@ export function createProxy({
   model = process.env.GEMMA_MODEL || "gemma-4-26b-a4b-it",
   fallbacks = (process.env.GEMMA_FALLBACKS || "gemma-4-31b-it").split(",").map((s) => s.trim()).filter(Boolean),
   origins = (process.env.ALLOWED_ORIGINS || "http://localhost:4319,http://localhost:5173,http://127.0.0.1:4319").split(",").map((s) => s.trim().replace(/\/$/, "")).filter((s) => s && s !== "*"),
-  trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? (process.env.RENDER ? 1 : 0)),
+  trustProxyHops = defaultTrustHops(),
   base = process.env.GEMINI_BASE || GEMINI_BASE,
-  limits = LIMITS,
+  limits: given = LIMITS,
   limiter = makeLimiter(),
   timeoutMs = Number(process.env.GEMMA_TIMEOUT_MS || 25000), // per call, then one retry (src/core/gemini.mjs)
   log = (line) => console.log(line),
 } = {}) {
+  const limits = { ...LIMITS, ...given };
   let features = {};
   let current = model;
   const counts = { ok: 0, refused: 0, limited: 0, failed: 0 };
@@ -176,7 +214,7 @@ export function createProxy({
     if (req.method === "GET" && (url.pathname === "/healthz" || url.pathname === "/")) {
       // "you" is the caller's own rate-limit key, so a deploy can check that a spoofed
       // X-Forwarded-For does not change it
-      return send(res, 200, { ok: !!key, model: current, limits: { perIpPerMinute: limits.perIpPerMinute, globalPerMinute: limits.globalPerMinute }, counts, you: clientIp(req, trustProxyHops) }, origin);
+      return send(res, 200, { ok: !!key, model: current, limits, counts, you: clientIp(req, trustProxyHops) }, origin);
     }
     if (req.method !== "POST" || url.pathname !== "/v1/task") return send(res, 404, { error: "Not found." }, origin);
     if (reqOrigin && !origin) {
@@ -186,15 +224,23 @@ export function createProxy({
     if (!key) return send(res, 503, { error: "The proxy has no API key.", hint: "Set GEMINI_API_KEY on the server, or use your own key in Smart mode." }, origin);
 
     const ip = clientIp(req, trustProxyHops);
-    for (const [k, lim, win] of [[`m:${ip}`, limits.perIpPerMinute, 60000], [`d:${ip}`, limits.perIpPerDay, 86400000], ["gm", limits.globalPerMinute, 60000], ["gd", limits.globalPerDay, 86400000]]) {
-      const a = limiter.allow(k, lim, win);
-      if (!a.ok) {
-        counts.limited++;
-        res.setHeader("retry-after", String(a.retrySec));
-        return send(res, 429, { error: "Too many requests.", hint: `Smart mode is busy. Try again in ${a.retrySec} s, use your own free key, or switch to Private mode.`, retrySec: a.retrySec }, origin);
+    const limited = (a, scope) => {
+      counts.limited++;
+      res.setHeader("retry-after", String(a.retrySec));
+      if (scope === "ingress") {
+        res.on("finish", () => req.destroy()); // the body is never read
+        res.setHeader("connection", "close");
       }
-    }
+      const hint = scope === "global"
+        ? `Smart mode is at capacity for everyone right now. Try again in ${a.retrySec} s, use your own free key, or switch to Private mode.`
+        : `Too many requests from this connection. Try again in ${a.retrySec} s, use your own free key, or switch to Private mode.`;
+      return send(res, 429, { error: "Too many requests.", hint, retrySec: a.retrySec, scope }, origin);
+    };
+    // 1. the cheap ingress limit, before the body is read
+    const gate = limiter.allowAll([[`im:${ip}`, limits.ingressPerIpPerMinute, 60000], [`id:${ip}`, limits.ingressPerIpPerDay, 86400000]]);
+    if (!gate.ok) return limited(gate, "ingress");
 
+    // 2. the body cap and the strict task check: neither spends model quota
     const body = await readBody(req, limits.bodyBytes);
     if (body.tooBig) {
       counts.refused++;
@@ -211,6 +257,10 @@ export function createProxy({
       counts.refused++;
       return send(res, 400, { error: `Refused: ${bad}.`, hint: "The proxy only judges Selects clips." }, origin);
     }
+    // 3. the scarce model quota, per IP and for everyone, charged together only for a valid task
+    const quota = limiter.allowAll([[`m:${ip}`, limits.perIpPerMinute, 60000], [`d:${ip}`, limits.perIpPerDay, 86400000], ["gm", limits.globalPerMinute, 60000], ["gd", limits.globalPerDay, 86400000]]);
+    if (!quota.ok) return limited(quota, quota.key.startsWith("g") ? "global" : "ip");
+
     const { messages, schema, maxTokens } = buildTask(slimTask(task), PROMPTS);
     const tryModels = [current, ...fallbacks.filter((m) => m !== current)];
     for (const m of tryModels) {

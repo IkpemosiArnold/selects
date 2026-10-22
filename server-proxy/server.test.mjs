@@ -36,13 +36,15 @@ test("proxy judges a clip through Gemma and keeps clip text out of its log", asy
 });
 
 test("proxy refuses other payloads, other origins and floods", async () => {
-  const s = await setup({ limits: { perIpPerMinute: 2, perIpPerDay: 100, globalPerMinute: 100, globalPerDay: 100, bodyBytes: 4096 } });
+  const s = await setup({ limits: { perIpPerMinute: 1, perIpPerDay: 100, globalPerMinute: 100, globalPerDay: 100, bodyBytes: 4096 } });
   try {
     const post = (body, origin = "http://localhost:4319") => fetch(`${s.url}/v1/task`, { method: "POST", headers: { "content-type": "application/json", origin }, body: JSON.stringify(body) });
     assert.equal((await post({ kind: "chat", prompt: "write a poem" })).status, 400);
     assert.equal((await post({ kind: "judge", candidate: clip }, "https://evil.example")).status, 403);
-    assert.equal((await post({ kind: "judge", candidate: clip })).status, 200);
-    assert.equal((await post({ kind: "judge", candidate: clip })).status, 429, "third counted call in a minute from one IP (refused bodies count too)");
+    assert.equal((await post({ kind: "judge", candidate: clip })).status, 200, "the refused body did not use the model quota");
+    const r = await post({ kind: "judge", candidate: clip });
+    assert.equal(r.status, 429, "second model call in a minute from one IP");
+    assert.equal((await r.json()).scope, "ip");
     const h = await (await fetch(`${s.url}/healthz`)).json();
     assert.equal(h.ok, true);
     assert.equal(h.counts.limited, 1);
@@ -156,4 +158,46 @@ test("strict payloads, a body cap, UTF-8 across chunks, and no wildcard origin",
   } finally {
     s.close();
   }
+});
+
+test("invalid bodies do not spend the model quota: validation comes before the global charge", async () => {
+  // a tiny model quota and a roomier ingress limit, as in production
+  const s = await setup({ limits: { ingressPerIpPerMinute: 50, ingressPerIpPerDay: 500, perIpPerMinute: 2, perIpPerDay: 100, globalPerMinute: 2, globalPerDay: 100, bodyBytes: 4096 } });
+  try {
+    const post = (body) => fetch(`${s.url}/v1/task`, { method: "POST", headers: { "content-type": "application/json" }, body: typeof body === "string" ? body : JSON.stringify(body) });
+    for (let i = 0; i < 5; i++) assert.equal((await post({ kind: "chat", prompt: "write a poem" })).status, 400, "an invalid body is a 400");
+    assert.equal((await post("{not json")).status, 400);
+    assert.equal((await post({ kind: "judge", candidate: { ...clip, text: "x".repeat(5000) } })).status, 413, "too big is refused before any quota");
+    assert.equal((await post({ kind: "judge", candidate: clip })).status, 200, "the model quota is still there for a real task");
+    assert.equal((await post({ kind: "judge", candidate: clip })).status, 200);
+    const third = await post({ kind: "judge", candidate: clip });
+    assert.equal(third.status, 429, "the model quota itself still holds");
+    assert.ok(Number(third.headers.get("retry-after")) > 0);
+    const h = await (await fetch(`${s.url}/healthz`)).json();
+    assert.equal(h.limits.globalPerMinute, 2);
+    assert.equal(h.limits.ingressPerIpPerMinute, 50);
+    assert.equal(h.limits.bodyBytes, 4096);
+  } finally {
+    s.close();
+  }
+});
+
+test("a cheap per-IP ingress limit stops a flood of junk before it is read", async () => {
+  const s = await setup({ limits: { ingressPerIpPerMinute: 3, ingressPerIpPerDay: 500, perIpPerMinute: 100, perIpPerDay: 100, globalPerMinute: 100, globalPerDay: 100, bodyBytes: 4096 } });
+  try {
+    const post = (body) => fetch(`${s.url}/v1/task`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const codes = [];
+    for (let i = 0; i < 5; i++) codes.push((await post({ kind: "chat" })).status);
+    assert.deepEqual(codes, [400, 400, 400, 429, 429]);
+    assert.equal(s.mock.seen.length, 0, "nothing reached Google");
+  } finally {
+    s.close();
+  }
+});
+
+test("on Render the proxy trusts 3 hops by default (client, Cloudflare edge, Render)", async () => {
+  const { defaultTrustHops } = await import("./server.mjs");
+  assert.equal(defaultTrustHops({ RENDER: "true" }), 3);
+  assert.equal(defaultTrustHops({ RENDER: "true", TRUST_PROXY_HOPS: "2" }), 2);
+  assert.equal(defaultTrustHops({}), 0);
 });

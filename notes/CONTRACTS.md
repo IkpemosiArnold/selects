@@ -350,7 +350,7 @@ IndexedDB database `selects-web`, store `kv`: `job:<key>` (the Job, which stages
 
 ### Smart mode proxy (`server-proxy/`)
 
-`POST /v1/task` with a slim task (only `text`, `hook`, `start`, `end` per clip) returns `{ text, model, promptTokens, outTokens, finish }`; `GET /healthz` returns `{ ok, model, limits, counts }`. 400 for any other body shape, 403 for an origin not in `ALLOWED_ORIGINS`, 429 with `retry-after` over the per-IP or global limits, 504 when Gemma did not answer within the timeout (the page then judges that clip on the device). The proxy builds prompts from `src/core/prompts` itself and never logs clip text.
+`POST /v1/task` with a slim task (only `text`, `hook`, `start`, `end` per clip) returns `{ text, model, promptTokens, outTokens, finish }`; `GET /healthz` returns `{ ok, model, limits, counts }`. 400 for any other body shape, 403 for an origin not in `ALLOWED_ORIGINS`, 429 with `retry-after` (and `scope: "ingress" | "ip" | "global"`) over the limits, 504 when Gemma did not answer within the timeout (the page then judges that clip on the device). The proxy builds prompts from `src/core/prompts` itself and never logs clip text. Order of checks (22 Oct): a cheap per-IP ingress limit before the body is read, then the body cap and the strict task check (413, 400), and only then the model quota (per IP and global, charged together), so invalid bodies never use up the shared quota. `/healthz` returns all `limits`. `TRUST_PROXY_HOPS` defaults to 3 on Render.
 
 ## Made for presets (17 Oct, core)
 
