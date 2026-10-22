@@ -9,12 +9,16 @@
 // from: the piece is decoded with ffmpeg and found in the recording by its loudness envelope.
 // MOCK_SPEED (default 189, Groq's published speed factor for whisper-large-v3) sets how long
 // it takes, so timing runs are realistic without a key. Used for notes/timings.md, "Light mode".
+// With MOCK_PLAN=1 the pieces are not decoded: the mock cuts the recording with the page's own
+// planner once at start (src/browser/speech-chunks.js) and places each piece by its length
+// (from the Ogg header), so a heavily loaded machine does not slow the answers down.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { audioSeconds, sniffAudio } from "./asr.mjs";
 
 const FRAME = 800; // 50 ms at 16 kHz
 
@@ -52,9 +56,23 @@ export function locate(piece, whole) {
 
 const bare = (w) => w.replace(/^[^\p{L}\p{N}']+|[^\p{L}\p{N}']+$/gu, "");
 
-export function createMockWhisper({ transcript = null, source = null, speed = 189, log = () => {} } = {}) {
+/** The page's own piece plan for a recording: [{ start, end }] in seconds. */
+async function planFor(pcm16) {
+  const { growingPcm, progressivePieces } = await import("../src/browser/speech-chunks.js");
+  const f = Float32Array.from(pcm16, (x) => x / 32768);
+  const audio = growingPcm(f.length);
+  audio.append(f);
+  audio.finish();
+  const out = [];
+  for await (const p of progressivePieces(audio, 16000)) out.push({ start: p.start / 16000, end: p.end / 16000, used: false });
+  return out;
+}
+
+export function createMockWhisper({ transcript = null, source = null, speed = 189, plan = false, log = () => {} } = {}) {
   const seen = [];
-  const whole = source ? envelope(decode16k(source)) : null;
+  const pcm = source ? decode16k(source) : null;
+  const whole = source && !plan ? envelope(pcm) : null;
+  const planned = plan && pcm ? planFor(pcm) : null;
   const server = http.createServer(async (req, res) => {
     const reply = (status, obj) => {
       res.writeHead(status, { "content-type": "application/json" });
@@ -73,16 +91,27 @@ export function createMockWhisper({ transcript = null, source = null, speed = 18
       // canned: two words, no punctuation on the words, punctuation in the text
       return reply(200, { text: "Hello, world.", duration: 1.2, segments: [{ start: 0, end: 1.2, text: " Hello, world." }], words: [{ word: "Hello", start: 0.1, end: 0.5 }, { word: "world", start: 0.6, end: 1.1 }] });
     }
-    const tmp = path.join(os.tmpdir(), `mock-whisper-${process.pid}-${seen.length}.${(file.name || "a.ogg").split(".").pop()}`);
-    fs.writeFileSync(tmp, buf);
-    let pcm;
-    try {
-      pcm = decode16k(tmp);
-    } finally {
-      fs.rmSync(tmp, { force: true });
+    let dur;
+    let at;
+    if (planned) {
+      // place the piece by its length among the planned pieces not yet answered
+      dur = audioSeconds(buf, sniffAudio(buf)?.kind) ?? 0;
+      const free = (await planned).filter((p) => !p.used);
+      const best = free.sort((a, b) => Math.abs(a.end - a.start - dur) - Math.abs(b.end - b.start - dur))[0];
+      if (best) best.used = true;
+      at = best ? best.start : 0;
+    } else {
+      const tmp = path.join(os.tmpdir(), `mock-whisper-${process.pid}-${seen.length}.${(file.name || "a.ogg").split(".").pop()}`);
+      fs.writeFileSync(tmp, buf);
+      let piece;
+      try {
+        piece = decode16k(tmp);
+      } finally {
+        fs.rmSync(tmp, { force: true });
+      }
+      dur = piece.length / 16000;
+      at = locate(envelope(piece), whole);
     }
-    const dur = pcm.length / 16000;
-    const at = locate(envelope(pcm), whole);
     const ws = transcript.filter((w) => w.s >= at - 0.05 && w.e <= at + dur + 0.05);
     await new Promise((r) => setTimeout(r, 300 + (dur * 1000) / speed));
     reply(200, {
@@ -98,6 +127,6 @@ export function createMockWhisper({ transcript = null, source = null, speed = 18
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT || 8789);
   const transcript = process.env.MOCK_TRANSCRIPT ? JSON.parse(fs.readFileSync(process.env.MOCK_TRANSCRIPT, "utf8")) : null;
-  const { server } = createMockWhisper({ transcript, source: process.env.MOCK_SOURCE || null, speed: Number(process.env.MOCK_SPEED || 189), log: (l) => console.log(l) });
+  const { server } = createMockWhisper({ transcript, source: process.env.MOCK_SOURCE || null, speed: Number(process.env.MOCK_SPEED || 189), plan: process.env.MOCK_PLAN === "1", log: (l) => console.log(l) });
   server.listen(port, () => console.log(`mock whisper on :${port}${transcript ? `, ${transcript.length} words` : ", canned"}`));
 }

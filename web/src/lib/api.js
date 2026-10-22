@@ -120,6 +120,8 @@ export function saveEngineMode(m) {
 }
 
 export const api = await createApi();
+// ?debug pages expose the adapter, for timing runs (notes/timings.md); never in normal use
+if (debugMode && typeof window !== "undefined") window.__selectsApi = api;
 /** True when the work runs in this tab (the hosted build). */
 export const inBrowser = !!api.browser;
 

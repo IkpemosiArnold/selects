@@ -144,7 +144,9 @@ export default function Processing({ job, words, onResume }) {
       eta ??= (dur - reached) / speed;
     }
   }
-  const speedText = speed ? `${speed >= 1 ? `${speed.toFixed(1)} times faster than` : `${(1 / speed).toFixed(1)} times slower than`} the video plays, on this ${api.browser ? "device" : "laptop"}.` : "";
+  // Light mode transcribes on the free hosted whisper, not on this device
+  const remote = api.getMode?.()?.mode === "light";
+  const speedText = speed ? `${speed >= 1 ? `${speed.toFixed(1)} times faster than` : `${(1 / speed).toFixed(1)} times slower than`} the video plays${remote ? "" : `, on this ${api.browser ? "device" : "laptop"}`}.` : "";
   const leave = api.browser
     ? "Keep this tab open to finish faster. If you leave, it carries on when you come back."
     : "You can close this tab. Progress is saved.";

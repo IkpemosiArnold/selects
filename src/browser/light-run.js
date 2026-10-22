@@ -31,6 +31,7 @@ const LONG_SEC = 20 * 60;
 export function publishPicks(engine, r, upTo, pcm = null) {
   try {
     const job = r.job;
+    upTo = Math.min(upTo, job.source.duration); // the last piece can end a few ms past the probed length
     if (!dueForPicks({ upTo, lastAt: r.picksAt ?? null, duration: job.source.duration })) return;
     r.picksAt = upTo;
     const heard = pcm ? pcm.subarray(0, Math.min(pcm.length, Math.floor(upTo * 16000))) : null;

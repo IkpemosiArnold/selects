@@ -25,11 +25,14 @@ export default function EarlyPicks({ job, words }) {
   const src = api.sourceUrl?.(job.id) || null;
   const picks = pre?.picks || [];
 
+  // the words keep arriving while a preview plays: read them through a ref, so playback starts once
+  const wordsRef = useRef(words);
+  wordsRef.current = words;
   useEffect(() => {
     const v = videoRef.current;
     if (!v || !playing) return;
     const onTime = () => {
-      setCue(cueAt(words, playing.start, playing.end, v.currentTime));
+      setCue(cueAt(wordsRef.current, playing.start, playing.end, v.currentTime));
       if (v.currentTime >= playing.end) {
         v.pause();
         setPlaying(null);
@@ -38,13 +41,16 @@ export default function EarlyPicks({ job, words }) {
     v.addEventListener("timeupdate", onTime);
     v.currentTime = playing.start;
     v.play().catch(() => {});
-    return () => v.removeEventListener("timeupdate", onTime);
-  }, [playing, words]);
+    return () => {
+      v.removeEventListener("timeupdate", onTime);
+      setCue("");
+    };
+  }, [playing]);
 
   if (!picks.length) return null;
   return (
     <section className="early-picks" aria-label="Early picks">
-      <p className="proc-page-head">Early picks from the first {tc(pre.upTo)}</p>
+      <p className="proc-page-head">{pre.upTo >= (job.source?.duration || Infinity) - 1 ? "Early picks" : `Early picks from the first ${tc(pre.upTo)}`}</p>
       <p className="field-hint">Ranked by the first-stage score (sentence shape, pauses, loudness), before Gemma has read anything. Gemma's ranking replaces them when the whole video has been heard. Nothing is rendered yet.</p>
       {src && (
         <div className={"early-player" + (playing ? " is-on" : "")} hidden={!playing}>
