@@ -550,3 +550,31 @@ Agreement with the model the site shipped (base.en, fp32 encoder, q8 decoder): w
 | tiny.en, all q8 | 41 MB | 5.3%, 0.20 s, 0.60x | 4.6%, 0.19 s, 1.13x |
 
 Speed is clip seconds per second of work (above 1 is faster than the clip plays). The two tiny.en sets gave the same words; the 8-bit encoder was slower on this Intel CPU, which may not hold on a phone's ARM CPU. Choice: **iPhones, iPads and devices reporting 4 GB of memory or less get tiny.en all-q8 (41 MB of weights, 43 MB with tokenizer files)**; other devices keep base.en. All-q8 base.en (77 MB) agreed with the shipped model to within 1% on the longer clip and is the candidate for a smaller desktop default; it was not switched here. Neither has been measured on Nigerian speech.
+
+## Light mode (22 Oct 2026, Light mode builder)
+
+Time to the transcript and to the first reviewable clips on a slow link, Light mode against the Private path, in headless Chrome 155 (the installed Google Chrome, a fresh profile each run) and WebKit (Playwright's Safari 26 engine for macOS 13), on this 2017 MacBook Pro.
+
+**Setup.** The clip is 3 min 30 s of the EMF talk excerpt (`strength-talk-6min.mp4`, the first 210 s, 5.5 MB, CC BY-SA 4.0; see `notes/test-media.md`). Every byte the browser sent or received went through one emulated link: **1 Mbps down, 384 kbps up, 200 ms round trip**, shared by all connections (a scratch Node throttle in front of the page, the proxy and, through an HTTP CONNECT proxy, Hugging Face; the throttle counted the bytes). The page was a local build of `web/` on the browser engine, served with the deploy headers. The proxy was `server-proxy/server.mjs` with the project's real Gemini key, so judging is the real free Gemma 4 26B on Google (Google's side is not throttled; on Render it is not either).
+
+**The transcriber is a stand-in, not Groq.** There is no `GROQ_API_KEY` yet, so `/transcribe` went to `server-proxy/mock-whisper.mjs` (`MOCK_PLAN=1`). It answers each piece with the desktop whisper's words for that stretch (placed by the page's own piece plan) after `0.3 s + length / 189`, Groq's published speed factor for whisper-large-v3. The audio, its compression, the upload over the slow link, the proxy and everything after are real; Groq's own processing time is modelled, not measured.
+
+**Not yet re-run at a normal load:** the Chrome Private-path run was stopped when the machine overloaded again; the Chrome row below is the earlier run. All rows are to be measured again after the iPhone fix (resumable downloads) is on main, when the Private path should no longer fail this way.
+
+**Machine load.** Other sessions were encoding video and running browsers: the load average was 63 to 445 during these runs (normal for this machine is about 15). Steps on the device (decoding the audio, the page itself) are slower than they would be on an idle machine; the upload and Google's judging are not affected. A first set of runs at load averages of 400 to 900 (iCloud syncing the project folder) was discarded.
+
+| Run (load average) | Page loaded | First words | Early picks (previewable) | Transcript | Ranking ready | Sent | Received |
+|---|---|---|---|---|---|---|---|
+| Chrome, Light (63 to 375) | 10.6 s | 19.5 s | 34 s | 38 s | 59 s | 0.48 MB | 1.67 MB |
+| WebKit, Light (420 to 248) | 11.5 s | 24 s | 47 s | 57 s | 86 s | 0.47 MB | 3.82 MB |
+| WebKit, Light, second run (235 to 435) | 21.0 s | 35 s | 68 s | 78 s | 113 s | 0.47 MB | 3.82 MB |
+| WebKit, Private path (445 to 122) | 11.9 s | none | none | **failed after 328 s**: "Speech model failed to load: Load failed", at 28 of 139 MB | none | 0.02 MB | 37.5 MB |
+| Chrome, Private path (an earlier run, about 500) | 10.9 s | none | none | **failed after 928 s**: "Speech model failed to load: network error", at 110 of 139 MB | none | 0.07 MB | 110.9 MB |
+
+Times after "Page loaded" count from the moment the video was given to the page. "Early picks" is when the first preliminary picks (first-stage score, no model) appeared; with a 3.5-minute clip they come when the whole clip has been heard, and on longer videos after about 3 minutes of transcript. The "Ranking ready" column is Gemma's judged ranking, the review screen. The "Private path" runs are the Smart mode setting: whisper base.en downloaded and run in the tab, then the same Google judge; strict Private mode would also download its own judge first.
+
+**Data per job.** Light mode sent 0.42 MB of audio (Chrome) or 0.43 MB (WebKit) for 211 s of speech: three Opus pieces of 29, 116 and 66 s at 16 kbps, plus about 35 KB of judge text each way. What it received was the page (1.2 MB in Chrome, 1.56 MB in WebKit, which fetched it uncompressed), the 1.1 MB language-check model (0.32 MB compressed in Chrome) and, in WebKit only, the 1 MB speed probe (Safari reports no connection speed). Nothing of the video left the device. The Private path needs the 139 MB speech model before the first word; strict Private adds Gemma 3 1B (722 MB, about 100 minutes at this speed) or Gemma 4 E2B (2,004 MB, about 4.7 hours).
+
+**What this says.** On a 1 Mbps link the Private path does not reach a transcript at all here: the speech model's download failed in WebKit after 5.5 minutes with the same "Load failed" Arnold saw on his iPhone, and in Chrome (an earlier run, at a load average of about 500) with "network error" after 15.5 minutes at 110 of 139 MB. Light mode gave previewable clips in 34 to 68 s and the judged ranking in 59 to 113 s, for about half a megabyte up and 1.7 to 3.8 MB down, most of which is the page and the language check, both cached for the next video.
+
+**Encoder, 211 s of speech, by codec** (the same clip, measured in the page; sizes are firm, times were taken at a load average near 844 and are not): Opus 16 kbps in Ogg 421,872 bytes in Chrome and 432,265 in WebKit; AAC in M4A 993,389 bytes in WebKit (Chrome's AAC encoder failed with "Encoding error"); 16-bit WAV 6,753,072 bytes. Opus encoding is supported at 16 kHz in both engines, so neither needs the MP3 fallback.
