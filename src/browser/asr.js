@@ -50,6 +50,7 @@ export function loadAsr({ device = "auto", model = MODELS.whisper, onDownload } 
     const onMsg = (ev) => {
       const m = ev.data;
       if (m.type === "download") onDownload?.(m);
+      else if (m.type === "download-note") console.info(`speech model download, ${m.file}: ${m.event} at ${Math.round(m.at / 1e6)} of ${Math.round((m.total || 0) / 1e6)} MB${m.why ? ` (${m.why})` : ""}`);
       else if (m.type === "ready") {
         w.removeEventListener("message", onMsg);
         info = m;

@@ -11,7 +11,7 @@ import ortAsyncifyMjs from "onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs?
 import ortAsyncifyWasm from "onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm?url";
 import ortPlainMjs from "onnxruntime-web/ort-wasm-simd-threaded.mjs?url";
 import ortPlainWasm from "onnxruntime-web/ort-wasm-simd-threaded.wasm?url";
-import { memoryStore, opfsStore, resumableDownload } from "./download.js";
+import { fetchWithRetry, memoryStore, opfsStore, resumableDownload } from "./download.js";
 
 env.allowLocalModels = false;
 env.useBrowserCache = true;
@@ -49,13 +49,15 @@ const netFetch = env.fetch;
 
 env.fetch = async (input, init) => {
   const url = String(input?.url || input);
-  if (!isBig(url)) return netFetch(input, init);
+  // the small files (configs, tokenizer) are retried too: one dropped connection on any of
+  // them used to fail the whole load
+  if (!isBig(url)) return fetchWithRetry(input, init, { fetchImpl: netFetch });
   const store = await getStore();
   // transformers.js asks for byte 0 first to learn the size: answer from what is stored
   if (new Headers(init?.headers).get("range") === "bytes=0-0") {
     const { meta } = await store.info(url);
     if (meta?.size) return new Response(new Uint8Array(1), { status: 206, headers: { "content-range": `bytes 0-0/${meta.size}`, "content-length": "1", "content-type": "application/octet-stream" } });
-    return netFetch(input, init);
+    return fetchWithRetry(input, init, { fetchImpl: netFetch });
   }
   const file = fileOf(url);
   let last = 0;
@@ -69,6 +71,7 @@ env.fetch = async (input, init) => {
         last = now;
         post({ type: "download", file, loaded: p.loaded, total: p.total, cached: !!p.cached });
       },
+      onNote: (n) => post({ type: "download-note", file, ...n }),
     });
     return new Response(blob, { status: 200, headers: { "content-length": String(blob.size), "content-type": "application/octet-stream" } });
   } catch (e) {

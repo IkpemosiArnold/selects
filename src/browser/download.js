@@ -87,8 +87,11 @@ export function resumableDownload(url, opts = {}) {
   return promise;
 }
 
-async function download(url, { store, fetchImpl = (...a) => fetch(...a), chunkBytes = CHUNK_BYTES, retries = 8, maxWaitMs = 30000, sleep = defaultSleep, onProgress, signal, estimate } = {}) {
+async function download(url, { store, fetchImpl = (...a) => fetch(...a), chunkBytes = CHUNK_BYTES, retries = 8, maxWaitMs = 30000, sleep = defaultSleep, onProgress, onNote, signal, estimate } = {}) {
   let { bytes: have, meta } = await store.info(url);
+  // what happened along the way, for the console (the person sees only progress and errors)
+  const note = (event, extra = {}) => onNote?.({ event, at: have, total: meta?.size ?? null, ...extra });
+  if (have) note("resume");
   if (meta?.done && meta.size === have) {
     onProgress?.({ loaded: have, total: have, cached: true });
     return store.blob(url);
@@ -107,7 +110,8 @@ async function download(url, { store, fetchImpl = (...a) => fetch(...a), chunkBy
     }
     have += bytes.length;
   };
-  const restart = async () => {
+  const restart = async (why) => {
+    note("restart", { why });
     await store.reset(url);
     have = 0;
     meta = null;
@@ -116,6 +120,7 @@ async function download(url, { store, fetchImpl = (...a) => fetch(...a), chunkBy
   const backoff = async (e) => {
     lastError = e;
     failures++;
+    note("retry", { why: `${e?.name || "Error"}: ${e?.message || e}`, failures });
     if (failures > retries) {
       throw new DownloadError("network", `The connection dropped ${failures} times in a row.`, { loaded: have, total: meta?.size ?? 0, cause: e });
     }
@@ -147,7 +152,7 @@ async function download(url, { store, fetchImpl = (...a) => fetch(...a), chunkBy
       continue;
     }
     if (res.status === 416) {
-      await restart(); // the file is shorter than what is stored: it changed
+      await restart("416"); // the file is shorter than what is stored: it changed
       continue;
     }
     if (res.status === 408 || res.status === 425 || res.status === 429 || res.status >= 500) {
@@ -174,10 +179,11 @@ async function download(url, { store, fetchImpl = (...a) => fetch(...a), chunkBy
     // the file changed on the server since the stored part was fetched: never stitch versions
     if (meta && ((meta.etag && tag && tag !== meta.etag) || (size != null && meta.size !== size))) {
       await res.body?.cancel().catch(() => {});
-      await restart();
+      await restart(`changed: etag ${meta.etag} -> ${tag}, size ${meta.size} -> ${size}`);
       continue;
     }
     if (res.status === 200 && have > 0) {
+      note("restart", { why: "the server sent the whole file instead of a range" });
       await store.reset(url); // the server ignored the range: this answer is the whole file from byte 0
       have = 0;
     } else if (start !== have) {
@@ -223,7 +229,7 @@ async function download(url, { store, fetchImpl = (...a) => fetch(...a), chunkBy
   }
 
   if (have !== meta.size) {
-    await restart();
+    await restart("wrong size");
     throw new DownloadError("integrity", "The model file came out the wrong size.", { loaded: 0, total: 0 });
   }
   const blob = await store.blob(url);
@@ -239,6 +245,32 @@ async function download(url, { store, fetchImpl = (...a) => fetch(...a), chunkBy
   await store.setMeta(url, meta);
   progress(have);
   return store.blob(url);
+}
+
+/**
+ * fetch, retried with backoff after a dropped connection (TypeError: "Load failed",
+ * "Failed to fetch") or a busy server (408, 429, 5xx), for the model's small files.
+ * Other answers (200, 404) come back as they are.
+ */
+export async function fetchWithRetry(input, init = {}, { fetchImpl = (...a) => fetch(...a), retries = 5, maxWaitMs = 15000, sleep = defaultSleep } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    let res = null;
+    let err = null;
+    try {
+      res = await fetchImpl(input, init);
+    } catch (e) {
+      if (isAbort(e) || init?.signal?.aborted) throw e;
+      err = e;
+    }
+    const busy = res && (res.status === 408 || res.status === 429 || res.status >= 500);
+    if (res && !busy) return res;
+    if (attempt >= retries) {
+      if (err) throw err;
+      return res;
+    }
+    await res?.body?.cancel().catch(() => {});
+    await sleep(Math.min(maxWaitMs, 1000 * 2 ** attempt), init?.signal);
+  }
 }
 
 /** Keeps downloads in memory: resumes after a dropped connection, but not after a reload. */

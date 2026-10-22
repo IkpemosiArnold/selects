@@ -173,3 +173,23 @@ test("two callers asking for the same file at once share one download", async ()
   assert.deepEqual(new Uint8Array(await b.arrayBuffer()), file);
   assert.equal(srv.log.length, 3, "one request per chunk, not two");
 });
+
+test("small files are retried after a dropped connection or a busy server, not after a 404", async () => {
+  const { fetchWithRetry } = await import("./download.js");
+  let n = 0;
+  const flaky = async () => {
+    n++;
+    if (n === 1) throw new TypeError("Load failed");
+    if (n === 2) return new Response("busy", { status: 503 });
+    return new Response("{}", { status: 200 });
+  };
+  const waits = [];
+  const res = await fetchWithRetry("https://huggingface.co/x/resolve/main/config.json", {}, { fetchImpl: flaky, sleep: async (ms) => waits.push(ms) });
+  assert.equal(res.status, 200);
+  assert.deepEqual(waits, [1000, 2000]);
+  let m = 0;
+  const missing = async () => (m++, new Response("no", { status: 404 }));
+  assert.equal((await fetchWithRetry("https://x/y", {}, { fetchImpl: missing, sleep: async () => {} })).status, 404);
+  assert.equal(m, 1);
+  await assert.rejects(fetchWithRetry("https://x/y", {}, { fetchImpl: async () => { throw new TypeError("Load failed"); }, retries: 2, sleep: async () => {} }), (e) => e.name === "TypeError");
+});
