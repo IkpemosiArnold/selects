@@ -5,6 +5,7 @@ import { useReducedMotion } from "../lib/hooks.js";
 import { languageName } from "../lib/languages.js";
 import { api } from "../lib/api.js";
 import { useNotifyOptIn } from "../lib/notify.js";
+import EarlyPicks from "./EarlyPicks.jsx";
 
 // The core's hints name CLI flags; in the app the same advice is said plainly.
 function plainHint(h) {
@@ -367,6 +368,8 @@ export default function Processing({ job, words, onResume }) {
             </ol>
           </div>
         </section>
+
+        {!isErr && <EarlyPicks job={job} words={words} />}
 
         <section className="proc-transcript" aria-label="Transcript so far">
           <p className="proc-page-head">What Selects has heard so far</p>

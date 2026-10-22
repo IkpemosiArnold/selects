@@ -3,12 +3,12 @@
 // mode's (text only); the clips are rendered on the device. The video never leaves.
 //
 // suggestMode is the rule for which mode to suggest, pure so it is tested in Node:
-//   - Private stays the default whenever the speech model is already in this browser.
-//   - Otherwise Light is suggested when the browser reports Data Saver, a 2G or 3G
-//     connection, or under 1.5 Mbps; when the speech model would take over a minute to
-//     download at the reported speed; or on an iPhone or iPad (a 140 to 209 MB model in a
-//     Safari tab is where downloads and memory fail).
-//   - With no signal either way, Private stays the default.
+//   - Private whenever the speech model is already in this browser (nothing to download).
+//   - Otherwise Light, whenever it can run: the free shared transcriber is switched on, or
+//     the person has given their own free Groq key. Private is one tap away (opt-in).
+//   - With neither, Private, as before.
+// The reasons say why in plain words, from what the browser reports (Data Saver, 2G or 3G,
+// the speed) or from a timed 1 MB probe where it reports nothing (Safari), and on iPhones.
 
 export const SLOW_MBPS = 1.5;
 export const SLOW_DOWNLOAD_SEC = 60;
@@ -20,20 +20,46 @@ export function isIos(nav = globalThis.navigator) {
 }
 
 /**
- * @param {{ connection?: object, ios?: boolean, asrCached?: boolean|null, asrBytes?: number, lightAvailable?: boolean }} facts
- * @returns {{ mode: "light" | "private", reasons: string[], estSec: number|null }}
+ * @param {{ connection?: object, probeMbps?: number|null, ios?: boolean, asrCached?: boolean|null, asrBytes?: number, lightAvailable?: boolean }} facts
+ * @returns {{ mode: "light" | "private", reasons: string[], estSec: number|null, mbps: number|null }}
  */
-export function suggestMode({ connection = null, ios = false, asrCached = null, asrBytes = 140e6, lightAvailable = true } = {}) {
-  const mbps = Number(connection?.downlink) > 0 ? Number(connection.downlink) : null;
+export function suggestMode({ connection = null, probeMbps = null, ios = false, asrCached = null, asrBytes = 140e6, lightAvailable = true } = {}) {
+  const reported = Number(connection?.downlink) > 0 ? Number(connection.downlink) : null;
+  const mbps = reported ?? (Number(probeMbps) > 0 ? +Number(probeMbps).toFixed(1) : null);
   const estSec = mbps ? Math.round((asrBytes * 8) / (mbps * 1e6)) : null;
-  if (!lightAvailable || asrCached === true) return { mode: "private", reasons: asrCached ? ["the speech model is already in this browser"] : [], estSec };
+  if (asrCached === true) return { mode: "private", reasons: ["the speech model is already in this browser"], estSec, mbps };
+  if (!lightAvailable) return { mode: "private", reasons: [], estSec, mbps };
   const reasons = [];
   if (connection?.saveData) reasons.push("Data Saver is on");
   if (/^(slow-2g|2g|3g)$/.test(String(connection?.effectiveType || ""))) reasons.push(`the connection looks like ${String(connection.effectiveType).toUpperCase()}`);
-  if (mbps != null && mbps < SLOW_MBPS) reasons.push(`the connection is about ${mbps} Mbps`);
-  if (estSec != null && estSec > SLOW_DOWNLOAD_SEC && !reasons.length) reasons.push(`the speech model would take about ${Math.round(estSec / 60) || 1} min to download`);
+  else if (mbps != null && mbps < SLOW_MBPS) reasons.push(`the connection is about ${mbps} Mbps`);
+  if (estSec != null && estSec > SLOW_DOWNLOAD_SEC && !reasons.length) reasons.push(`the speech model would take about ${Math.round(estSec / 60) || 1} min to download here`);
   if (ios) reasons.push("this is an iPhone or iPad");
-  return { mode: reasons.length ? "light" : "private", reasons, estSec };
+  if (!reasons.length) reasons.push(`the speech model (${Math.round(asrBytes / 1e6)} MB) is not in this browser yet`);
+  return { mode: "light", reasons, estSec, mbps };
+}
+
+/**
+ * Time a 1 MB download (an HTTP Range request) to estimate the speed where the browser does
+ * not report one (Safari, Firefox). Resolves Mbps, or null when it cannot tell. Used once,
+ * only when the speech model is not cached, so the page can say how long Private would take.
+ */
+export async function measureDownlink(url, { bytes = 1 << 20, fetchImpl = globalThis.fetch, now = () => performance.now(), timeoutMs = 20000 } = {}) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
+  const t0 = now();
+  try {
+    const r = await fetchImpl(url, { headers: { range: `bytes=0-${bytes - 1}` }, cache: "no-store", credentials: "omit", signal: ctl.signal });
+    if (!r.ok) return null;
+    const got = (await r.arrayBuffer()).byteLength;
+    const sec = (now() - t0) / 1000;
+    return got >= bytes / 4 && sec > 0 ? +((got * 8) / sec / 1e6).toFixed(2) : null;
+  } catch {
+    // a timeout is an answer too: under bytes*8/timeout Mbps
+    return ctl.signal.aborted ? +((bytes * 8) / (timeoutMs / 1000) / 1e6).toFixed(2) : null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**

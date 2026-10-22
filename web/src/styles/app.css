@@ -535,3 +535,16 @@ button.resume-row { width: 100%; text-align: left; font: inherit; color: inherit
 .proc-choices { display: grid; gap: 12px; margin-top: 16px; }
 .proc-choice { display: grid; gap: 4px; }
 .proc-choice .btn { justify-self: start; max-width: 100%; white-space: normal; text-align: left; }
+
+/* Early picks while the video is still being heard (EarlyPicks.jsx) */
+.early-picks { display: grid; gap: 10px; margin: 0 0 20px; }
+.early-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.early-pick { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.early-n { font-size: 13px; color: var(--ink-2); }
+.early-body { min-width: 0; }
+.early-hook { margin: 0; overflow-wrap: anywhere; }
+.early-meta { margin: 2px 0 0; font-size: 12px; color: var(--ink-2); }
+.early-player { position: relative; background: var(--film); border-radius: 8px; overflow: hidden; max-width: 640px; }
+.early-player video { display: block; width: 100%; max-height: 60vh; }
+.early-cue { position: absolute; left: 8px; right: 8px; bottom: 10%; margin: 0; text-align: center; font-weight: 700; font-size: clamp(15px, 3.6vw, 22px); color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85), 0 0 1px #000; overflow-wrap: anywhere; }
+@media (max-width: 480px) { .early-pick { grid-template-columns: auto 1fr; } .early-pick .btn { grid-column: 1 / -1; justify-self: start; } }

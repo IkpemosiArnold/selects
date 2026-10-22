@@ -22,15 +22,18 @@ export function useEngine() {
   useEffect(() => {
     let alive = true;
     api.downloads?.().then((d) => alive && setDl(d)).catch(() => alive && setDl({ items: [], caps: null }));
-    // Light mode is suggested on a slow or metered connection and on iPhones, until the person
-    // picks a mode themselves; Private stays the default when the speech model is already here
-    if (!readEngineMode()) {
-      api.suggestMode?.().then((s) => {
-        if (!alive || !s) return;
-        setSuggested(s);
-        if (s.mode === "light" && !readEngineMode()) setModeState(api.setMode("light"));
-      }).catch(() => {});
-    }
+    // Until the person picks a mode themselves: Light when the speech model is not in this
+    // browser and Light can run, else Private. Asked twice: at once, then again when the proxy
+    // has answered (a free server can take a minute to wake) with a speed probe on Safari
+    const apply = (s) => {
+      if (!alive || !s) return;
+      setSuggested(s);
+      if (readEngineMode()) return;
+      const cur = api.getMode().mode;
+      if (s.mode !== cur) setModeState(api.setMode(s.mode));
+      else setModeState(api.getMode());
+    };
+    api.suggestMode?.().then(apply).then(() => api.suggestMode({ wait: true, probe: true })).then(apply).catch(() => {});
     return () => {
       alive = false;
     };
@@ -72,8 +75,11 @@ export default function EnginePanel({ engine }) {
 
       {light ? (
         <div className="engine-smart">
+          {mode.lightShared === false && !mode.hasGroqKey && (
+            <p className="field-error" role="note">The free shared transcriber is not switched on yet, so Light mode needs your own free Groq key for now. Or use Private.</p>
+          )}
           {suggested?.mode === "light" && suggested.reasons?.length > 0 && (
-            <p className="field-hint">Suggested because {suggested.reasons.join(" and ")}. Private mode is one tap away.</p>
+            <p className="field-hint">Chosen because {suggested.reasons.join(" and ")}. Private mode is one tap away.</p>
           )}
           <p className="field-hint">About half a megabyte of audio for a 4-minute video, instead of downloading a speech model. The words of the shortlisted moments then go to Google's free Gemma API, as in Smart mode.</p>
           {mode.hasGroqKey ? (
@@ -101,7 +107,7 @@ export default function EnginePanel({ engine }) {
                 />
               </label>
               <button className="btn" type="button" disabled={!groq.trim()} onClick={() => { setMode("light", { groqKey: groq.trim() }); setGroq(""); }}>Use this key</button>
-              <p className="field-hint">Without a key, Selects uses its free shared transcriber, which does not keep the audio or the words. Your key stays in this tab and goes only to Groq.</p>
+              <p className="field-hint">{mode.lightShared === false ? "Make one free at console.groq.com, no card needed. It stays in this tab and goes only to Groq." : "Without a key, Selects uses its free shared transcriber, which does not keep the audio or the words. Your key stays in this tab and goes only to Groq."}</p>
             </div>
           )}
         </div>
@@ -158,6 +164,9 @@ export default function EnginePanel({ engine }) {
               <p className="engine-dl">
                 <b>{plainLabel(judge.label)}, {gb(judge.bytes)}</b>, downloads once{whisper ? `, with the speech model (${plainLabel(whisper.label)}, ${gb(whisper.bytes)}${whisper.size === "tiny" ? ", the smaller one for phones" : ""})` : ""}.
               </p>
+            )}
+            {suggested?.estSec != null && !/already/.test(suggested.reasons?.[0] || "") && (
+              <p className="field-hint">The speech model takes about {Math.max(1, Math.round(suggested.estSec / 60))} min to download on this connection{suggested.mbps ? ` (about ${suggested.mbps} Mbps)` : ""}.</p>
             )}
             <p className="field-hint">
               {caps?.webgpu
