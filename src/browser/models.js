@@ -33,8 +33,10 @@ export const MODELS = {
     label: "Whisper tiny.en (speech to text, smaller)",
     licence: "MIT (OpenAI Whisper), ONNX export by onnx-community",
     source: `${HF}/onnx-community/whisper-tiny.en_timestamped`,
-    dtype: { wasm: { encoder_model: "fp32", decoder_model_merged: "q8" }, webgpu: { encoder_model: "fp32", decoder_model_merged: "q4" } },
-    bytes: { wasm: 32894434 + 30729881 + 2692523, webgpu: 32894434 + 86803045 + 2692523 },
+    // all 8-bit on the CPU: 41 MB of weights. On the test clips it gave the same words as tiny.en
+    // with the full-precision encoder (64 MB), 4.6 to 5.3% different from base.en
+    dtype: { wasm: { encoder_model: "q8", decoder_model_merged: "q8" }, webgpu: { encoder_model: "fp32", decoder_model_merged: "q4" } },
+    bytes: { wasm: 10097112 + 30729881 + 2692523, webgpu: 32894434 + 86803045 + 2692523 },
     files: {
       "onnx/encoder_model.onnx": { size: 32894434, sha256: "e19140280ff8ae5299e4a82566e6c33e809f45b635428f7674ac821dd64f2ccc" },
       "onnx/encoder_model_quantized.onnx": { size: 10097112, sha256: "697eaa5668bb13343965f423d6002273479b8508f592bd26970735516ed5039e" },

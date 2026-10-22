@@ -16,15 +16,19 @@ import { fetchWithRetry, memoryStore, opfsStore, resumableDownload } from "./dow
 env.allowLocalModels = false;
 env.useBrowserCache = true;
 
-// transformers.js points ONNX Runtime at cdn.jsdelivr.net; use the copies built into this
-// site instead (same version, same choice of build: Safari before 26 without WebGPU gets the
-// plain build, everything else the asyncify build that WebGPU needs)
+// transformers.js points ONNX Runtime at cdn.jsdelivr.net; the copies built into this site
+// are used instead (same version). Which build is chosen at load time (setOrtBuild): WebKit
+// running whisper on the CPU gets the plain build, since the asyncify build is reported to
+// run away with memory on Safari 26 (onnxruntime issue 26827) and only WebGPU needs it;
+// everything else keeps the asyncify build, as transformers.js would pick.
 const ua = self.navigator?.userAgent || "";
-const safariVersion = /Apple/.test(self.navigator?.vendor || "") && !/CriOS|FxiOS|EdgiOS|Chrome|Android/.test(ua) ? +(/Version\/(\d+)/.exec(ua)?.[1] || 0) : 0;
-const plainOrt = safariVersion > 0 && safariVersion < 26 && !self.navigator?.gpu;
-if (env.backends?.onnx?.wasm) {
-  env.backends.onnx.wasm.wasmPaths = plainOrt ? { mjs: ortPlainMjs, wasm: ortPlainWasm } : { mjs: ortAsyncifyMjs, wasm: ortAsyncifyWasm };
+const webkit = /AppleWebKit/.test(ua) && !/Chrome\/|Chromium\/|Edg\/|Android/.test(ua);
+function setOrtBuild(dev) {
+  if (!env.backends?.onnx?.wasm) return;
+  const plain = webkit && dev !== "webgpu";
+  env.backends.onnx.wasm.wasmPaths = plain ? { mjs: ortPlainMjs, wasm: ortPlainWasm } : { mjs: ortAsyncifyMjs, wasm: ortAsyncifyWasm };
 }
+setOrtBuild("wasm");
 
 let asr = null;
 let device = null;
@@ -148,6 +152,7 @@ async function load({ model, dtype, wantDevice, files }) {
       if (adapter && !/intel/i.test(adapter.info?.vendor || "")) dev = "webgpu";
     } catch {}
   }
+  setOrtBuild(dev);
   const t0 = performance.now();
   asr = await pipeline("automatic-speech-recognition", model, {
     device: dev,

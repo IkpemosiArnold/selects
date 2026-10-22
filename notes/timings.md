@@ -508,3 +508,45 @@ Limit set and shown: on a phone or tablet, over 30 minutes the job says "For vid
 | Timeline strip with 50 clips: 17 to 34 overlapping markers, colliding labels | lanes and fitted labels; approve the best N in the review (35d2795, 00b393c) |
 
 Local Gemma instead of Smart mode: at the measured 40 to 80 s a call, k = 30 on 2 hours caps the shortlist at 52 windows (half the video's length in judge time) and judging takes about 1.6 hours with the faithful checks, which is why the CLI prints the estimate and suggests overnight mode.
+
+## Selects Web on an iPhone: the speech model download (22 Oct 2026, iPhone fix)
+
+Arnold's iPhone (Safari, Lagos mobile data, a 3:26 phone video) stopped at "Transcribe what's said", 5%, with "Speech model failed to load: Load failed". Everything below ran in Playwright 1.52's WebKit (the Safari 18.4 engine, the last build Playwright ships for macOS 13) with its iPhone 13 profile, on the 2017 MacBook Pro, from Lagos. Test clip: 45 s (00:20 to 01:05) of the 2-minute CC BY-SA 4.0 EMF excerpt, re-encoded to HEVC in a .mov like a phone's (`libx265`, `hvc1`, AAC). A flaky link was made with a local CONNECT proxy that cuts the Hugging Face CDN connection after every 20 MB carried. **Timings here are noisy:** the machine's load average swung between about 13 and 650 during these runs (iCloud syncing, other builders), so read speeds as rough.
+
+### The failure, reproduced on the live site
+
+| Run | Result |
+|---|---|
+| Live site, steady connection | Downloaded 139 MB (whisper base.en, fp32 encoder, q8 decoder) in about 70 s, then transcribed, 12.5 times slower than the clip plays: the page was not cross-origin isolated (below), so whisper ran on one thread |
+| Live site, one cut at 20 MB | "Speech model failed to load: Load failed" and "The download resumes from what is cached", with the Stopped stamp over the text: the same screen as the iPhone. The cut killed both large downloads (they share one connection), and nothing was kept, because transformers.js stores a file only once it is complete |
+
+Other causes checked and ruled out as the cause of this message: storage quota (Safari names that `QuotaExceededError`), memory (iOS reloads the tab instead), and an unsupported model variant (the steady run loaded and ran it). "Load failed" is WebKit's whole message for any failed `fetch`.
+
+### Facts found on the way (WebKit)
+
+- **COEP `credentialless` is ignored by Safari** (caniuse lists no support up to Safari 27.2, read 22 Oct 2026; WebKit bug 230550 is open). With it, `crossOriginIsolated` is false and there is no `SharedArrayBuffer`. With `require-corp`, WebKit and Chromium 136 both report true, and ranged CORS fetches from Hugging Face still work. The site now sends `require-corp`.
+- **Range requests through Hugging Face's redirect are unreliable in WebKit.** After the redirect has been followed once or twice, a request to `huggingface.co/.../resolve/main/...` with `Range: bytes=a-b` comes back 200 with the whole file; the same range sent to the CDN address the redirect leads to (`us.aws.cdn.hf.co`) is 206 every time, before and after a dropped connection. curl gets 206 from both. An open-ended range (`bytes=a-`) also came back as the whole file. The downloader asks the CDN address directly, with closed ranges.
+- **Hugging Face's ETag for these files is the Xet hash, not a SHA-256.** The SHA-256 is only in `x-linked-etag` on the redirect, which a CORS fetch cannot see, so `models.js` pins each file's size and SHA-256 (from the Hugging Face API).
+- **Playwright's throwaway WebKit contexts have no working OPFS** (every call fails with `UnknownError: The operation failed for an unknown transient reason`); a context with a profile on disk works. In WebKit 18.4 the page itself has no `createWritable`, so only workers (sync access handles) can write model pieces; the page falls back to Cache Storage there. The `UnknownError` logged after transcription in the throwaway context was wllama's OPFS cache in the judge stage, not the speech model.
+- **The service worker** once failed to fetch ONNX Runtime's module for the whisper worker ("FetchEvent.respondWith received an error: Load failed"), and the load stopped. It now leaves `.wasm`, `.mjs` and worker scripts to the HTTP cache.
+
+### After the fix (local build, WebKit, iPhone profile)
+
+| Run | Result |
+|---|---|
+| Cuts at 20, 40 and 60 MB | Each cut: "retry at 5, 16, 28 of 33 MB", carried on from there; both files "verified" against their SHA-256; transcription finished (about 4.5 times slower than the clip plays; tiny.en, 2 threads, heavy load) |
+| One cut, then the browser closed at 39 of 66 MB, then reopened (profile on disk) | "resume at 17 of 33 MB" and "17 of 31 MB" (the last whole 8 MB pieces; pieces are now written every 2 MB), both verified, transcribed |
+| A real drop on this line (SSL error on `tokenizer_config.json`) | Before the small files were retried: "The connection dropped while getting the speech model." with Try again. Small files are now retried too |
+
+### Speech model for phones (Chromium 136 headless, 2 threads, cross-origin isolated; noisy)
+
+Agreement with the model the site shipped (base.en, fp32 encoder, q8 decoder): word error rate of each against it, and the mean shift in word start times on matched words. Not against a human transcript.
+
+| Model | Download (weights) | 45 s clip: WER vs shipped, start shift, speed | 2 min clip: WER vs shipped, start shift, speed |
+|---|---|---|---|
+| base.en, fp32 encoder, q8 decoder (shipped) | 136 MB | 0, 0, 0.28x | 0, 0, 0.55x |
+| base.en, all q8 | 77 MB | 7.0%, 0.01 s, 0.50x | 0.9%, 0.00 s, 0.46x |
+| tiny.en, fp32 encoder, q8 decoder | 64 MB | 5.3%, 0.20 s, 1.09x | 4.6%, 0.19 s, 1.57x |
+| tiny.en, all q8 | 41 MB | 5.3%, 0.20 s, 0.60x | 4.6%, 0.19 s, 1.13x |
+
+Speed is clip seconds per second of work (above 1 is faster than the clip plays). The two tiny.en sets gave the same words; the 8-bit encoder was slower on this Intel CPU, which may not hold on a phone's ARM CPU. Choice: **iPhones, iPads and devices reporting 4 GB of memory or less get tiny.en all-q8 (41 MB of weights, 43 MB with tokenizer files)**; other devices keep base.en. All-q8 base.en (77 MB) agreed with the shipped model to within 1% on the longer clip and is the candidate for a smaller desktop default; it was not switched here. Neither has been measured on Nigerian speech.
