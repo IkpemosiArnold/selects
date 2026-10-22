@@ -10,7 +10,7 @@ test("an iPhone without an audio decoder is told to update iOS", () => {
   const e = audioDecodeUnsupported({ navigator: { userAgent: OLD_IPHONE, maxTouchPoints: 5 } });
   assert.match(e.message, /iPhone's Safari is too old/);
   assert.match(e.hint, /iOS 26/);
-  assert.doesNotMatch(e.message + e.hint, /—/);
+  assert.doesNotMatch(e.message + e.hint, /\u2014/);
 });
 
 test("another browser without one is told to update the browser", () => {

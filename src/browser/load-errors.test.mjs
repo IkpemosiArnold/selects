@@ -77,5 +77,5 @@ test("no em dashes in any copy", () => {
     { name: "Error", message: "no available backend found" },
     { name: "Error", message: "x" },
   ].map((x) => explainModelError(x, { sizeBytes: 140 * MB }));
-  for (const e of all) assert.doesNotMatch(e.message + e.hint, /—/);
+  for (const e of all) assert.doesNotMatch(e.message + e.hint, /\u2014/);
 });
