@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@huggingface/transformers": "4.3.1",
+    "@mediabunny/mp3-encoder": "1.61.5",
     "@mediapipe/tasks-genai": "0.10.29",
     "@wllama/wllama": "3.8.1",
     "@wllama/wllama-compat": "3.8.1",

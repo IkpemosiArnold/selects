@@ -16,6 +16,7 @@ import { kitSourceFromCaptions, plainKit } from "../core/kit-core.mjs";
 import { applyDecisions, captureDecisions } from "../core/decisions.mjs";
 import { loadAsr, resolveSpeech, transcribePcm } from "./asr.js";
 import { canJudgeInTab } from "./devices.js";
+import { transcribeLight } from "./light-run.js";
 import { cachedFetch } from "./cache.js";
 import { faithfulRound, judgeShortlist, listwiseRound, makeKit, rankAndCurve } from "./judge.js";
 import { audioDecodeUnsupported, decodeAudio16k, loudnessFromPcm, makeThumbs, probeFile } from "./media.js";
@@ -54,7 +55,7 @@ const newId = () => {
 const LONG_SEC = 20 * 60;
 
 export class Engine {
-  constructor({ getJudge, getFallback, store, render = renderInWorker, inTabJudge = canJudgeInTab } = {}) {
+  constructor({ getJudge, getFallback, getTranscriber, store, render = renderInWorker, inTabJudge = canJudgeInTab } = {}) {
     this.store = store || createJobStore(typeof indexedDB !== "undefined" ? indexedDbBackend() : memoryBackend());
     // getJudge(): Promise<backend> from llm.js; the adapter swaps it for Private or Smart mode.
     // getFallback(): Promise<backend>, the on-device judge Smart mode falls back to.
@@ -62,6 +63,9 @@ export class Engine {
     this.getFallback = getFallback;
     // inTabJudge(): Promise<boolean>, false on phones and small-memory devices (devices.js)
     this.inTabJudge = inTabJudge;
+    // getTranscriber(): Promise<transcriber|null> (transcribers.js); a remote one is Light mode,
+    // null keeps whisper on this device
+    this.getTranscriber = getTranscriber;
     this.renderClip = render; // renderInWorker; tests pass a fake
     this.jobs = new Map(); // id -> { job, file, words, events, pcm, pcmSegs, captions, thumbs, clips, kits }
     // long videos keep their 16 kHz audio in 10-minute segments in OPFS, not in memory
@@ -129,9 +133,11 @@ export class Engine {
    */
   async chooseJudge(id, choice) {
     const r = this.rec(id);
-    if (!["retry", "preliminary", "download"].includes(choice)) throw Object.assign(new Error("Choose retry, preliminary or download."), { status: 400 });
+    if (!["retry", "preliminary", "download", "device"].includes(choice)) throw Object.assign(new Error("Choose retry, preliminary, download or device."), { status: 400 });
     if (r.active) throw Object.assign(new Error("This job is still running."), { status: 409, hint: "Wait for it to stop, then choose." });
-    r.judgeChoice = choice === "retry" ? null : choice;
+    // Light mode's free transcriber was busy (job.error.code "light_busy"): "device" transcribes here
+    if (choice === "device") r.asrChoice = "device";
+    else r.judgeChoice = choice === "retry" ? null : choice;
     this.start(id);
     return structuredClone(r.job);
   }
@@ -329,8 +335,11 @@ export class Engine {
       // made from this file with this speech model, precision, device setting and language (a
       // transcript saved before signatures existed is reused: those never varied in the browser)
       const speech = await resolveSpeech({ device: job.settings.asrDevice || "auto", speech: job.settings.asrModel || "auto" });
-      const tSig = transcriptSignature({ source: r.key, model: speech.model.id, language: "en", device: job.settings.asrDevice || "auto", dtype: speech.model.dtype });
-      if (has("transcribe") && (sigs.transcribe == null || sigs.transcribe === tSig)) {
+      const deviceSig = transcriptSignature({ source: r.key, model: speech.model.id, language: "en", device: job.settings.asrDevice || "auto", dtype: speech.model.dtype });
+      // Light mode: a remote transcriber (it also takes a transcript already made on this device)
+      const remote = this.getTranscriber ? await this.getTranscriber() : null;
+      const tSig = remote ? transcriptSignature({ source: r.key, model: `${remote.id}:${remote.model}`, language: "en" }) : deviceSig;
+      if (has("transcribe") && (sigs.transcribe == null || sigs.transcribe === tSig || (remote && sigs.transcribe === deviceSig))) {
         const [words, events, loudness, pcm, pcmSegs] = await Promise.all(["words", "events", "loudness", "pcm", "pcmSegs"].map((n) => this.store.part(r.key, n)));
         r.words = words || [];
         r.events = events || [];
@@ -339,6 +348,12 @@ export class Engine {
         job.loudness = loudness || null;
         if (r.words.length) this.emit(id, "words", r.words);
         reuse("transcribe", `${r.words.length} words`);
+      } else if (remote) {
+        needFile();
+        begin("transcribe");
+        const choice = r.asrChoice ?? null;
+        r.asrChoice = null;
+        await transcribeLight(this, r, remote, { progress, finish, sig: tSig, choice });
       } else if (job.source.duration > LONG_SEC) {
         needFile();
         begin("transcribe");

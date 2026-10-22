@@ -5,6 +5,9 @@
 //   const api = createBrowserApi();            // Private mode: everything in this tab
 //   api.setMode("smart", { key });             // Smart mode with the user's own key
 //   api.setMode("smart", { proxyUrl });        // Smart mode through server-proxy
+//   api.setMode("light");                      // Light mode: audio transcribed by the free
+//                                              // hosted whisper, judged as in Smart mode
+//   api.setMode("light", { groqKey });         // Light mode with the person's own free Groq key
 //
 // Differences from the HTTP client are listed in src/browser/adapter.md.
 import { Engine } from "./engine.js";
@@ -13,8 +16,11 @@ import { MODELS, SMART_MODELS, speechModel } from "./models.js";
 import { runtimes } from "./devices.js";
 import { COPY } from "./copy.js";
 import { enableNotifications, KEEP_OPEN, registerApp } from "./device.js";
+import { groqKeySender, proxySender, remoteTranscriber } from "./transcribers.js";
+import { isIos, speechModelCached, suggestMode, wakeProxy } from "./light.js";
 
 const KEY_STORE = "selects.geminiKey"; // sessionStorage only: gone when the tab closes
+const GROQ_STORE = "selects.groqKey"; // Light mode's own-key option, also sessionStorage only
 
 const wrap = async (fn) => {
   try {
@@ -59,6 +65,10 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
   let state = { mode, smart: { proxyUrl: BUILT_PROXY, ...smart }, prefer };
   let backend = null;
   let backendKey = null;
+  // wake the free proxy while the person picks a file (it sleeps when idle); never awaited here
+  const woke = state.smart.proxyUrl && typeof window !== "undefined" ? wakeProxy(state.smart.proxyUrl) : Promise.resolve({ ok: false, light: false });
+  let transcriber = null;
+  let transcriberKey = null;
 
   const savedKey = () => {
     try {
@@ -67,12 +77,33 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
       return null;
     }
   };
+  const savedGroq = () => {
+    try {
+      return sessionStorage.getItem(GROQ_STORE);
+    } catch {
+      return null;
+    }
+  };
+
+  /** Light mode's transcriber (the person's own Groq key first, else the proxy), or null for whisper on this device. */
+  async function getTranscriber() {
+    if (state.mode !== "light") return null;
+    const groq = state.smart.groqKey || savedGroq();
+    const k = JSON.stringify([groq ? "key" : "proxy", state.smart.proxyUrl || null]);
+    if (transcriber && transcriberKey === k) return transcriber;
+    if (groq) transcriber = remoteTranscriber({ sender: groqKeySender(groq) });
+    else if (state.smart.proxyUrl) transcriber = remoteTranscriber({ sender: proxySender(state.smart.proxyUrl) });
+    else return null;
+    transcriberKey = k;
+    return transcriber;
+  }
 
   async function getJudge() {
     const s = state;
     const k = JSON.stringify([s.mode, s.prefer, s.smart.proxyUrl || null, s.smart.model || null, !!(s.smart.key || savedKey())]);
     if (backend && backendKey === k) return backend;
-    if (s.mode === "smart") {
+    // Light mode judges as Smart mode does (the text of the shortlist, never audio or video)
+    if (s.mode === "smart" || s.mode === "light") {
       const key = s.smart.key || savedKey();
       if (key) backend = geminiKeyBackend({ key, model: s.smart.model || SMART_MODELS[0] });
       else if (s.smart.proxyUrl) backend = proxyBackend({ url: s.smart.proxyUrl, model: s.smart.model || null });
@@ -85,7 +116,7 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
     return backend;
   }
 
-  const engine = new Engine({ getJudge, getFallback: () => privateBackend({ prefer: state.prefer }) });
+  const engine = new Engine({ getJudge, getFallback: () => privateBackend({ prefer: state.prefer }), getTranscriber });
 
   return {
     mock: false,
@@ -93,10 +124,21 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
     engine,
     copy: COPY,
 
-    /** "private" (default: the video, audio and transcript stay in this tab) or "smart". */
+    /** "private" (default: the video, audio and transcript stay in this tab), "light" or "smart". */
     setMode(next, opts = {}) {
       const given = Object.fromEntries(Object.entries(opts).filter(([, v]) => v != null && v !== ""));
       state = { ...state, mode: next, smart: { ...state.smart, ...given } };
+      if (opts.groqKey) {
+        try {
+          sessionStorage.setItem(GROQ_STORE, opts.groqKey);
+        } catch {}
+      }
+      if (opts.groqKey === null) {
+        delete state.smart.groqKey;
+        try {
+          sessionStorage.removeItem(GROQ_STORE);
+        } catch {}
+      }
       if (opts.key) {
         try {
           sessionStorage.setItem(KEY_STORE, opts.key);
@@ -109,7 +151,17 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
       }
       return this.getMode();
     },
-    getMode: () => ({ mode: state.mode, hasKey: !!(state.smart.key || savedKey()), proxyUrl: state.smart.proxyUrl || null, model: state.smart.model || null, prefer: state.prefer }),
+    getMode: () => ({ mode: state.mode, hasKey: !!(state.smart.key || savedKey()), hasGroqKey: !!(state.smart.groqKey || savedGroq()), proxyUrl: state.smart.proxyUrl || null, model: state.smart.model || null, prefer: state.prefer }),
+    /**
+     * Which mode to suggest on this connection and device (light.js suggestMode): Light on
+     * Data Saver, 2G or 3G, under 1.5 Mbps, a speech model over a minute away, or an iPhone;
+     * Private whenever the speech model is already in this browser.
+     */
+    async suggestMode() {
+      const [rt, cached, woken] = await Promise.all([runtimes({ prefer: state.prefer }), speechModelCached(MODELS.whisper.id), Promise.race([woke, new Promise((r) => setTimeout(() => r(null), 4000))])]);
+      const lightAvailable = !!state.smart.proxyUrl && woken?.light !== false;
+      return suggestMode({ connection: globalThis.navigator?.connection, ios: isIos(), asrCached: cached, asrBytes: MODELS.whisper.bytes[rt.asr], lightAvailable });
+    },
     preferBackend(p) {
       state = { ...state, prefer: p };
     },
