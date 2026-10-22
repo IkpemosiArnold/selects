@@ -104,11 +104,11 @@ async function createApi() {
   return createHttpApi();
 }
 
-/** Private or Smart, remembered per browser (the Gemini key itself stays in the tab only). */
+/** Private, Light or Smart, remembered per browser once chosen (keys stay in the tab only). */
 export function readEngineMode() {
   try {
     const m = localStorage.getItem("selects-engine-mode");
-    return m === "smart" || m === "private" ? m : null;
+    return m === "smart" || m === "private" || m === "light" ? m : null;
   } catch {
     return null;
   }

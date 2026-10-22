@@ -9,6 +9,14 @@ export const COPY = {
     name: "Private",
     line: "Everything runs in this tab. Your video, its audio and its transcript stay on this device.",
   },
+  lightMode: {
+    name: "Light",
+    line: "Light mode sends your audio, not your video, to be transcribed.",
+    detail: "For slow or costly data: about half a megabyte of compressed audio for a 4-minute video, instead of a 140 MB speech model. The transcript's shortlisted passages are then judged as in Smart mode.",
+    busy: "The free transcriber is busy right now. Use your own free key, or transcribe on this phone.",
+    keyLine: "Optional: a free Groq key from console.groq.com (no card needed). It stays in this tab and goes only to Groq.",
+    waking: "Getting ready...",
+  },
   smartMode: {
     name: "Smart",
     line: "Smart mode sends the transcript text of the 8 shortlisted passages to Google's Gemma model. Your video and audio stay on this device.",

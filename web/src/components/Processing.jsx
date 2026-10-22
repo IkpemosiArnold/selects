@@ -154,6 +154,7 @@ export default function Processing({ job, words, onResume }) {
   const needsFile = isErr && !!job.error?.needsFile;
   const choices = isErr ? job.error?.choices || null : null; // Smart mode is not answering
   const [choosing, setChoosing] = useState(null);
+  const [groqKey, setGroqKey] = useState(""); // Light mode's "use your own free key" choice
   const fileRef = useRef(null);
 
   let headline, sub;
@@ -175,6 +176,10 @@ export default function Processing({ job, words, onResume }) {
     // the browser engine downloads its models the first time, then keeps them
     headline = dl.key === "judge" ? "Downloading Gemma, once." : "Downloading the speech model, once.";
     sub = `${mb(dl.loaded)} of ${mb(dl.total)}. Later videos use the copy kept in this browser. ${leave}`;
+  } else if (job.stage === "transcribing" && /Getting ready/.test(tr.note || "")) {
+    // Light mode: the free transcriber sleeps when idle (it was woken when the page opened)
+    headline = "Getting ready...";
+    sub = "The free transcriber sleeps when nobody uses it, so this can take up to a minute.";
   } else if (job.stage === "transcribing") {
     headline = "Transcribing what's said.";
     sub = eta != null ? `${cap(aboutMinutes(eta))} left. ${speedText} ${leave}` : `Timing the speed on this ${api.browser ? "device" : "laptop"}. ${leave}`;
@@ -281,13 +286,29 @@ export default function Processing({ job, words, onResume }) {
               <div className="proc-choices" role="group" aria-label="What to do now">
                 {choices.map((c) => (
                   <div key={c.id} className="proc-choice">
+                    {c.needsKey && (
+                      <input
+                        className="input mono"
+                        type="password"
+                        value={groqKey}
+                        onChange={(e) => setGroqKey(e.target.value)}
+                        placeholder="Paste a key from console.groq.com"
+                        aria-label="Your own free Groq key"
+                        autoComplete="off"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                      />
+                    )}
                     <button
                       className={"btn btn-big" + (c.id === "retry" ? " btn-primary" : "")}
-                      disabled={!!choosing}
+                      disabled={!!choosing || (c.needsKey && !groqKey.trim())}
                       onClick={async () => {
                         setChoosing(c.id);
                         try {
-                          await onResume({ judge: c.id });
+                          // the key is kept in this tab only and sent only to Groq; then the job carries on
+                          if (c.needsKey) api.setMode("light", { groqKey: groqKey.trim() });
+                          await onResume({ judge: c.needsKey ? "retry" : c.id });
                         } catch (err) {
                           setFileErr(err.message);
                         } finally {

@@ -3,10 +3,11 @@
 // free Gemma API, with the person's own key or through the Selects proxy. The copy says
 // exactly what leaves the device, and what downloads the first time.
 import { useEffect, useState } from "react";
-import { api, saveEngineMode } from "../lib/api.js";
+import { api, readEngineMode, saveEngineMode } from "../lib/api.js";
 
 export const PRIVATE_LINE = "Everything runs in this tab. Nothing leaves your device.";
 export const SMART_LINE = "The words from the shortlisted moments go to Google's free Gemma API, which may use them to improve its products. Your video never leaves your device.";
+export const LIGHT_LINE = "Light mode sends your audio, not your video, to be transcribed.";
 export const LAPTOP_LINE = "On a laptop, Selects can also blur faces and handle long videos.";
 
 const gb = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : `${Math.round(b / 1e6)} MB`);
@@ -17,9 +18,19 @@ const plainLabel = (l) => String(l || "").replace(/\s*\(.*?\)\s*/g, " ").replace
 export function useEngine() {
   const [mode, setModeState] = useState(() => api.getMode?.() || { mode: "private" });
   const [dl, setDl] = useState(null);
+  const [suggested, setSuggested] = useState(null);
   useEffect(() => {
     let alive = true;
     api.downloads?.().then((d) => alive && setDl(d)).catch(() => alive && setDl({ items: [], caps: null }));
+    // Light mode is suggested on a slow or metered connection and on iPhones, until the person
+    // picks a mode themselves; Private stays the default when the speech model is already here
+    if (!readEngineMode()) {
+      api.suggestMode?.().then((s) => {
+        if (!alive || !s) return;
+        setSuggested(s);
+        if (s.mode === "light" && !readEngineMode()) setModeState(api.setMode("light"));
+      }).catch(() => {});
+    }
     return () => {
       alive = false;
     };
@@ -29,13 +40,15 @@ export function useEngine() {
     saveEngineMode(next);
     setModeState(m);
   };
-  return { mode, setMode, downloads: dl };
+  return { mode, setMode, downloads: dl, suggested };
 }
 
 export default function EnginePanel({ engine }) {
-  const { mode, setMode, downloads } = engine;
+  const { mode, setMode, downloads, suggested } = engine;
   const smart = mode.mode === "smart";
+  const light = mode.mode === "light";
   const [key, setKey] = useState("");
+  const [groq, setGroq] = useState("");
   const caps = downloads?.caps;
   const judge = downloads?.items?.find((i) => i.id === "gemma4" || i.id === "gemma3");
   const whisper = downloads?.items?.find((i) => i.id === "whisper");
@@ -49,15 +62,50 @@ export default function EnginePanel({ engine }) {
     <fieldset className="engine">
       <legend className="field-label">Where Gemma runs</legend>
       <div className="seg seg-light seg-wide" role="radiogroup" aria-label="Where Gemma runs">
-        {[["private", "Private"], ["smart", "Smart"]].map(([m, l]) => (
+        {[["private", "Private"], ["light", "Light"], ["smart", "Smart"]].map(([m, l]) => (
           <button key={m} type="button" role="radio" aria-checked={mode.mode === m} className={"seg-btn" + (mode.mode === m ? " is-on" : "")} onClick={() => setMode(m)}>
             {l}
           </button>
         ))}
       </div>
-      <p className="engine-line">{smart ? SMART_LINE : PRIVATE_LINE}</p>
+      <p className="engine-line">{smart ? SMART_LINE : light ? LIGHT_LINE : PRIVATE_LINE}</p>
 
-      {smart ? (
+      {light ? (
+        <div className="engine-smart">
+          {suggested?.mode === "light" && suggested.reasons?.length > 0 && (
+            <p className="field-hint">Suggested because {suggested.reasons.join(" and ")}. Private mode is one tap away.</p>
+          )}
+          <p className="field-hint">About half a megabyte of audio for a 4-minute video, instead of downloading a speech model. The words of the shortlisted moments then go to Google's free Gemma API, as in Smart mode.</p>
+          {mode.hasGroqKey ? (
+            <p className="field-hint">
+              Using your Groq key, kept in this tab only.{" "}
+              <button type="button" className="linkish inline" onClick={() => setMode("light", { groqKey: null })}>
+                Forget the key
+              </button>
+            </p>
+          ) : (
+            <div className="engine-key">
+              <label className="field">
+                <span className="field-label">Your own free Groq key (optional)</span>
+                <input
+                  className="input mono"
+                  type="password"
+                  value={groq}
+                  onChange={(e) => setGroq(e.target.value)}
+                  placeholder="Paste a key from console.groq.com"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  enterKeyHint="done"
+                />
+              </label>
+              <button className="btn" type="button" disabled={!groq.trim()} onClick={() => { setMode("light", { groqKey: groq.trim() }); setGroq(""); }}>Use this key</button>
+              <p className="field-hint">Without a key, Selects uses its free shared transcriber, which does not keep the audio or the words. Your key stays in this tab and goes only to Groq.</p>
+            </div>
+          )}
+        </div>
+      ) : smart ? (
         <div className="engine-smart">
           {mode.hasKey ? (
             <p className="field-hint">

@@ -125,7 +125,8 @@ export default function NewJob() {
   const [file, setFile] = useState(null);
   const [saved, setSaved] = useState([]);
   const engine = inBrowser ? useEngine() : null; // eslint-disable-line react-hooks/rules-of-hooks
-  const smart = engine?.mode?.mode === "smart";
+  // Light mode judges as Smart mode does, through Google's free Gemma API
+  const smart = engine?.mode?.mode === "smart" || engine?.mode?.mode === "light";
   // The list carries summaries; the stills and clips come from each job (a few small requests).
   const [full, setFull] = useState({});
   useEffect(() => {
