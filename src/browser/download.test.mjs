@@ -25,7 +25,7 @@ const sha = (b) => createHash("sha256").update(b).digest("hex");
  * A fake Hugging Face: the resolve URL redirects to a CDN URL; the CDN answers closed byte
  * ranges with 206. `plan` can fail a given request: { at: n, kind: "throw" | "midway" | "status", status }.
  */
-function fakeServer(file, { etag = sha(file), ignoreRange = false, fail = [], changeAt = null } = {}) {
+function fakeServer(file, { etag = sha(file), ignoreRange = false, redirectDropsRange = false, fail = [], changeAt = null } = {}) {
   const log = [];
   let n = 0;
   let body = file;
@@ -43,8 +43,15 @@ function fakeServer(file, { etag = sha(file), ignoreRange = false, fail = [], ch
     if (f?.kind === "status") return new Response("busy", { status: f.status });
     const m = range && /^bytes=(\d+)-(\d+)$/.exec(range);
     const headers = { etag: `"${tag}"`, "content-type": "application/octet-stream" };
-    if (!m || ignoreRange) {
-      return cdn(new Response(body.slice(), { status: 200, headers: { ...headers, "content-length": String(body.length) } }));
+    // WebKit, following Hugging Face's redirect a second time, sometimes loses the Range header
+    if (!m || ignoreRange || (redirectDropsRange && url === URL1)) {
+      let whole = body.slice();
+      if (f?.kind === "midway") {
+        const half = whole.subarray(0, Math.floor(whole.length / 2));
+        let sent = false;
+        whole = new ReadableStream({ pull(c) { if (!sent) c.enqueue(half), (sent = true); else c.error(new TypeError("Load failed")); } });
+      }
+      return cdn(new Response(whole, { status: 200, headers: { ...headers, "content-length": String(body.length) } }));
     }
     const a = +m[1];
     const b = Math.min(+m[2], body.length - 1);
@@ -192,4 +199,25 @@ test("small files are retried after a dropped connection or a busy server, not a
   assert.equal((await fetchWithRetry("https://x/y", {}, { fetchImpl: missing, sleep: async () => {} })).status, 404);
   assert.equal(m, 1);
   await assert.rejects(fetchWithRetry("https://x/y", {}, { fetchImpl: async () => { throw new TypeError("Load failed"); }, retries: 2, sleep: async () => {} }), (e) => e.name === "TypeError");
+});
+
+test("when the redirect loses the Range header, ranges go to the CDN address instead", async () => {
+  const file = bytes(3 * MB);
+  const srv = fakeServer(file, { redirectDropsRange: true, fail: [{ at: 0, kind: "midway" }] });
+  const notes = [];
+  const blob = await resumableDownload(URL1, { store: memoryStore(), fetchImpl: srv.fetchImpl, onNote: (n) => notes.push(n.event), ...fast });
+  assert.deepEqual(new Uint8Array(await blob.arrayBuffer()), file);
+  assert.ok(srv.log.slice(1).every((r) => r.url === "https://cdn.example/file?sig=1"), "after the first answer, only the CDN address");
+  assert.ok(!notes.includes("restart"), "nothing stored is thrown away");
+});
+
+test("a whole-file answer that drops part way keeps what arrived; the next whole-file answer skips it", async () => {
+  const file = bytes(3 * MB);
+  const srv = fakeServer(file, { ignoreRange: true, fail: [{ at: 0, kind: "midway" }] });
+  const notes = [];
+  const seen = [];
+  const blob = await resumableDownload(URL1, { store: memoryStore(), fetchImpl: srv.fetchImpl, onNote: (n) => notes.push(n.event), onProgress: (p) => seen.push(p.loaded), ...fast });
+  assert.deepEqual(new Uint8Array(await blob.arrayBuffer()), file);
+  assert.ok(!notes.includes("restart"));
+  for (let i = 1; i < seen.length; i++) assert.ok(seen[i] >= seen[i - 1], "progress never goes backwards");
 });

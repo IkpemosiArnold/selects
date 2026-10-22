@@ -97,6 +97,7 @@ async function download(url, { store, fetchImpl = (...a) => fetch(...a), chunkBy
     return store.blob(url);
   }
   let src = null; // the CDN address the first range was redirected to (signed, so kept in memory only)
+  let triedCdn = false;
   let failures = 0;
   let lastError = null;
   const progress = (loaded) => onProgress?.({ loaded, total: meta?.size ?? 0, cached: false });
@@ -182,11 +183,20 @@ async function download(url, { store, fetchImpl = (...a) => fetch(...a), chunkBy
       await restart(`changed: etag ${meta.etag} -> ${tag}, size ${meta.size} -> ${size}`);
       continue;
     }
-    if (res.status === 200 && have > 0) {
-      note("restart", { why: "the server sent the whole file instead of a range" });
-      await store.reset(url); // the server ignored the range: this answer is the whole file from byte 0
-      have = 0;
-    } else if (start !== have) {
+    // WebKit, following Hugging Face's redirect again, can drop the Range header and get the
+    // whole file back (seen in the Safari 18.4 engine; curl gets 206 every time). The CDN
+    // address the redirect leads to honours ranges, so ask it directly, once.
+    if (res.status === 200 && !triedCdn && res.url && res.url !== url) {
+      triedCdn = true;
+      src = res.url;
+      await res.body?.cancel().catch(() => {});
+      note("redirect", { why: "the redirect lost the range; asking the CDN address directly" });
+      continue;
+    }
+    // a whole-file answer while part is stored: same file (checked above), so skip what is
+    // stored and keep the rest, instead of throwing the stored part away
+    const skipBytes = res.status === 200 ? have : 0;
+    if (res.status !== 200 && start !== have) {
       await res.body?.cancel().catch(() => {});
       await backoff(new Error(`Asked for byte ${have}, got byte ${start}.`));
       continue;
@@ -196,25 +206,50 @@ async function download(url, { store, fetchImpl = (...a) => fetch(...a), chunkBy
       await store.setMeta(url, meta);
       await checkRoom();
     }
-    if (res.url && res.url !== url && res.status === 206) src = res.url;
+    if (res.url && res.url !== url) src = res.url;
 
-    // read what arrives, keeping it even if the connection drops part way
-    const parts = [];
+    // read what arrives, keeping it even if the connection drops part way; a long answer is
+    // written out every chunkBytes so it never sits whole in memory
+    let skip = skipBytes;
+    let parts = [];
+    let pending = 0;
     let got = 0;
+    const flush = async () => {
+      if (!pending) return;
+      const bytes = concat(parts, pending);
+      parts = [];
+      pending = 0;
+      await append(bytes);
+    };
     const reader = res.body.getReader();
     let readError = null;
-    try {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        parts.push(value);
-        got += value.length;
-        progress(have + got);
+    for (;;) {
+      // only the network read counts as a dropped connection; a failed write (no room) stops at once
+      let chunk;
+      try {
+        chunk = await reader.read();
+      } catch (e) {
+        readError = e;
+        break;
       }
-    } catch (e) {
-      readError = e;
+      const { done, value } = chunk;
+      if (done) break;
+      let v = value;
+      if (skip) {
+        if (v.length <= skip) {
+          skip -= v.length;
+          continue;
+        }
+        v = v.subarray(skip);
+        skip = 0;
+      }
+      parts.push(v);
+      pending += v.length;
+      got += v.length;
+      progress(have + pending);
+      if (pending >= chunkBytes) await flush();
     }
-    if (got) await append(concat(parts, got));
+    await flush();
     if (meta.size == null && !readError) {
       meta.size = have; // a whole-file answer without a length: done when the body ends
       await store.setMeta(url, meta);
