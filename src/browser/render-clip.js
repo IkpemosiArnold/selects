@@ -11,6 +11,28 @@ import { captionOptions, captionTimeline, captionTop, motionSize, paintCaption, 
 
 export const FAMILIES = ["Selects Caption", "Selects Caption Fallback"];
 
+/**
+ * Safari's (WebKit's) H.264 encoder in latencyMode "quality" never returns a frame in Safari
+ * 27.0 and 27.0.1 (mediabunny issue 541, WebKit bug fixed later); "realtime" works on every
+ * profile. Other engines keep "quality".
+ */
+export function encoderLatencyMode(ua = globalThis.navigator?.userAgent || "") {
+  const webkit = /AppleWebKit/.test(ua) && !/Chrome\/|Chromium\/|Edg\//.test(ua);
+  return webkit ? "realtime" : "quality";
+}
+
+/** How long one frame may sit in the encoder before Selects says it has stopped responding. */
+export const ENCODER_STALL_SEC = 30;
+
+/** p, or a rejection when it has not settled after sec seconds (an encoder that hangs). */
+export function withStallLimit(p, sec = ENCODER_STALL_SEC) {
+  let t;
+  const stall = new Promise((_, reject) => {
+    t = setTimeout(() => reject(Object.assign(new Error("This browser's video encoder stopped responding."), { hint: "Update the browser (Safari 27.0 has a known encoder fault), then render again, or render on a computer with Chrome or Edge.", code: "encoder_stalled" })), sec * 1000);
+  });
+  return Promise.race([p, stall]).finally(() => clearTimeout(t));
+}
+
 /** Load the caption fonts into this realm (window or worker). */
 export async function loadFonts(urls) {
   const set = self.fonts || globalThis.document?.fonts;
@@ -88,7 +110,7 @@ export async function renderClip({ file, source, candidate, cues, preset = "shor
     const output = new Output({ format: new Mp4OutputFormat({ fastStart: "in-memory" }), target: new BufferTarget() });
     const canvas = new OffscreenCanvas(W, H);
     const ctx = canvas.getContext("2d", { alpha: false });
-    const vsrc = new CanvasSource(canvas, { codec: "avc", bitrate: preset === "preview" ? 2.5e6 : 6e6, keyFrameInterval: 2, latencyMode: "quality" });
+    const vsrc = new CanvasSource(canvas, { codec: "avc", bitrate: preset === "preview" ? 2.5e6 : 6e6, keyFrameInterval: 2, latencyMode: encoderLatencyMode() });
     output.addVideoTrack(vsrc, { frameRate: Math.min(P.fps, Math.round(source.fps || P.fps)) });
     let asrc = null;
     if (atrack && audioCodec) {
@@ -153,7 +175,7 @@ export async function renderClip({ file, source, candidate, cues, preset = "shor
       let pending = null; // the previous frame: its duration runs to the next kept frame
       const flush = async (nextAt) => {
         if (!pending) return;
-        await vsrc.add(pending, Math.max(1e-3, nextAt - pending));
+        await withStallLimit(vsrc.add(pending, Math.max(1e-3, nextAt - pending)));
         frames++;
       };
       for await (const wc of sink.canvases(start, end)) {
@@ -203,7 +225,7 @@ export async function renderClip({ file, source, candidate, cues, preset = "shor
     })();
 
     await Promise.all([videoDone, audioDone]);
-    await output.finalize();
+    await withStallLimit(output.finalize(), ENCODER_STALL_SEC * 2);
     onProgress?.({ progress: 1 });
     return {
       mp4: output.target.buffer,

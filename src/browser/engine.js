@@ -14,10 +14,10 @@ import { snapTrim, toSentences } from "../core/sentences.mjs";
 import { judgeIdentity, judgmentSignature, kitSignature, selectionSignature, transcriptHash, transcriptSignature } from "../core/signatures.mjs";
 import { kitSourceFromCaptions, plainKit } from "../core/kit-core.mjs";
 import { applyDecisions, captureDecisions } from "../core/decisions.mjs";
-import { loadAsr, transcribePcm } from "./asr.js";
+import { loadAsr, resolveSpeech, transcribePcm } from "./asr.js";
 import { cachedFetch } from "./cache.js";
 import { faithfulRound, judgeShortlist, listwiseRound, makeKit, rankAndCurve } from "./judge.js";
-import { decodeAudio16k, loudnessFromPcm, makeThumbs, probeFile } from "./media.js";
+import { audioDecodeUnsupported, decodeAudio16k, loudnessFromPcm, makeThumbs, probeFile } from "./media.js";
 import { decodeAudioSegments, longVideoNote, pcmStore } from "./pcm.js";
 import { MODELS } from "./models.js";
 import { PROMPTS } from "./prompts.js";
@@ -35,6 +35,7 @@ export const DEFAULT_SETTINGS = {
   model: null, k: 5, madeFor: "shorts", faithful: "model", preset: "shorts", judgeN: 8, listwise: true,
   credit: null, license: null, sourceUrl: null, mode: "clips", language: "en", captions: true, kit: "model",
   asrDevice: "auto", // "auto" (WebGPU when there is an adapter), "webgpu" or "wasm"
+  asrModel: "auto", // "auto" (tiny.en on phones and small-memory devices, base.en elsewhere), "base" or "tiny"
 };
 
 const now = () => new Date().toISOString();
@@ -298,6 +299,9 @@ export class Engine {
         begin("probe");
         job.source = { ...job.source, ...(await probeFile(r.file)) };
         if (!job.source.audioStreams?.length) throw Object.assign(new Error("This video has no audio track."), { hint: "Selects finds clips from speech. Choose a video with someone talking." });
+        // say so at the first step, before any download, when this browser cannot read sound at all
+        const noDecoder = audioDecodeUnsupported();
+        if (noDecoder) throw noDecoder;
         finish("probe", `${Math.round(job.source.duration)} s, ${job.source.uprightWidth || "?"}x${job.source.uprightHeight || "?"}`);
         await this.save(r, "probe");
       }
@@ -319,7 +323,8 @@ export class Engine {
       // 2. transcribe: decode audio, load whisper, run it window by window. Reused when it was
       // made from this file with this speech model, precision, device setting and language (a
       // transcript saved before signatures existed is reused: those never varied in the browser)
-      const tSig = transcriptSignature({ source: r.key, model: MODELS.whisper.id, language: "en", device: job.settings.asrDevice || "auto", dtype: MODELS.whisper.dtype });
+      const speech = await resolveSpeech({ device: job.settings.asrDevice || "auto", speech: job.settings.asrModel || "auto" });
+      const tSig = transcriptSignature({ source: r.key, model: speech.model.id, language: "en", device: job.settings.asrDevice || "auto", dtype: speech.model.dtype });
       if (has("transcribe") && (sigs.transcribe == null || sigs.transcribe === tSig)) {
         const [words, events, loudness, pcm, pcmSegs] = await Promise.all(["words", "events", "loudness", "pcm", "pcmSegs"].map((n) => this.store.part(r.key, n)));
         r.words = words || [];
@@ -332,7 +337,7 @@ export class Engine {
       } else if (job.source.duration > LONG_SEC) {
         needFile();
         begin("transcribe");
-        await this.transcribeLong(r, { progress, finish, sig: tSig });
+        await this.transcribeLong(r, { progress, finish, sig: tSig, model: speech.model });
       } else {
         needFile();
         begin("transcribe");
@@ -345,6 +350,7 @@ export class Engine {
         const files = {};
         const asr = await loadAsr({
           device: job.settings.asrDevice || "auto",
+          model: speech.model,
           onDownload: (m) => {
             if (m.total) files[m.file] = { loaded: m.loaded, total: m.total };
             const loaded = Object.values(files).reduce((a, f) => a + f.loaded, 0);
@@ -367,7 +373,7 @@ export class Engine {
           },
         });
         job.loudness = loudnessFromPcm(r.pcm);
-        job.asr = { provider: "transformers.js", model: MODELS.whisper.id, device: asr.device, language: "en", decodeSec, loadSec: asr.loadSec, sec: res.wallSec, speed: +(job.source.duration / Math.max(0.1, res.wallSec)).toFixed(2), chunks: res.chunks ?? null };
+        job.asr = { provider: "transformers.js", model: speech.model.id, device: asr.device, language: "en", decodeSec, loadSec: asr.loadSec, sec: res.wallSec, speed: +(job.source.duration / Math.max(0.1, res.wallSec)).toFixed(2), chunks: res.chunks ?? null };
         // the language check the browser can afford: lid-lite-5 reads the English text for
         // signs of Nigerian languages or Pidgin, which the desktop app's accent model handles
         job.language = await this.languageNote(r.words);
@@ -450,7 +456,7 @@ export class Engine {
    * segment (38 MB of PCM) however long the video is, and a job that stops part way (a
    * closed tab, a frozen phone) resumes at the next segment.
    */
-  async transcribeLong(r, { progress, finish, sig }) {
+  async transcribeLong(r, { progress, finish, sig, model = MODELS.whisper }) {
     const job = r.job;
     const dur = job.source.duration;
     const partial = (await this.store.part(r.key, "asrPartial").catch(() => null)) || null;
@@ -464,6 +470,7 @@ export class Engine {
     const files = {};
     const asr = await loadAsr({
       device: job.settings.asrDevice || "auto",
+      model,
       onDownload: (m) => {
         if (m.total) files[m.file] = { loaded: m.loaded, total: m.total };
         const loaded = Object.values(files).reduce((a, f) => a + f.loaded, 0);
@@ -500,7 +507,7 @@ export class Engine {
     r.pcm = null;
     r.pcmSegs = segs;
     job.loudness = { step: 0.5, db };
-    job.asr = { provider: "transformers.js", model: MODELS.whisper.id, device: asr.device, language: "en", decodeSec: +decodeSec.toFixed(1), loadSec: asr.loadSec, sec: +wallSec.toFixed(1), speed: +((dur - startAt) / Math.max(0.1, wallSec)).toFixed(2), segments: segs.length, pcmIn: this.pcm.kind };
+    job.asr = { provider: "transformers.js", model: model.id, device: asr.device, language: "en", decodeSec: +decodeSec.toFixed(1), loadSec: asr.loadSec, sec: +wallSec.toFixed(1), speed: +((dur - startAt) / Math.max(0.1, wallSec)).toFixed(2), segments: segs.length, pcmIn: this.pcm.kind };
     job.language = await this.languageNote(r.words);
     finish("transcribe", `${r.words.length} words, ${job.asr.speed}x real time on ${where}, in ${segs.length} parts`);
     await this.save(r, "transcribe", { words: r.words, events: r.events, loudness: job.loudness, pcmSegs: segs }, { transcribe: sig });

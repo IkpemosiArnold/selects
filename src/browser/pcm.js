@@ -4,6 +4,7 @@
 // memory, and a job that stops part way resumes at the next segment. Measured in headless
 // Chrome on the 2017 MacBook Pro: see notes/timings.md, "Long videos".
 import { ALL_FORMATS, AudioSampleSink, BlobSource, Input } from "mediabunny";
+import { audioDecodeUnsupported } from "./media.js";
 
 export const RATE = 16000;
 export const SEGMENT_SEC = 600;
@@ -70,7 +71,7 @@ export async function* decodeAudioSegments(file, { segmentSec = SEGMENT_SEC, sta
   try {
     const track = await input.getPrimaryAudioTrack();
     if (!track) throw Object.assign(new Error("This video has no audio track, so there is nothing to transcribe."), { hint: "Choose a video with speech in it." });
-    if (!(await track.canDecode())) throw Object.assign(new Error("This browser cannot decode the video's audio."), { hint: "Try Chrome or Edge, or convert the video to MP4 (H.264 and AAC)." });
+    if (!(await track.canDecode())) throw audioDecodeUnsupported() || Object.assign(new Error("This browser cannot decode the video's audio."), { hint: "Try Chrome or Edge, or convert the video to MP4 (H.264 and AAC)." });
     const total = duration || (await input.computeDuration());
     const sink = new AudioSampleSink(track);
     let index = firstIndex;

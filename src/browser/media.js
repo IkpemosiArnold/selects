@@ -5,6 +5,19 @@ import { ALL_FORMATS, AudioSampleSink, BlobSource, CanvasSink, Input } from "med
 
 export const ASR_RATE = 16000;
 
+/**
+ * An Error when this browser has no WebCodecs audio decoder (Safari before 26, which older
+ * iPhones cannot update past), or null. Selects reads every video's sound through it.
+ */
+export function audioDecodeUnsupported(g = globalThis) {
+  if (typeof g.AudioDecoder !== "undefined") return null;
+  const ua = g.navigator?.userAgent || "";
+  const apple = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && (g.navigator?.maxTouchPoints || 0) > 1);
+  return apple
+    ? Object.assign(new Error("This iPhone's Safari is too old for Selects Web."), { hint: "Selects Web needs iOS 26 or later to read a video's sound. Update in Settings, General, Software Update, or use Selects on a computer.", code: "no_audio_decoder" })
+    : Object.assign(new Error("This browser is too old to read the video's sound."), { hint: "Update the browser, or use a recent Chrome, Edge or Safari (26 or later).", code: "no_audio_decoder" });
+}
+
 export function openInput(file) {
   return new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
 }
@@ -80,7 +93,7 @@ export async function decodeAudio16k(file, { onProgress, duration } = {}) {
   try {
     const track = await input.getPrimaryAudioTrack();
     if (!track) throw Object.assign(new Error("This video has no audio track, so there is nothing to transcribe."), { hint: "Choose a video with speech in it." });
-    if (!(await track.canDecode())) throw Object.assign(new Error("This browser cannot decode the video's audio."), { hint: "Try Chrome or Edge, or convert the video to MP4 (H.264 and AAC)." });
+    if (!(await track.canDecode())) throw audioDecodeUnsupported() || Object.assign(new Error("This browser cannot decode the video's audio."), { hint: "Try Chrome or Edge, or convert the video to MP4 (H.264 and AAC)." });
     const total = duration || (await input.computeDuration());
     const sink = new AudioSampleSink(track);
     const parts = [];
