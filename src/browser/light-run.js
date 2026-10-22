@@ -11,21 +11,46 @@
 import { splitNonSpeech } from "../core/nonspeech.mjs";
 import { decodeAudio16k, loudnessFromPcm } from "./media.js";
 import { decodeAudioSegments } from "./pcm.js";
+import { growingPcm } from "./speech-chunks.js";
+import { dueForPicks, preliminaryPicks } from "./preliminary.js";
 import { MODELS } from "./models.js";
 import { deviceTranscriber } from "./transcribers.js";
 import { speechModelCached } from "./light.js";
 import { downloadAdvice, runtimes } from "./devices.js";
 
 export const BUSY_LINE = "The free transcriber is busy right now. Use your own free key, or transcribe on this phone.";
+export const OFF_LINE = "The free shared transcriber is not switched on yet. Use your own free key, or transcribe on this phone.";
 
 const LONG_SEC = 20 * 60;
+
+/**
+ * Early picks from the transcript so far (preliminary.js), when they are due: set on
+ * job.preliminary ({ upTo, picks }) and sent as a "preliminary" event (and the job). Never
+ * fatal. pcm: the 16 kHz audio heard so far, for the loudness part of the score, or null.
+ */
+export function publishPicks(engine, r, upTo, pcm = null) {
+  try {
+    const job = r.job;
+    if (!dueForPicks({ upTo, lastAt: r.picksAt ?? null, duration: job.source.duration })) return;
+    r.picksAt = upTo;
+    const heard = pcm ? pcm.subarray(0, Math.min(pcm.length, Math.floor(upTo * 16000))) : null;
+    const picks = preliminaryPicks({ words: r.words, events: r.events, loudness: heard ? loudnessFromPcm(heard) : null, settings: job.settings, upTo });
+    if (!picks.length) return;
+    job.preliminary = { upTo: +upTo.toFixed(1), picks, at: new Date().toISOString() };
+    engine.emit(job.id, "preliminary", structuredClone(job.preliminary));
+    engine.emit(job.id, "job", structuredClone(job));
+  } catch (e) {
+    console.error(e);
+  }
+}
 
 /** The stop when the free transcriber is busy and whisper is not saved here: the choices, with the download's real size. */
 export async function lightBusy(e, { asrDevice = "auto" } = {}) {
   const dev = await runtimes({ asrDevice }).then((r) => r.asr).catch(() => "wasm");
   const a = downloadAdvice(MODELS.whisper.bytes[dev] || MODELS.whisper.bytes.wasm);
   const mb = Math.round(a.bytes / 1e6);
-  return Object.assign(new Error(BUSY_LINE), {
+  // 503: the server has no key for the free transcriber (not switched on), not a busy quota
+  return Object.assign(new Error(e?.status === 503 ? OFF_LINE : BUSY_LINE), {
     code: "light_busy",
     hint: `${e?.hint || e?.message || "The free transcriber did not answer."} Nothing was downloaded, and nothing is charged.`,
     choices: [
@@ -63,8 +88,25 @@ export async function transcribeLight(engine, r, transcriber, { progress, finish
   progress("transcribe", { progress: 0, note: "reading the audio" });
   const long = dur > LONG_SEC;
   const decodeT = performance.now();
-  if (!long) r.pcm = await hooks.decode(r.file, { duration: dur, onProgress: (p) => progress("transcribe", { progress: p * 0.05, note: "reading the audio" }) });
-  const decodeSec = +((performance.now() - decodeT) / 1000).toFixed(1);
+  let decodeSec = null;
+  // short videos: the audio is decoded in 15 s blocks into a growing buffer, and the remote
+  // transcriber cuts and sends pieces from it while the rest is still being read
+  let audio = null;
+  let decoding = null;
+  if (!long) {
+    audio = growingPcm(Math.ceil(dur * 16000));
+    decoding = hooks
+      .decode(r.file, { duration: dur, blockSec: 15, keep: false, onBlock: (b) => audio.append(b), onProgress: (p) => !r.words.length && progress("transcribe", { progress: p * 0.05, note: "reading the audio" }) })
+      .then((pcm) => {
+        if (pcm && !audio.length) audio.append(pcm); // a decoder that returns everything at once
+        decodeSec = +((performance.now() - decodeT) / 1000).toFixed(1);
+        audio.finish();
+      }, (e) => {
+        audio.finish();
+        throw e;
+      });
+    decoding.catch(() => {}); // awaited below; never an unhandled rejection meanwhile
+  }
 
   const prepare = async (t) => {
     if (t.where === "remote") {
@@ -93,15 +135,20 @@ export async function transcribeLight(engine, r, transcriber, { progress, finish
     await prepare(used);
   };
 
+  // pcm null: the growing audio (short videos). The device needs all of it, so it waits for the decode
   const run = async (pcm, base, total) => {
     let from = 0;
     for (;;) {
       try {
-        const res = await used.transcribe(pcm, {
+        const progressive = !pcm && used.where === "remote" && from === 0;
+        if (!pcm && !progressive) await decoding;
+        const res = await used.transcribe(progressive ? null : pcm || audio.pcm, {
+          ...(progressive ? { audio } : {}),
           from,
           onChunk: (m) => {
             take(m.words.map((w) => ({ ...w, s: +(w.s + base).toFixed(3), e: +(w.e + base).toFixed(3) })));
             const heard = base + m.processed;
+            publishPicks(engine, r, heard, audio ? audio.pcm : null);
             const wall = (performance.now() - t0) / 1000;
             const speed = heard / Math.max(0.1, wall);
             const where = used.where === "remote" ? `sent ${(m.bytes / 1e6).toFixed(2)} MB of audio` : "transcribing on this device";
@@ -125,7 +172,9 @@ export async function transcribeLight(engine, r, transcriber, { progress, finish
   let pieces = 0;
   let codec = null;
   if (!long) {
-    const res = await run(r.pcm, 0, dur);
+    const res = await run(null, 0, dur);
+    await decoding; // a decode error surfaces here
+    r.pcm = audio.pcm.slice(); // its own buffer: a view would save the spare capacity too
     bytes = res.bytes || 0;
     pieces = res.pieces || 0;
     codec = res.codec || null;

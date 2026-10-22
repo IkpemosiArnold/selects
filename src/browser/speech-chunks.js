@@ -109,40 +109,147 @@ export function planChunks(pcm, rate = 16000, { regions = null, firstSec = 30, m
 }
 
 /**
+ * 16 kHz audio that grows while it is decoded: append(block) as blocks arrive, finish() at
+ * the end. wait(n) resolves when at least n samples (or everything) are there. The buffer is
+ * sized from the duration once, so it is never copied while it grows.
+ */
+export function growingPcm(expectedSamples) {
+  let buf = new Float32Array(Math.max(1, Math.ceil(expectedSamples * 1.01) + 16000));
+  let length = 0;
+  let done = false;
+  let waiters = [];
+  const wake = () => {
+    const ready = waiters.filter((w) => done || length >= w.n);
+    waiters = waiters.filter((w) => !ready.includes(w));
+    for (const w of ready) w.resolve();
+  };
+  return {
+    get length() {
+      return length;
+    },
+    get done() {
+      return done;
+    },
+    /** The audio so far (a view, not a copy). */
+    get pcm() {
+      return buf.subarray(0, length);
+    },
+    append(block) {
+      if (length + block.length > buf.length) {
+        const bigger = new Float32Array(Math.ceil((length + block.length) * 1.25));
+        bigger.set(buf.subarray(0, length));
+        buf = bigger;
+      }
+      buf.set(block, length);
+      length += block.length;
+      wake();
+    },
+    finish() {
+      done = true;
+      wake();
+    },
+    wait(n) {
+      return done || length >= n ? Promise.resolve() : new Promise((resolve) => waiters.push({ n, resolve }));
+    },
+  };
+}
+
+/** Trim a piece to the speech in it (padded), or null when it has none. Offsets stay exact. */
+export function trimToSpeech(pcm, piece, rate = 16000) {
+  const regions = speechRegions(pcm.subarray(piece.start, piece.end), rate);
+  if (!regions.length) return null;
+  return { start: piece.start + Math.floor(regions[0][0] * rate), end: Math.min(piece.end, piece.start + Math.ceil(regions[regions.length - 1][1] * rate)) };
+}
+
+/**
+ * Pieces of growing audio as soon as each can be cut: a short first piece, then pieces of up
+ * to maxSec, each ending at the quietest 50 ms near its limit, each trimmed to its speech
+ * (a piece of silence is not sent). An async generator of { start, end } in samples.
+ */
+export async function* progressivePieces(audio, rate = 16000, { firstSec = 30, maxSec = 120, searchSec = 8, trim = true } = {}) {
+  let pos = 0;
+  let first = true;
+  for (;;) {
+    const limit = (first ? firstSec : maxSec) * rate;
+    await audio.wait(pos + limit + 1);
+    const pcm = audio.pcm;
+    let end;
+    if (pcm.length - pos <= limit) {
+      if (!audio.done) continue;
+      end = pcm.length;
+    } else {
+      const hard = pos + limit;
+      const search = Math.min(searchSec * rate, Math.floor(limit / 3));
+      const db = frameDb(pcm.subarray(hard - search, hard), rate);
+      let best = db.length - 1;
+      for (let f = 0; f < db.length; f++) if (db[f] < db[best]) best = f;
+      end = hard - search + best * Math.round(rate * FRAME_SEC) + Math.round((rate * FRAME_SEC) / 2);
+    }
+    if (end > pos) {
+      const piece = trim ? trimToSpeech(pcm, { start: pos, end }, rate) : { start: pos, end };
+      if (piece && piece.end > piece.start) {
+        yield piece;
+        first = false;
+      }
+    }
+    pos = end;
+    if (pos >= audio.length && audio.done) return;
+  }
+}
+
+/**
  * Run pieces with up to `concurrency` in flight and hand the results back strictly in order
- * (so the transcript streams from the start). run(piece, i) -> Promise<result>;
+ * (so the transcript streams from the start). pieces: an array or an (async) iterable, so
+ * pieces can be cut while the audio is still being read. run(piece, i) -> Promise<result>;
  * onResult(result, i) is called in order. Stops at the first failure, reporting how far the
  * in-order results reached ({ error, done }), so a fallback can carry on from there.
  */
 export async function inOrder(pieces, run, { concurrency = 2, onResult, signal } = {}) {
-  const results = new Array(pieces.length);
-  const settled = new Array(pieces.length).fill(false);
-  let next = 0;
+  const it = (pieces[Symbol.asyncIterator] || pieces[Symbol.iterator]).call(pieces);
+  const results = new Map();
+  let taken = 0;
   let delivered = 0;
   let failure = null;
+  let exhausted = false;
+  // one pull at a time, so pieces are numbered in order
+  let pulling = Promise.resolve();
+  const pull = () =>
+    (pulling = pulling.then(async () => {
+      if (exhausted || failure) return null;
+      const n = await it.next();
+      if (n.done) {
+        exhausted = true;
+        return null;
+      }
+      return { piece: n.value, i: taken++ };
+    }));
   // one delivery at a time, so two pieces finishing together are still handed back in order
   let chain = Promise.resolve();
   const deliver = () =>
     (chain = chain.then(async () => {
-      while (delivered < pieces.length && settled[delivered]) {
-        await onResult?.(results[delivered], delivered);
+      // pieces before a failure are still handed back when they arrive; none after it
+      while (results.has(delivered) && (!failure || delivered < failure.index)) {
+        await onResult?.(results.get(delivered), delivered);
+        results.delete(delivered);
         delivered++;
       }
     }));
   const worker = async () => {
-    while (!failure && next < pieces.length) {
+    for (;;) {
       if (signal?.aborted) throw Object.assign(new Error("Stopped before it finished."), { name: "AbortError" });
-      const i = next++;
+      const next = await pull();
+      if (!next) return;
       try {
-        results[i] = await run(pieces[i], i);
-        settled[i] = true;
+        results.set(next.i, await run(next.piece, next.i));
         await deliver();
       } catch (e) {
-        failure ??= { error: e, index: i };
+        if (!failure || next.i < failure.index) failure = { error: e, index: next.i };
+        return;
       }
     }
   };
-  await Promise.all(Array.from({ length: Math.max(1, Math.min(concurrency, pieces.length)) }, worker));
+  await Promise.all(Array.from({ length: Math.max(1, concurrency) }, worker));
   await deliver();
+  if (failure) await it.return?.();
   return { done: delivered, error: failure?.error ?? null };
 }

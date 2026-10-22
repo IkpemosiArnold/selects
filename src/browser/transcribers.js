@@ -4,11 +4,13 @@
 //   transcriber = {
 //     id, model, where: "device" | "remote", label,
 //     prepare({ onProgress, onWaking })          load the model or wake the server
-//     transcribe(pcm, { rate, onChunk, signal, from })
+//     transcribe(pcm, { rate, onChunk, signal, from, audio })
 //       -> { words: [{ w, s, e }], wallSec, bytes, pieces, codec, doneSec }
 //   }
 //   onChunk({ words, processed, i, n, bytes, wallSec }) arrives in order, so the transcript
-//   streams from the start. `from` (seconds) skips audio already transcribed.
+//   streams from the start. `from` (seconds) skips audio already transcribed. A remote
+//   transcriber also takes `audio` (speech-chunks.js growingPcm) instead of pcm: pieces are
+//   then cut and sent while the rest of the audio is still being decoded.
 //
 // Remote transcribers send speech-only audio pieces (speech-chunks.js), compressed on the
 // device (encode.js); the video never leaves. A remote failure carries .doneSec (how far the
@@ -16,7 +18,7 @@
 // from there on the device or with the person's own key.
 import { cleanWords, wordsFromVerbose } from "../core/asr-words.mjs";
 import { encodeSpeech, speechCodec } from "./encode.js";
-import { inOrder, planChunks, speechRegions } from "./speech-chunks.js";
+import { inOrder, planChunks, progressivePieces, speechRegions } from "./speech-chunks.js";
 
 const secs = (t0) => +((performance.now() - t0) / 1000).toFixed(1);
 
@@ -112,7 +114,7 @@ export function groqKeySender(key, { model = "whisper-large-v3", base = "https:/
  *   sender: proxySender(url) or groqKeySender(key)
  *   encode, plan, regions: injectable for tests
  */
-export function remoteTranscriber({ sender, model = "whisper-large-v3", concurrency = 2, encode = encodeSpeech, codec = speechCodec, plan = planChunks, regions = speechRegions, retryMs = 1500 } = {}) {
+export function remoteTranscriber({ sender, model = "whisper-large-v3", concurrency = 2, encode = encodeSpeech, codec = speechCodec, plan = planChunks, regions = speechRegions, progressive = progressivePieces, retryMs = 1500 } = {}) {
   let wakeP = null;
   return {
     id: `remote:${sender.id}`,
@@ -143,17 +145,19 @@ export function remoteTranscriber({ sender, model = "whisper-large-v3", concurre
         clearInterval(timer);
       }
     },
-    async transcribe(pcm, { rate = 16000, onChunk, signal, from = 0 } = {}) {
+    async transcribe(pcm, { rate = 16000, onChunk, signal, from = 0, audio = null } = {}) {
       const t0 = performance.now();
       const c = await codec();
-      const startAt = Math.floor(from * rate);
-      const body = startAt ? pcm.subarray(startAt) : pcm;
-      const pieces = plan(body, rate, { regions: regions ? regions(body, rate) : null, ...(c.maxSec ? { firstSec: Math.min(30, c.maxSec), maxSec: c.maxSec } : {}) });
+      const startAt = audio ? 0 : Math.floor(from * rate);
+      const sizes = c.maxSec ? { firstSec: Math.min(30, c.maxSec), maxSec: c.maxSec } : {};
+      // the audio pieces come from: the growing decode (progressive), or the whole PCM
+      const view = () => (audio ? audio.pcm : startAt ? pcm.subarray(startAt) : pcm);
+      const pieces = audio ? progressive(audio, rate, sizes) : plan(view(), rate, { regions: regions ? regions(view(), rate) : null, ...sizes });
       const words = [];
       let bytes = 0;
       let doneSec = from;
       const send = async (p) => {
-        const piece = await encode(body.subarray(p.start, p.end), { rate, codec: c });
+        const piece = await encode(view().subarray(p.start, p.end), { rate, codec: c });
         for (let attempt = 0; ; attempt++) {
           try {
             const res = await sender.send(piece, { signal });
@@ -173,7 +177,7 @@ export function remoteTranscriber({ sender, model = "whisper-large-v3", concurre
           words.push(...ws);
           bytes += res.bytes;
           doneSec = from + res.piece.end / rate;
-          onChunk?.({ words: ws, processed: doneSec, i, n: pieces.length, bytes, wallSec: secs(t0) });
+          onChunk?.({ words: ws, processed: doneSec, i, n: pieces.length ?? null, bytes, wallSec: secs(t0) });
         },
       });
       if (out.error) {
@@ -183,7 +187,7 @@ export function remoteTranscriber({ sender, model = "whisper-large-v3", concurre
         e.words = words;
         throw e;
       }
-      return { words, wallSec: secs(t0), bytes, pieces: pieces.length, codec: c.codec, doneSec: pcm.length / rate };
+      return { words, wallSec: secs(t0), bytes, pieces: out.done, codec: c.codec, doneSec: (audio ? audio.length : pcm.length) / rate };
     },
   };
 }

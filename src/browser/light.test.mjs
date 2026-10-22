@@ -4,7 +4,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 await import("./test-env.mjs");
-const { isIos, suggestMode, wakeProxy } = await import("./light.js");
+const { isIos, measureDownlink, suggestMode, wakeProxy } = await import("./light.js");
+const { growingPcm, progressivePieces } = await import("./speech-chunks.js");
+const { dueForPicks, preliminaryPicks } = await import("./preliminary.js");
 const { remoteTranscriber } = await import("./transcribers.js");
 const { pickCodec, estimateBytes, SPEECH_CODECS } = await import("./encode.js");
 const { Engine } = await import("./engine.js");
@@ -19,21 +21,45 @@ test("mode: Private stays the default when the speech model is already in this b
   assert.equal(s.mode, "private");
 });
 
-test("mode: Light on Data Saver, 2G or 3G, under 1.5 Mbps, a slow download, or an iPhone", () => {
-  assert.equal(suggestMode({ connection: { saveData: true, downlink: 10 }, asrCached: false }).mode, "light");
-  assert.equal(suggestMode({ connection: { effectiveType: "3g", downlink: 5 }, asrCached: false }).mode, "light");
-  assert.equal(suggestMode({ connection: { effectiveType: "slow-2g" }, asrCached: false }).mode, "light");
-  assert.equal(suggestMode({ connection: { effectiveType: "4g", downlink: 1.2 }, asrCached: false }).mode, "light");
+test("mode: Light is the default whenever the speech model is not here and Light can run", () => {
+  const plain = suggestMode({ connection: { effectiveType: "4g", downlink: 10 }, asrCached: false, asrBytes: 50e6 });
+  assert.equal(plain.mode, "light", "even on a fast connection: Private is opt-in");
+  assert.match(plain.reasons[0], /not in this browser yet/);
+  assert.equal(suggestMode({ connection: { saveData: true, downlink: 10 }, asrCached: false }).reasons[0], "Data Saver is on");
+  assert.match(suggestMode({ connection: { effectiveType: "3g", downlink: 5 }, asrCached: false }).reasons[0], /3G/);
+  assert.match(suggestMode({ connection: { effectiveType: "4g", downlink: 1.2 }, asrCached: false }).reasons[0], /1.2 Mbps/);
   const slow = suggestMode({ connection: { effectiveType: "4g", downlink: 10 }, asrCached: false, asrBytes: 209e6 });
-  assert.equal(slow.mode, "light", "209 MB at 10 Mbps is about 167 s, over a minute");
-  assert.match(slow.reasons[0], /min to download/);
-  assert.equal(suggestMode({ connection: null, ios: true, asrCached: null }).mode, "light", "iPhone, no connection info (Safari)");
+  assert.match(slow.reasons[0], /min to download/, "209 MB at 10 Mbps is about 167 s");
+  assert.equal(slow.estSec, 167);
+  const ios = suggestMode({ connection: null, ios: true, asrCached: null });
+  assert.equal(ios.mode, "light");
+  assert.ok(ios.reasons.includes("this is an iPhone or iPad"));
 });
 
-test("mode: Private on a fast connection, with no signal, or when the free transcriber is not set up", () => {
-  assert.equal(suggestMode({ connection: { effectiveType: "4g", downlink: 10 }, asrCached: false, asrBytes: 50e6 }).mode, "private");
-  assert.equal(suggestMode({ connection: null, asrCached: false }).mode, "private", "desktop Safari or Firefox: no information, no change");
+test("mode: Safari's 1 MB probe stands in for the speed the browser does not report", () => {
+  const s = suggestMode({ connection: null, probeMbps: 0.8, asrCached: false, asrBytes: 140e6 });
+  assert.equal(s.mbps, 0.8);
+  assert.equal(s.estSec, 1400);
+  assert.match(s.reasons[0], /0.8 Mbps/);
+  assert.equal(suggestMode({ connection: { downlink: 5 }, probeMbps: 0.5, asrCached: false }).mbps, 5, "a reported speed wins");
+});
+
+test("mode: Private when the free transcriber is off and there is no own key", () => {
   assert.equal(suggestMode({ connection: { saveData: true }, ios: true, asrCached: false, lightAvailable: false }).mode, "private");
+});
+
+test("probe: times a 1 MB range request; a timeout is a slow answer, an error is no answer", async () => {
+  let t = 0;
+  const now = () => t;
+  const ok = await measureDownlink("https://x/model", { now, fetchImpl: async (u, o) => {
+    assert.equal(o.headers.range, "bytes=0-1048575");
+    t = 4000; // 1 MiB in 4 s
+    return { ok: true, arrayBuffer: async () => new ArrayBuffer(1 << 20) };
+  } });
+  assert.equal(ok, 2.1);
+  assert.equal(await measureDownlink("https://x/model", { fetchImpl: async () => { throw new Error("offline"); } }), null);
+  const slow = await measureDownlink("https://x/model", { timeoutMs: 10, fetchImpl: (u, o) => new Promise((_, rej) => o.signal.addEventListener("abort", () => rej(new Error("aborted")))) });
+  assert.ok(slow > 0 && slow < 1000, "a timeout says the speed is under 1 MB per timeout");
 });
 
 test("isIos: iPhone, and iPad reporting itself as a Mac with touch", () => {
@@ -154,9 +180,10 @@ function fakeRemote({ fail = null, failAfterSec = 0 } = {}) {
     where: "remote",
     calls: 0,
     async prepare() {},
-    async transcribe(pcm, { onChunk, from = 0 } = {}) {
+    async transcribe(pcm, { onChunk, from = 0, audio = null } = {}) {
       this.calls++;
-      const end = pcm.length / RATE;
+      if (audio) await audio.wait(Infinity); // progressive: the whole decode, for simplicity
+      const end = (audio ? audio.length : pcm.length) / RATE;
       if (fail) {
         const kept = words.filter((w) => w.e <= failAfterSec);
         if (kept.length) onChunk?.({ words: kept, processed: failAfterSec, i: 0, n: 2, bytes: 1000 });
@@ -227,4 +254,80 @@ test("light: free transcriber busy, speech model already saved: carries on on th
   assert.match(job.asr.note, /busy/);
   const words = engine.getWords(job.id);
   assert.ok(words.every((w, i) => i === 0 || w.s >= words[i - 1].s), "one transcript, in order, no repeats");
+});
+
+// ---------------------------------------------------------------- progressive
+
+test("progressive: pieces are cut and sent while the audio is still arriving", async () => {
+  const audio = growingPcm(RATE * 200);
+  const block = new Float32Array(RATE * 10).fill(0.1);
+  const cut = [];
+  const reader = (async () => {
+    for await (const p of progressivePieces(audio, RATE)) cut.push({ ...p, heard: audio.length / RATE });
+  })();
+  for (let i = 0; i < 20; i++) {
+    audio.append(block);
+    await new Promise((r) => setTimeout(r, 1));
+  }
+  audio.finish();
+  await reader;
+  assert.ok(cut[0].end / RATE <= 30, "a 30 s first piece");
+  assert.ok(cut[0].heard < 60, `the first piece went out after ${cut[0].heard} s of 200 s had been read`);
+  assert.equal(cut[cut.length - 1].end, RATE * 200, "the last piece ends at the end");
+  for (let i = 1; i < cut.length; i++) assert.equal(cut[i].start, cut[i - 1].end);
+});
+
+test("progressive: the remote transcriber streams from growing audio", async () => {
+  const audio = growingPcm(RATE * 200);
+  const sender = fakeSender();
+  const t = remoteTranscriber({ sender, encode: fakeEncode, codec, regions: null });
+  const firsts = [];
+  const run = t.transcribe(null, { audio, onChunk: (c) => firsts.push({ i: c.i, read: audio.length / RATE }) });
+  for (let i = 0; i < 20; i++) {
+    audio.append(new Float32Array(RATE * 10).fill(0.1));
+    await new Promise((r) => setTimeout(r, 2));
+  }
+  audio.finish();
+  const res = await run;
+  assert.ok(firsts[0].read < 200, `the first words came back after ${firsts[0].read} s of audio was read`);
+  assert.equal(res.doneSec, 200);
+  assert.ok(res.words.length > 150);
+});
+
+test("early picks: the best windows inside what has been heard, not overlapping, refreshed each minute", () => {
+  const words = talk(120);
+  const upTo = 200;
+  const heard = words.filter((w) => w.e <= upTo);
+  const picks = preliminaryPicks({ words: heard, upTo });
+  assert.ok(picks.length >= 1 && picks.length <= 3);
+  assert.ok(picks.every((p) => p.end <= upTo - 3 && p.preliminary));
+  for (const a of picks) for (const b of picks) if (a !== b) assert.ok(Math.min(a.end, b.end) - Math.max(a.start, b.start) <= 0.2 * Math.min(a.end - a.start, b.end - b.start) + 1e-6);
+  assert.equal(dueForPicks({ upTo: 100, duration: 600 }), false);
+  assert.equal(dueForPicks({ upTo: 181, duration: 600 }), true);
+  assert.equal(dueForPicks({ upTo: 200, lastAt: 181, duration: 600 }), false);
+  assert.equal(dueForPicks({ upTo: 245, lastAt: 181, duration: 600 }), true);
+  assert.equal(dueForPicks({ upTo: 120, duration: 120 }), true, "a short video gets its picks at the end");
+});
+
+test("light: early picks are published while the transcript arrives", async () => {
+  const words = talk(120);
+  const remote = {
+    id: "remote:fake", model: "whisper-large-v3", where: "remote", async prepare() {},
+    async transcribe(pcm, { onChunk, audio } = {}) {
+      await audio.wait(Infinity);
+      for (const at of [120, 240, DURATION]) onChunk({ words: words.filter((w) => w.s >= at - 120 && w.s < at), processed: at, bytes: 1000 });
+      return { words, bytes: 3000, pieces: 3, codec: "opus", doneSec: DURATION };
+    },
+  };
+  const s = await probedOnly();
+  const engine = new Engine({ store: s.store, getJudge: async () => fakeBackend({ id: "gemini-proxy", model: "g", where: "google" }), getTranscriber: async () => remote, render: fakeRender() });
+  engine.lightHooks = { decode: async () => new Float32Array(Math.ceil(DURATION * RATE)), cached: async () => false };
+  const seen = [];
+  const job = await engine.createJob(s.file, {});
+  engine.on(job.id, (type, data) => type === "preliminary" && seen.push(data));
+  await engine.idle(job.id);
+  assert.equal(engine.getJob(job.id).stage, "ready");
+  assert.ok(seen.length >= 1, "at least one round of early picks");
+  assert.equal(seen[0].upTo, 240, "the first after 3 minutes or more had been heard");
+  assert.ok(seen[0].picks.every((p) => p.end <= 240));
 });

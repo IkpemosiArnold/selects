@@ -16,7 +16,7 @@ import { kitSourceFromCaptions, plainKit } from "../core/kit-core.mjs";
 import { applyDecisions, captureDecisions } from "../core/decisions.mjs";
 import { loadAsr, resolveSpeech, transcribePcm } from "./asr.js";
 import { canJudgeInTab } from "./devices.js";
-import { transcribeLight } from "./light-run.js";
+import { publishPicks, transcribeLight } from "./light-run.js";
 import { cachedFetch } from "./cache.js";
 import { faithfulRound, judgeShortlist, listwiseRound, makeKit, rankAndCurve } from "./judge.js";
 import { audioDecodeUnsupported, decodeAudio16k, loudnessFromPcm, makeThumbs, probeFile } from "./media.js";
@@ -386,6 +386,7 @@ export class Engine {
             r.words.push(...split.words);
             r.events.push(...split.events);
             if (split.words.length) this.emit(id, "words", split.words);
+            publishPicks(this, r, m.processed, r.pcm); // early picks after the first minutes
             const wall = (performance.now() - t1) / 1000;
             const speed = m.processed / Math.max(0.1, wall);
             const left = job.source.duration - m.processed;

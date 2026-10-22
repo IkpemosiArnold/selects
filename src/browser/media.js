@@ -86,9 +86,11 @@ async function resample(pcm, fromRate, rate) {
 
 /**
  * Decode the audio track to 16 kHz mono Float32 for whisper, in blocks of about 60 s so a
- * long video never sits in memory at its native rate. onProgress(0..1).
+ * long video never sits in memory at its native rate. onProgress(0..1). onBlock(pcm16k) gets
+ * each resampled block as soon as it is ready (blockSec, default 60), so Light mode can start
+ * sending speech while the rest is still being read; with keep: false nothing is returned.
  */
-export async function decodeAudio16k(file, { onProgress, duration } = {}) {
+export async function decodeAudio16k(file, { onProgress, duration, onBlock, blockSec = 60, keep = true } = {}) {
   const input = openInput(file);
   try {
     const track = await input.getPrimaryAudioTrack();
@@ -108,7 +110,10 @@ export async function decodeAudio16k(file, { onProgress, duration } = {}) {
         joined.set(p, o);
         o += p.length;
       }
-      parts.push(await resample(joined, rate, ASR_RATE));
+      const block = await resample(joined, rate, ASR_RATE);
+      // keep: false when onBlock keeps the audio itself (Light mode), so it is not held twice
+      if (keep) parts.push(block);
+      await onBlock?.(block);
       pending = [];
       pendingLen = 0;
     };
@@ -120,10 +125,11 @@ export async function decodeAudio16k(file, { onProgress, duration } = {}) {
       pendingLen += m.length;
       const end = sample.timestamp + sample.duration;
       sample.close();
-      if (pendingLen >= rate * 60) await flush();
+      if (pendingLen >= rate * blockSec) await flush();
       onProgress?.(Math.min(1, end / total));
     }
     await flush();
+    if (!keep) return null;
     const len = parts.reduce((a, p) => a + p.length, 0);
     const pcm = new Float32Array(len);
     let o = 0;
