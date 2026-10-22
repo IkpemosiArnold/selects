@@ -510,3 +510,37 @@ test("transcript reuse: a second job on the same video skips the language check 
     process.env.SELECTS_REUSE = "0";
   }
 });
+
+test("signatures: a finished job whose judge inputs changed is judged again, keeps its approvals, and is not transcribed again", async () => {
+  const { writeJsonAtomic } = await import("./util.mjs");
+  const job = createJob(video, { k: 3, model: "mock", qualityGate: false });
+  const counter = { probe: 0, transcribe: 0, judge: 0 };
+  const ready = await runJob(job.id, { deps: mocks(counter) });
+  assert.equal(ready.stage, "ready");
+  assert.ok(ready.signatures?.selection && ready.signatures?.judgment, "each computed result is signed");
+  const pick = ready.candidates[1];
+  updateCandidate(job.id, pick.id, { status: "approved" });
+  const judgedOnce = counter.judge;
+
+  // nothing changed: nothing is redone
+  await runJob(job.id, { deps: mocks(counter) });
+  assert.equal(counter.judge, judgedOnce, "same inputs, same judgment");
+
+  // another judge model (the job.json edited, as a later run with --model would)
+  const j = loadJob(job.id);
+  j.settings.model = "mock-2";
+  writeJsonAtomic(path.join(jobDir(job.id), "job.json"), j);
+  const again = await runJob(job.id, { deps: mocks(counter) });
+  assert.equal(again.stage, "ready", again.error?.message);
+  assert.ok(counter.judge > judgedOnce, "judged again with the new model");
+  assert.equal(counter.transcribe, 1, "never transcribed again");
+  assert.equal(again.candidates.find((c) => c.start === pick.start && c.end === pick.end)?.status, "approved", "the approval stayed on its window");
+
+  // a new length range is a new selection (and so a new judgment)
+  const k = loadJob(job.id);
+  Object.assign(k.settings, { minLen: 25, maxLen: 40 });
+  writeJsonAtomic(path.join(jobDir(job.id), "job.json"), k);
+  const third = await runJob(job.id, { deps: mocks(counter) });
+  assert.ok(third.candidates.every((c) => c.end - c.start <= 40 + 1e-6), "selected again with the new range");
+  assert.equal(counter.transcribe, 1);
+});

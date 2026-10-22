@@ -28,6 +28,13 @@ import { restorePunctuation as realRestorePunctuation } from "./punctuate.mjs";
 import { isSparsePunctuation, snapTrim, toSentences } from "./sentences.mjs";
 import { transcribe as realTranscribe } from "./transcribe.mjs";
 import { readJson, run, sha1, writeJsonAtomic } from "./util.mjs";
+import { judgmentSignature, selectionSignature, transcriptHash, transcriptSignature } from "./signatures.mjs";
+import { applyDecisions, captureDecisions } from "./decisions.mjs";
+
+/** The prompt files' text, for the judgment signature (a prompt change is a new judgment). */
+function promptTexts() {
+  return Object.fromEntries(["judge", "listwise", "faithful", "kit"].map((k) => [k, fs.readFileSync(new URL(`./prompts/${k}.md`, import.meta.url), "utf8")]));
+}
 
 /**
  * Every job event goes out twice: as "event" ({ jobId, type, data }) for listeners that
@@ -561,6 +568,7 @@ async function runStages(id, { deps = {}, signal } = {}) {
       writeJsonAtomic(wordsFile, words);
       fs.rmSync(path.join(dir, "captions.json"), { force: true }); // new words, new cues
       const sec = (Date.now() - t0) / 1000;
+      job.signatures = { ...(job.signatures || {}), transcript: transcriptSignature({ source: fingerprint ?? job.source.path, model: path.basename(model), language: lang, prompt: asrOpts.prompt, preprocess: asrOpts.preprocess, audioStream }) };
       job.asr = { provider: "whisper.cpp", model: path.basename(model), accent: job.accent?.routed ? job.accent.accent : null, language: lang, prompt: job.settings.asrPrompt || null, preprocess: job.settings.asrPreprocess || "none", sec: +sec.toFixed(1), speed: +(job.source.duration / Math.max(0.1, sec)).toFixed(2) };
       job.transcriptQuality = transcriptQuality(words, { duration: job.source.duration });
       const speed = job.source.duration / ((Date.now() - Date.parse(job.stages.transcribe.startedAt)) / 1000);
@@ -595,6 +603,24 @@ async function runStages(id, { deps = {}, signal } = {}) {
       throw Object.assign(err, { stage: "transcribe", keepStage: true, suggest: job.transcriptQuality.suggest });
     }
 
+    // Signatures (signatures.mjs): the shortlist and the judgment are reused only when they were
+    // made from these inputs; otherwise that stage (and the ones after it) runs again. A finished
+    // stage saved before signatures existed is taken as made from the current inputs (a desktop
+    // job's settings did not change after it was created).
+    const events = loadEvents(dir, words);
+    const loudness = readJson(path.join(dir, "loudness.json"), null);
+    const exclude = loopExclusions(job.transcriptQuality);
+    const secPerCall = judgeSecPerCall(job.settings);
+    job.signatures = job.signatures || {};
+    const selSig = selectionSignature({ transcript: transcriptHash({ words, events, loudness }), settings: job.settings, duration: job.source.duration, exclude, secPerCall });
+    const sigFor = (selection) => judgmentSignature({ selection, judge: { backend: "ollama", model: job.settings.model ?? null }, prompts: promptTexts(), settings: job.settings });
+    if (job.stages.candidates.status === "done") {
+      job.signatures.selection ??= selSig;
+      if (job.stages.judge.status === "done") job.signatures.judgment ??= sigFor(selSig);
+      if (job.signatures.selection !== selSig) for (const st of ["candidates", "judge"]) job.stages[st] = freshStage();
+    }
+    if (job.stages.judge.status === "done" && job.signatures.judgment !== sigFor(selSig)) job.stages.judge = freshStage();
+
     // 3. candidates (deterministic windows, prefilter, shortlist for the judge)
     const candFile = path.join(dir, "candidates.json");
     let short;
@@ -604,13 +630,16 @@ async function runStages(id, { deps = {}, signal } = {}) {
       // sentences and windows are built from speech only; laughter is kept as a pre-score signal
       // how many windows the judge reads: scaled with k and the length, capped by a time budget
       // at the judge's measured speed (judgeCount in select.mjs)
-      const secPerCall = judgeSecPerCall(job.settings);
-      const sel = selectCandidates({ words, events: loadEvents(dir, words), loudness: readJson(path.join(dir, "loudness.json"), null), settings: job.settings, duration: job.source.duration, judge: { secPerCall }, exclude: loopExclusions(job.transcriptQuality) });
+      const sel = selectCandidates({ words, events, loudness, settings: job.settings, duration: job.source.duration, judge: { secPerCall }, exclude });
       const { sentences, windows: all } = sel;
       short = sel.shortlist;
       job.judgeN = sel.judgeN;
       if (sel.judgeN.auto) job.settings.judgeN = sel.judgeN.n; // the count it used, for estimates and reruns
       writeJsonAtomic(candFile, { sentences: sentences.length, windows: all.length, shortlist: short, judgeN: sel.judgeN });
+      // a person's decisions are kept apart before the new shortlist replaces the candidates
+      job.decisions = captureDecisions(job.candidates || [], job.decisions);
+      job.signatures.selection = selSig;
+      delete job.signatures.judgment;
       job.candidates = short;
       finish("candidates", `${all.length} windows passed the filter, ${short.length} go to the judge`);
       emit(id, "candidates", { ranked: false, candidates: short });
@@ -668,9 +697,20 @@ async function runStages(id, { deps = {}, signal } = {}) {
       const bar = applyQualityBar(ranked);
       ranked = bar.candidates;
       job.verdict = bar.verdict;
-      // keep any human decisions from an earlier run of the same windows
-      const prev = new Map((job.candidates || []).map((c) => [c.id, c]));
-      job.candidates = ranked.map((c) => (prev.get(c.id)?.status && prev.get(c.id).status !== "proposed" ? { ...c, status: prev.get(c.id).status } : c));
+      // put back a person's decisions where their window is a candidate again (decisions.mjs),
+      // and keep renders already made of the same clip
+      const prevCands = job.candidates || [];
+      job.decisions = captureDecisions(prevCands, job.decisions);
+      job.candidates = carryRenders(prevCands, applyDecisions(ranked, job.decisions, { words: speechOnly(words) }).candidates);
+      if (job.candidates.some((c) => c.faithful)) {
+        job.candidates = orderByFaithful(job.candidates);
+        const t = job.verdict?.threshold;
+        if (t != null) {
+          for (const x of job.candidates) if (typeof x.weak === "boolean") x.weak = !(typeof x.total === "number" && x.total >= t && !x.demoted);
+          job.verdict = qualityVerdict(job.candidates, { threshold: t });
+        }
+      }
+      job.signatures.judgment = sigFor(selSig);
       job.curve = curve(judged, job.source.duration, { step: 5 });
       finish("judge", st?.secPerCandidate ? `${judged.length} clips judged, ${st.secPerCandidate} s each` : `${judged.length} clips judged`);
       emit(id, "candidates", { ranked: true, candidates: job.candidates, curve: job.curve });
@@ -682,6 +722,16 @@ async function runStages(id, { deps = {}, signal } = {}) {
   } catch (e) {
     return fail(job, e.stage || current, e);
   }
+}
+
+/** Keep the render, preview and title of clips that are the same cut (id, start and end) in the new list. */
+function carryRenders(prev, next) {
+  const old = new Map(prev.map((c) => [`${c.id}|${c.start}|${c.end}`, c]));
+  return next.map((c) => {
+    const p = old.get(`${c.id}|${c.start}|${c.end}`);
+    if (!p) return c;
+    return { ...c, ...(p.render ? { render: p.render } : {}), ...(p.preview ? { preview: p.preview } : {}), ...(p.title ? { title: p.title } : {}) };
+  });
 }
 
 function fail(job, stage, e) {
@@ -749,6 +799,8 @@ export function updateCandidate(id, cid, patch = {}) {
     const words = loadWords(id);
     const snapped = snapTrim(words, Number(patch.start ?? c.start), Number(patch.end ?? c.end));
     if (snapped.start !== c.start || snapped.end !== c.end) {
+      c.origStart ??= c.start; // the window it came from, which keys the decision
+      c.origEnd ??= c.end;
       c.start = snapped.start;
       c.end = snapped.end;
       const ws = words.filter((w) => w.s >= c.start - 1e-6 && w.e <= c.end + 1e-6);
@@ -769,6 +821,7 @@ export function updateCandidate(id, cid, patch = {}) {
       job.verdict = qualityVerdict(job.candidates, { threshold: t });
     }
   }
+  job.decisions = captureDecisions(job.candidates, job.decisions);
   saveJob(job);
   emit(id, "candidates", { ranked: true, candidates: job.candidates, changed: cid });
   return job.candidates.find((x) => x.id === cid);
@@ -916,7 +969,7 @@ async function renderCaptioned(id, { deps = {}, signal } = {}) {
 
 // What a person owns on a candidate while the renderer runs: decisions and cuts. The
 // renderer saves its progress without undoing an approval or a trim made meanwhile.
-const HUMAN_FIELDS = ["status", "blur", "start", "end", "text", "hook", "trimmed", "faithful"];
+const HUMAN_FIELDS = ["status", "blur", "start", "end", "origStart", "origEnd", "text", "hook", "trimmed", "faithful"];
 
 /** Take the person's edits that landed on disk into the renderer's copy of a job. */
 function mergeHuman(job) {
@@ -931,6 +984,7 @@ function mergeHuman(job) {
       if (d) for (const f of HUMAN_FIELDS) if (f in d) c[f] = d[f];
     }
     job.settings = disk.settings; // credit and licence edits reach the kits written after them
+    job.decisions = disk.decisions;
   }
   return job;
 }
@@ -955,6 +1009,7 @@ export function approveTop(id, n, { includeWeak = true } = {}) {
     c.status = "approved";
     approved++;
   }
+  job.decisions = captureDecisions(job.candidates, job.decisions);
   saveJob(job);
   emit(id, "candidates", { ranked: true, candidates: job.candidates });
   return job;

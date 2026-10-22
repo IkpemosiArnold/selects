@@ -11,12 +11,15 @@ import { orderByFaithful } from "../core/faithful-core.mjs";
 import { applyMadeFor, clipCaptionStyle } from "../core/madefor.mjs";
 import { applyQualityBar, qualityVerdict } from "../core/rank.mjs";
 import { snapTrim, toSentences } from "../core/sentences.mjs";
+import { judgeIdentity, judgmentSignature, selectionSignature, transcriptHash, transcriptSignature } from "../core/signatures.mjs";
+import { applyDecisions, captureDecisions } from "../core/decisions.mjs";
 import { loadAsr, transcribePcm } from "./asr.js";
 import { cachedFetch } from "./cache.js";
 import { faithfulRound, judgeShortlist, listwiseRound, makeKit, rankAndCurve } from "./judge.js";
 import { decodeAudio16k, loudnessFromPcm, makeThumbs, probeFile } from "./media.js";
 import { decodeAudioSegments, longVideoNote, pcmStore } from "./pcm.js";
 import { MODELS } from "./models.js";
+import { PROMPTS } from "./prompts.js";
 import { clipGainDb, renderInWorker } from "./render.js";
 import { keepAwake, notifyDone, titleProgress } from "./device.js";
 import { contentKey, createJobStore, dropVideo, indexedDbBackend, keepVideo, keptVideo, memoryBackend, resumePoint } from "./store.js";
@@ -45,12 +48,13 @@ const newId = () => {
 const LONG_SEC = 20 * 60;
 
 export class Engine {
-  constructor({ getJudge, getFallback, store } = {}) {
+  constructor({ getJudge, getFallback, store, render = renderInWorker } = {}) {
     this.store = store || createJobStore(typeof indexedDB !== "undefined" ? indexedDbBackend() : memoryBackend());
     // getJudge(): Promise<backend> from llm.js; the adapter swaps it for Private or Smart mode.
     // getFallback(): Promise<backend>, the on-device judge Smart mode falls back to.
     this.getJudge = getJudge;
     this.getFallback = getFallback;
+    this.renderClip = render; // renderInWorker; tests pass a fake
     this.jobs = new Map(); // id -> { job, file, words, events, pcm, pcmSegs, captions, thumbs, clips, kits }
     // long videos keep their 16 kHz audio in 10-minute segments in OPFS, not in memory
     this.pcm = pcmStore();
@@ -98,8 +102,24 @@ export class Engine {
     }
     job.key = key;
     this.jobs.set(job.id, this.blankRec(job, file, key));
-    this.run(job.id);
+    this.start(job.id);
     return structuredClone(job);
+  }
+
+  start(id) {
+    const r = this.rec(id);
+    r.running = this.run(id);
+    return r.running;
+  }
+
+  /** Resolves when the job's run, its saves and its posting kits have settled (tests, and callers that need to wait). */
+  async idle(id) {
+    const r = this.rec(id);
+    for (;;) {
+      const pending = [r.running, r.saving, r.kitQueue].filter(Boolean);
+      await Promise.all(pending.map((p) => p.catch?.(() => {}) ?? p));
+      if ([r.running, r.saving, r.kitQueue].filter(Boolean).every((p, i) => p === pending[i])) return;
+    }
   }
 
   newJob(file, clean) {
@@ -124,7 +144,7 @@ export class Engine {
   }
 
   blankRec(job, file, key) {
-    return { job, key, file: file || null, words: [], events: [], pcm: null, captions: null, thumbs: [], clips: {}, kits: {}, sourceUrl: file ? URL.createObjectURL(file) : null };
+    return { job, key, file: file || null, words: [], events: [], pcm: null, captions: null, thumbs: [], clips: {}, kits: {}, decisions: {}, sourceUrl: file ? URL.createObjectURL(file) : null };
   }
 
   /** Jobs saved on this device, newest first: { key, id, name, size, savedAt, from, finished }. */
@@ -151,7 +171,7 @@ export class Engine {
     job.key = key;
     job.resumed = { from: resumePoint(saved).from, savedAt: saved.savedAt, withFile: !!f };
     this.jobs.set(job.id, this.blankRec(job, f, key));
-    this.run(job.id);
+    this.start(job.id);
     return structuredClone(job);
   }
 
@@ -202,10 +222,10 @@ export class Engine {
     return this.rec(id).words.slice();
   }
 
-  /** Save after a stage (or just the job, for a person's decisions). Never fatal. */
-  async save(r, stage, parts) {
+  /** Save after a stage (or just the job, for a person's decisions), with the stage's signature. Never fatal. */
+  async save(r, stage, parts, sigs) {
     try {
-      await this.store.saveStage(r.key, r.job, stage, parts);
+      await this.store.saveStage(r.key, r.job, stage, parts, sigs);
     } catch (e) {
       r.job.saveError = e.message; // full storage: the job still runs, it just will not resume
     }
@@ -216,7 +236,10 @@ export class Engine {
     const job = r.job;
     const saved = (await this.store.load(r.key).catch(() => null)) || { stages: {} };
     const has = (s) => saved.stages?.[s] === "done";
+    const sigs = saved.sigs || {};
     if (saved.job) await this.restoreExtras(r);
+    // a person's decisions, kept apart from the judgment (older saves kept them only on the candidates)
+    r.decisions = (await this.store.part(r.key, "decisions").catch(() => null)) || captureDecisions(saved.job?.candidates || []);
     let current = null;
     const awake = typeof document !== "undefined" ? keepAwake() : null;
     const title = typeof document !== "undefined" ? titleProgress("Selects") : null;
@@ -274,8 +297,11 @@ export class Engine {
       }
       this.emit(id, "job", structuredClone(job));
 
-      // 2. transcribe: decode audio, load whisper, run it window by window
-      if (has("transcribe")) {
+      // 2. transcribe: decode audio, load whisper, run it window by window. Reused when it was
+      // made from this file with this speech model, precision, device setting and language (a
+      // transcript saved before signatures existed is reused: those never varied in the browser)
+      const tSig = transcriptSignature({ source: r.key, model: MODELS.whisper.id, language: "en", device: job.settings.asrDevice || "auto", dtype: MODELS.whisper.dtype });
+      if (has("transcribe") && (sigs.transcribe == null || sigs.transcribe === tSig)) {
         const [words, events, loudness, pcm, pcmSegs] = await Promise.all(["words", "events", "loudness", "pcm", "pcmSegs"].map((n) => this.store.part(r.key, n)));
         r.words = words || [];
         r.events = events || [];
@@ -287,7 +313,7 @@ export class Engine {
       } else if (job.source.duration > LONG_SEC) {
         needFile();
         begin("transcribe");
-        await this.transcribeLong(r, { progress, finish });
+        await this.transcribeLong(r, { progress, finish, sig: tSig });
       } else {
         needFile();
         begin("transcribe");
@@ -327,13 +353,17 @@ export class Engine {
         // signs of Nigerian languages or Pidgin, which the desktop app's accent model handles
         job.language = await this.languageNote(r.words);
         finish("transcribe", `${r.words.length} words, ${job.asr.speed}x real time on ${asr.device === "webgpu" ? "the GPU" : "the CPU"}`);
-        await this.save(r, "transcribe", { words: r.words, events: r.events, loudness: job.loudness, pcm: r.pcm });
+        await this.save(r, "transcribe", { words: r.words, events: r.events, loudness: job.loudness, pcm: r.pcm }, { transcribe: tSig });
       }
 
-      // 3. candidates (cheap: rebuilt unless the saved shortlist used the same settings)
-      const candKey = JSON.stringify([job.settings.minLen, job.settings.maxLen, job.settings.stride ?? 6, job.settings.judgeN ?? 8]);
+      // 3. candidates: reused only when the saved shortlist was selected from this transcript
+      // with these settings (signatures.mjs). The browser has no transcript-quality check yet,
+      // so there are no loop stretches to keep out (README, Limits).
+      const selSettings = { ...job.settings, judgeN: job.settings.judgeN ?? 8 };
+      const exclude = [];
+      const selSig = selectionSignature({ transcript: transcriptHash({ words: r.words, events: r.events, loudness: job.loudness }), settings: selSettings, duration: job.source.duration, exclude });
       let short;
-      const savedShort = has("candidates") && saved.candKey === candKey ? await this.store.part(r.key, "shortlist") : null;
+      const savedShort = has("candidates") && sigs.candidates === selSig ? await this.store.part(r.key, "shortlist") : null;
       if (savedShort) {
         short = savedShort;
         reuse("candidates", `${short.length} go to the judge`);
@@ -341,31 +371,40 @@ export class Engine {
         begin("candidates");
         // the same selection path as the desktop app and the eval (src/core/select.mjs);
         // never fewer windows than k clips need (30 clips cannot come out of 8 judged windows)
-        const sel = selectCandidates({ words: r.words, events: r.events, loudness: job.loudness, settings: { ...job.settings, judgeN: job.settings.judgeN ?? 8 }, duration: job.source.duration });
+        const sel = selectCandidates({ words: r.words, events: r.events, loudness: job.loudness, settings: selSettings, duration: job.source.duration, exclude });
         const all = sel.windows;
         short = sel.shortlist;
         job.windows = all.length;
         finish("candidates", `${all.length} windows passed the filter, ${short.length} go to the judge`);
-        await this.save(r, "candidates", { shortlist: short });
-        await this.store.backend.put(`job:${r.key}`, { ...(await this.store.load(r.key)), candKey });
+        await this.save(r, "candidates", { shortlist: short }, { candidates: selSig });
       }
-      if (!job.candidates?.length || job.stages.judge.status !== "done") job.candidates = short;
+      if (job.stages.judge.status !== "done") job.candidates = short;
       this.emit(id, "candidates", { ranked: false, candidates: structuredClone(short) });
       if (!short.length) throw Object.assign(new Error("No clip-sized passages were found."), { hint: "Selects needs at least 20 seconds of continuous speech. Try a longer video, or lower the minimum length." });
 
-      // 4. judge, listwise round, rank, curve (a saved judgement is kept with the person's decisions)
-      const savedJudged = has("judge") && saved.candKey === candKey ? await this.store.part(r.key, "judged") : null;
-      if (savedJudged) {
-        r.judged = savedJudged;
-        const { curve } = rankAndCurve(savedJudged, { k: job.settings.k, duration: job.source.duration });
-        job.curve = curve;
-        reuse("judge", `${savedJudged.length} clips judged by ${job.judge?.model || "the judge"}`);
+      // 4. judge, listwise round, rank, curve: reused only when made from this shortlist by
+      // this judge (backend and model) with these prompts and settings. A person's decisions
+      // are kept apart and put back on whatever the judge produced.
+      current = "judge"; // a judge that cannot be set up (Smart mode without a key) stops this stage
+      const asked = await this.getJudge();
+      const want = judgmentSignature({ selection: selSig, judge: judgeIdentity(asked), prompts: PROMPTS, settings: job.settings });
+      const savedJudgment = has("judge") && sigs.judge === want ? await this.store.part(r.key, "judgment") : null;
+      let ranked;
+      if (savedJudgment?.candidates) {
+        ranked = savedJudgment.candidates;
+        r.judged = savedJudgment.judged;
+        Object.assign(job, { curve: savedJudgment.curve, verdict: savedJudgment.verdict, listwise: savedJudgment.listwise, faithful: savedJudgment.faithful, judge: savedJudgment.judge });
+        reuse("judge", `${savedJudgment.judged.length} clips judged by ${job.judge?.model || "the judge"}`);
       } else {
         begin("judge");
-        await this.judgeStage(r, short, progress);
+        const { ranked: fresh, llm } = await this.judgeStage(r, short, progress, asked);
+        ranked = fresh;
         finish("judge", job.judge.secPerCandidate ? `${r.judged.length} clips judged, ${job.judge.secPerCandidate} s each` : `${r.judged.length} clips judged`);
-        await this.save(r, "judge", { judged: r.judged });
+        // signed with the judge that actually did the work (Smart mode can fall back to the device)
+        const made = judgmentSignature({ selection: selSig, judge: judgeIdentity(llm), prompts: PROMPTS, settings: job.settings });
+        await this.save(r, "judge", { judgment: { judged: r.judged, candidates: ranked, curve: job.curve, verdict: job.verdict ?? null, listwise: job.listwise ?? null, faithful: job.faithful ?? null, judge: job.judge } }, { judge: made });
       }
+      job.candidates = this.withDecisions(r, ranked);
       this.emit(id, "candidates", { ranked: true, candidates: structuredClone(job.candidates), curve: job.curve });
       job.stage = "ready";
       this.emit(id, "stage", { stage: "ready" });
@@ -392,7 +431,7 @@ export class Engine {
    * segment (38 MB of PCM) however long the video is, and a job that stops part way (a
    * closed tab, a frozen phone) resumes at the next segment.
    */
-  async transcribeLong(r, { progress, finish }) {
+  async transcribeLong(r, { progress, finish, sig }) {
     const job = r.job;
     const dur = job.source.duration;
     const partial = (await this.store.part(r.key, "asrPartial").catch(() => null)) || null;
@@ -445,7 +484,7 @@ export class Engine {
     job.asr = { provider: "transformers.js", model: MODELS.whisper.id, device: asr.device, language: "en", decodeSec: +decodeSec.toFixed(1), loadSec: asr.loadSec, sec: +wallSec.toFixed(1), speed: +((dur - startAt) / Math.max(0.1, wallSec)).toFixed(2), segments: segs.length, pcmIn: this.pcm.kind };
     job.language = await this.languageNote(r.words);
     finish("transcribe", `${r.words.length} words, ${job.asr.speed}x real time on ${where}, in ${segs.length} parts`);
-    await this.save(r, "transcribe", { words: r.words, events: r.events, loudness: job.loudness, pcmSegs: segs });
+    await this.save(r, "transcribe", { words: r.words, events: r.events, loudness: job.loudness, pcmSegs: segs }, { transcribe: sig });
     await this.store.savePart(r.key, "asrPartial", null).catch(() => {});
   }
 
@@ -457,17 +496,45 @@ export class Engine {
       for (const { cid, preset } of await this.store.clips(r.key)) {
         const c = await this.store.clip(r.key, cid, preset);
         if (!c?.mp4) continue;
-        r.clips[`${cid}:${preset}`] = { url: URL.createObjectURL(c.mp4), srtUrl: URL.createObjectURL(new Blob([c.srt || ""], { type: "application/x-subrip" })), bytes: c.mp4.size };
-        const cand = r.job.candidates.find((x) => x.id === cid);
-        const field = preset === "preview" ? "preview" : "render";
-        if (cand?.[field]) Object.assign(cand[field], { path: r.clips[`${cid}:${preset}`].url, srt: r.clips[`${cid}:${preset}`].srtUrl });
+        r.clips[`${cid}:${preset}`] = { url: URL.createObjectURL(c.mp4), srtUrl: URL.createObjectURL(new Blob([c.srt || ""], { type: "application/x-subrip" })), bytes: c.mp4.size, start: c.start ?? null, end: c.end ?? null };
       }
+      this.attachRenders(r);
     } catch {}
   }
 
-  async judgeStage(r, short, progress) {
+  /**
+   * Link saved MP4s and kits to the candidates they were made from. A clip is saved with its
+   * start and end, so after a new selection (where an id can name another window) or a trim
+   * it is not shown as this candidate's render. Clips saved before that are linked by id, as
+   * they always were, but only to a candidate that already had a render.
+   */
+  attachRenders(r) {
+    const same = (x, c) => (x?.start == null ? null : Math.abs(x.start - c.start) < 0.01 && Math.abs(x.end - c.end) < 0.01);
+    for (const c of r.job.candidates || []) {
+      for (const preset of ["shorts", "preview"]) {
+        const field = preset === "preview" ? "preview" : "render";
+        const clip = r.clips[`${c.id}:${preset}`];
+        const match = clip ? same(clip, c) : false;
+        if (match === false || (match === null && !c[field])) {
+          if (c[field]?.status === "done" && c[field].path?.startsWith?.("blob:") && !clip) c[field] = null;
+          continue;
+        }
+        c[field] = { ...(c[field]?.status === "done" ? c[field] : { status: "done", progress: 1 }), path: clip.url, srt: clip.srtUrl, bytes: clip.bytes };
+        if (field === "render") {
+          const k = r.kits[c.id];
+          if (k && same(k, c) !== false) {
+            c.render.kit ??= `kit:${c.id}`;
+            c.title ??= k.title;
+          }
+        }
+      }
+    }
+  }
+
+  /** Judge the shortlist. Returns { ranked, llm }: the candidates as the judge ranked them (no human decisions) and the backend that judged. */
+  async judgeStage(r, short, progress, asked) {
     const job = r.job;
-    let llm = await this.getJudge();
+    let llm = asked || (await this.getJudge());
     const loadOpts = {
       onProgress: (p) => progress("judge", { progress: 0, note: p.cached ? "loading the judge model from this browser's cache" : `getting the judge model: ${Math.round(p.loaded / 1e6)} of ${Math.round(p.total / 1e6)} MB`, download: { loaded: p.loaded, total: p.total } }),
       onWaking: (s) => progress("judge", { progress: 0, note: `waking the Smart mode server (${s} s; a free server sleeps when idle and can take up to a minute)` }),
@@ -531,10 +598,30 @@ export class Engine {
     const bar = applyQualityBar(ranked);
     ranked = bar.candidates;
     job.verdict = bar.verdict;
-    // keep any decisions a person made on an earlier run of the same windows
-    const prev = new Map((job.candidates || []).map((c) => [c.id, c]));
-    job.candidates = ranked.map((c) => (prev.get(c.id)?.status && prev.get(c.id).status !== "proposed" ? { ...c, status: prev.get(c.id).status } : c));
     job.curve = curve;
+    return { ranked, llm };
+  }
+
+  /**
+   * The judge's ranking with a person's decisions put back where their window is a candidate
+   * again (decisions.mjs), misleading cuts ordered as the review shows them, and rendered
+   * clips and kits linked back to the clips they were made from.
+   */
+  withDecisions(r, ranked) {
+    const out = applyDecisions(structuredClone(ranked), r.decisions, { words: r.words }).candidates;
+    const job = r.job;
+    let cands = out;
+    if (cands.some((c) => c.faithful)) {
+      cands = orderByFaithful(cands);
+      if (job.verdict) {
+        const t = job.verdict.threshold;
+        for (const x of cands) if (typeof x.weak === "boolean") x.weak = !(typeof x.total === "number" && x.total >= t && !x.demoted);
+        job.verdict = qualityVerdict(cands, { threshold: t });
+      }
+    }
+    job.candidates = cands;
+    this.attachRenders(r);
+    return job.candidates;
   }
 
   /** A light language check on the transcript text (lid-lite-5). Never fatal. */
@@ -583,6 +670,8 @@ export class Engine {
     if (patch.start != null || patch.end != null) {
       const snapped = snapTrim(r.words, Number(patch.start ?? c.start), Number(patch.end ?? c.end));
       if (snapped.start !== c.start || snapped.end !== c.end) {
+        c.origStart ??= c.start; // the window it came from, which keys the decision
+        c.origEnd ??= c.end;
         c.start = snapped.start;
         c.end = snapped.end;
         const ws = r.words.filter((w) => w.s >= c.start - 1e-6 && w.e <= c.end + 1e-6);
@@ -604,7 +693,9 @@ export class Engine {
       }
     }
     this.emit(id, "candidates", { ranked: true, candidates: structuredClone(r.job.candidates), changed: cid });
-    this.save(r, null); // approvals and trims survive a closed tab
+    // approvals and trims survive a closed tab, and a new judgment (kept apart from it)
+    r.decisions = captureDecisions(r.job.candidates, r.decisions);
+    r.saving = Promise.all([this.save(r, null), this.store.savePart(r.key, "decisions", r.decisions).catch(() => {})]);
     return structuredClone(r.job.candidates.find((x) => x.id === cid));
   }
 
@@ -681,7 +772,7 @@ export class Engine {
       c[field] = { status: "running", progress: 0, path: null, srt: null, kit: null };
       this.emit(id, "render", { id: c.id, preset, ...c[field] });
       try {
-        const result = await renderInWorker(
+        const result = await this.renderClip(
           { file: r.file, source: job.source, candidate: { id: c.id, start: c.start, end: c.end }, cues, preset, style, edited: !!caps?.edited, gainDb: clipGainDb(await this.pcmRange(r, c.start, c.end), 0, c.end - c.start, { channels: Math.min(2, job.source.audioStreams?.[0]?.channels || 2) }) },
           { onProgress: (p) => {
             c[field].progress = +p.progress.toFixed(3);
@@ -693,8 +784,8 @@ export class Engine {
         if (prev) URL.revokeObjectURL(prev.url);
         const url = URL.createObjectURL(new Blob([result.mp4], { type: "video/mp4" }));
         const srtUrl = URL.createObjectURL(new Blob([result.srt], { type: "application/x-subrip" }));
-        r.clips[`${c.id}:${preset}`] = { url, srtUrl, bytes: result.mp4.byteLength };
-        this.store.saveClip(r.key, c.id, preset, { mp4: new Blob([result.mp4], { type: "video/mp4" }), srt: result.srt }).catch(() => {});
+        r.clips[`${c.id}:${preset}`] = { url, srtUrl, bytes: result.mp4.byteLength, start: c.start, end: c.end };
+        this.store.saveClip(r.key, c.id, preset, { mp4: new Blob([result.mp4], { type: "video/mp4" }), srt: result.srt, start: c.start, end: c.end }).catch(() => {});
         let kitSec = null;
         if (field === "render") {
           const k0 = performance.now();

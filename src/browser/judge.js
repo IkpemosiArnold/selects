@@ -4,17 +4,21 @@
 import { applyListOrder, blend, clamp, combine, tidyReason } from "../core/judge-core.mjs";
 import { plainKit } from "../core/kit-core.mjs";
 import { curve, rank } from "../core/rank.mjs";
-import { readTask } from "../core/tasks.mjs";
+import { buildTask, readTask } from "../core/tasks.mjs";
+import { taskKey } from "../core/signatures.mjs";
+import { PROMPTS } from "./prompts.js";
 import { contextFor, faithfulHints, faithfulResult } from "../core/faithful-core.mjs";
 import { toSentences } from "../core/sentences.mjs";
 
-// Answers are cached for the page's life by model + kind + clip text, so a re-run or a
-// changed setting does not pay for the same call twice.
+// Answers are cached for the page's life, keyed by the backend, the model and everything the
+// model is sent (the messages built from the prompt files, the schema and the output budget:
+// signatures.mjs taskKey), so a re-run does not pay for the same call twice and a changed
+// task never gets an old answer.
 const memo = new Map();
-const key = (llm, task, text) => `${llm.id}|${llm.model}|${task.kind}|${task.madeFor || ""}|${text}`;
+const key = (llm, task) => taskKey({ backend: llm.id, model: llm.model }, buildTask(task, PROMPTS));
 
-async function ask(llm, task, cacheText) {
-  const k = key(llm, task, cacheText);
+async function ask(llm, task) {
+  const k = key(llm, task);
   if (memo.has(k)) return { ...memo.get(k), cached: true };
   let last;
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -73,7 +77,7 @@ export async function judgeShortlist(short, llm, { onProgress, onResult, onFallb
   if (batch && llm.where === "google" && short.length > 1) {
     const t0 = performance.now();
     try {
-      const r = await ask(llm, { kind: "judgeBatch", candidates: short, madeFor }, short.map((c) => c.text.trim()).join("\n---\n"));
+      const r = await ask(llm, { kind: "judgeBatch", candidates: short, madeFor });
       const sec = +((performance.now() - t0) / 1000).toFixed(2);
       calls.push({ kind: "judgeBatch", clips: short.length, sec, complete: r.parsed.complete, ...(r.stats || {}) });
       short.forEach((c, i) => {
@@ -96,7 +100,7 @@ export async function judgeShortlist(short, llm, { onProgress, onResult, onFallb
     if (signal?.aborted) throw Object.assign(new Error("Stopped before it finished."), { name: "AbortError" });
     const t0 = performance.now();
     try {
-      const r = await ask(llm, { kind: "judge", candidate: c, madeFor }, c.text.trim());
+      const r = await ask(llm, { kind: "judge", candidate: c, madeFor });
       const sec = +((performance.now() - t0) / 1000).toFixed(2);
       if (!r.cached) times.push(sec);
       out[i] = scored(c, r.parsed, { judgedOn: where });
@@ -109,7 +113,7 @@ export async function judgeShortlist(short, llm, { onProgress, onResult, onFallb
           device ??= fallback();
           const dev = await device;
           const t1 = performance.now();
-          const r = await ask(dev, { kind: "judge", candidate: c, madeFor }, c.text.trim());
+          const r = await ask(dev, { kind: "judge", candidate: c, madeFor });
           fallbacks++;
           out[i] = scored(c, r.parsed, { judgedOn: "device", fallbackNote: FALLBACK_NOTE });
           calls.push({ id: c.id, kind: "judge", backend: dev.id, sec: +((performance.now() - t1) / 1000).toFixed(2), fallback: true, ...(r.stats || {}) });
@@ -139,7 +143,7 @@ export async function listwiseRound(judged, llm, { n = 4 } = {}) {
   const top = rank(judged, { k: n, iou: 0.3 });
   if (top.length < 2) return { candidates: judged, order: top.map((c) => c.id), reasons: {}, complete: true, sec: 0 };
   const t0 = performance.now();
-  const r = await ask(llm, { kind: "listwise", top }, top.map((c) => `${c.hook}|${c.text.slice(-200)}`).join("\n"));
+  const r = await ask(llm, { kind: "listwise", top });
   const { order, reasons, complete } = r.parsed;
   const { candidates, byLetter } = applyListOrder(judged, top, order, reasons);
   return {
@@ -161,7 +165,7 @@ export function rankAndCurve(judged, { k = 5, duration }) {
 export async function makeKit(candidate, llm, { plain = false, madeFor } = {}) {
   if (plain || !llm) return plainKit(candidate);
   try {
-    const r = await ask(llm, { kind: "kit", candidate, madeFor }, candidate.text.trim());
+    const r = await ask(llm, { kind: "kit", candidate, madeFor });
     return r.parsed.title ? r.parsed : plainKit(candidate);
   } catch {
     return plainKit(candidate);
@@ -189,7 +193,7 @@ export async function faithfulRound(ranked, llm, { words, maxLen = 90, rulesOnly
     if (!rulesOnly && llm) {
       const t1 = performance.now();
       try {
-        const r = await ask(llm, { kind: "faithful", candidate: c, before: before?.text ?? null, after: after?.text ?? null, hints }, `${before?.text}|${c.text}|${after?.text}`);
+        const r = await ask(llm, { kind: "faithful", candidate: c, before: before?.text ?? null, after: after?.text ?? null, hints });
         answer = r.parsed;
         if (!r.cached) times.push((performance.now() - t1) / 1000);
       } catch (e) {

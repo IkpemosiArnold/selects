@@ -10,15 +10,12 @@
 //   gemini-proxy   the same through server-proxy (the project's key, rate limited)
 import { geminiGenerate } from "../core/gemini.mjs";
 import { buildTask, slimTask, withSchemaHint } from "../core/tasks.mjs";
-import judgeMd from "../core/prompts/judge.md?raw";
-import listwiseMd from "../core/prompts/listwise.md?raw";
-import kitMd from "../core/prompts/kit.md?raw";
-import faithfulMd from "../core/prompts/faithful.md?raw";
+import { PROMPTS } from "./prompts.js";
 import { cachedFetch } from "./cache.js";
 import { MODELS } from "./models.js";
 import { runtimes } from "./devices.js";
 
-export const PROMPTS = { judge: judgeMd, listwise: listwiseMd, kit: kitMd, faithful: faithfulMd };
+export { PROMPTS };
 
 const now = () => performance.now();
 const secs = (t0) => +((performance.now() - t0) / 1000).toFixed(2);

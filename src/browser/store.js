@@ -74,8 +74,10 @@ export const SAVED_AFTER = {
   probe: ["source"],
   transcribe: ["words", "events", "loudness", "asr", "language", "pcm"],
   candidates: ["shortlist"],
-  judge: ["judged", "candidates", "curve", "listwise", "judge"],
+  judge: ["judgment"], // { judged, candidates (as the judge ranked them), curve, verdict, listwise, faithful, judge }
 };
+// Saved apart from the stages: "decisions" (a person's approvals, trims and faithful accepts,
+// keyed by window: src/core/decisions.mjs), "captions" and "kits".
 const ORDER = ["probe", "transcribe", "candidates", "judge"];
 
 /**
@@ -94,7 +96,7 @@ export function resumePoint(rec) {
 /**
  * The job store. A job is saved as several keys so a stage's save is small:
  *   job:<key>            { key, id, name, size, savedAt, stages: { probe: "done", ... }, job }
- *   part:<key>:<name>    words, events, loudness, shortlist, judged, captions, kits
+ *   part:<key>:<name>    words, events, loudness, shortlist, judgment, decisions, captions, kits
  *   pcm:<key>            the 16 kHz mono audio (Float32Array, about 3.8 MB a minute)
  *   clip:<key>:<cid>:<preset>   a rendered MP4 (Blob)
  */
@@ -105,14 +107,19 @@ export function createJobStore(backend = memoryBackend()) {
     async load(key) {
       return (await backend.get(jk(key))) ?? null;
     },
-    /** Save the job summary and mark a stage done (or just update the job with stage = null). */
-    async saveStage(key, job, stage, parts = {}) {
-      for (const [name, value] of Object.entries(parts)) {
+    /**
+     * Save the job summary and mark a stage done (or just update the job with stage = null).
+     * sigs: { [stage]: signature } of what that stage's saved parts were computed from
+     * (src/core/signatures.mjs); a later run reuses a part only when its signature matches.
+     */
+    async saveStage(key, job, stage, parts = {}, sigs = null) {
+      for (const [name, value] of Object.entries(parts || {})) {
         if (name === "pcm") await backend.put(`pcm:${key}`, value);
         else await backend.put(`part:${key}:${name}`, value);
       }
       const prev = (await backend.get(jk(key))) || { key, stages: {} };
-      const rec = { ...prev, key, id: job.id, name: job.source?.name ?? prev.name, size: job.source?.size ?? prev.size, savedAt: new Date().toISOString(), job, stages: stage ? { ...prev.stages, [stage]: "done" } : prev.stages };
+      const rec = { ...prev, key, id: job.id, name: job.source?.name ?? prev.name, size: job.source?.size ?? prev.size, savedAt: new Date().toISOString(), job, stages: stage ? { ...prev.stages, [stage]: "done" } : prev.stages, sigs: { ...(prev.sigs || {}), ...(sigs || {}) } };
+      delete rec.candKey; // the old shortlist fingerprint, replaced by sigs
       await backend.put(jk(key), rec);
       return rec;
     },
