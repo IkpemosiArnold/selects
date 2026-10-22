@@ -250,6 +250,7 @@ export async function inOrder(pieces, run, { concurrency = 2, onResult, signal }
   };
   await Promise.all(Array.from({ length: Math.max(1, concurrency) }, worker));
   await deliver();
-  if (failure) await it.return?.();
+  // stop cutting pieces; not awaited, since a pending cut may be waiting for audio still decoding
+  if (failure) it.return?.()?.catch?.(() => {});
   return { done: delivered, error: failure?.error ?? null };
 }

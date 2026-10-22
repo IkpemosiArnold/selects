@@ -331,3 +331,23 @@ test("light: early picks are published while the transcript arrives", async () =
   assert.equal(seen[0].upTo, 240, "the first after 3 minutes or more had been heard");
   assert.ok(seen[0].picks.every((p) => p.end <= 240));
 });
+
+test("light: a transcript made through the shared transcriber is reused with the person's own key", async () => {
+  const s = await probedOnly();
+  const first = { ...fakeRemote(), id: "remote:proxy" };
+  const make = (remote) => {
+    const e = new Engine({ store: s.store, getJudge: async () => fakeBackend({ id: "gemini-proxy", model: "g", where: "google" }), getTranscriber: async () => remote, render: fakeRender() });
+    e.lightHooks = { decode: async () => new Float32Array(Math.ceil(DURATION * RATE)), cached: async () => false };
+    return e;
+  };
+  const a = make(first);
+  const j1 = await a.createJob(s.file, {});
+  await a.idle(j1.id);
+  assert.equal(first.calls, 1);
+  const second = { ...fakeRemote(), id: "remote:groq-key" };
+  const b = make(second);
+  const j2 = await b.createJob(s.file, {});
+  await b.idle(j2.id);
+  assert.equal(second.calls, 0, "no second transcription");
+  assert.match(b.getJob(j2.id).stages.transcribe.note, /saved on this device/);
+});

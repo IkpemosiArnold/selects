@@ -28,7 +28,8 @@ export function useEngine() {
     const apply = (s) => {
       if (!alive || !s) return;
       setSuggested(s);
-      if (readEngineMode()) return;
+      // never change the mode once a job has started (its judge is chosen later in the run)
+      if (readEngineMode() || api.engine?.jobs?.size) return;
       const cur = api.getMode().mode;
       if (s.mode !== cur) setModeState(api.setMode(s.mode));
       else setModeState(api.getMode());

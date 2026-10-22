@@ -338,7 +338,8 @@ export class Engine {
       const deviceSig = transcriptSignature({ source: r.key, model: speech.model.id, language: "en", device: job.settings.asrDevice || "auto", dtype: speech.model.dtype });
       // Light mode: a remote transcriber (it also takes a transcript already made on this device)
       const remote = this.getTranscriber ? await this.getTranscriber() : null;
-      const tSig = remote ? transcriptSignature({ source: r.key, model: `${remote.id}:${remote.model}`, language: "en" }) : deviceSig;
+      // one signature for Light mode's whisper, whichever route sent the audio (the shared proxy or the person's own key)
+      const tSig = remote ? transcriptSignature({ source: r.key, model: `light:${remote.model}`, language: "en" }) : deviceSig;
       if (has("transcribe") && (sigs.transcribe == null || sigs.transcribe === tSig || (remote && sigs.transcribe === deviceSig))) {
         const [words, events, loudness, pcm, pcmSegs] = await Promise.all(["words", "events", "loudness", "pcm", "pcmSegs"].map((n) => this.store.part(r.key, n)));
         r.words = words || [];
@@ -363,6 +364,8 @@ export class Engine {
         begin("transcribe");
         r.words = [];
         r.events = [];
+        r.picksAt = null;
+        job.preliminary = null;
         const t0 = performance.now();
         progress("transcribe", { progress: 0, note: "reading the audio" });
         r.pcm = await decodeAudio16k(r.file, { duration: job.source.duration, onProgress: (p) => progress("transcribe", { progress: p * 0.05, note: "reading the audio" }) });

@@ -74,6 +74,8 @@ export async function transcribeLight(engine, r, transcriber, { progress, finish
   const hooks = { decode: decodeAudio16k, decodeSegments: decodeAudioSegments, device: deviceTranscriber, cached: speechModelCached, ...(engine.lightHooks || {}) };
   r.words = [];
   r.events = [];
+  r.picksAt = null; // early picks start again with this transcript
+  job.preliminary = null;
   const t0 = performance.now();
   const take = (words) => {
     const split = splitNonSpeech(words);
