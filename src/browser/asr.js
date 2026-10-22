@@ -65,7 +65,7 @@ export function loadAsr({ device = "auto", model = MODELS.whisper, onDownload } 
       }
     };
     w.addEventListener("message", onMsg);
-    w.postMessage({ type: "load", model: model.id, dtype: model.dtype, wantDevice });
+    w.postMessage({ type: "load", model: model.id, dtype: model.dtype, wantDevice, files: model.files || null });
   }));
   return ready;
 }

@@ -45,6 +45,7 @@ const fileOf = (u) => decodeURIComponent(new URL(u).pathname.split("/resolve/")[
 let storeP = null;
 const getStore = () => (storeP ??= opfsStore().then((s) => s || memoryStore()));
 let lastDownloadError = null;
+let expected = {}; // { "onnx/encoder_model.onnx": { size, sha256 } } for the model being loaded
 const netFetch = env.fetch;
 
 env.fetch = async (input, init) => {
@@ -72,6 +73,7 @@ env.fetch = async (input, init) => {
         post({ type: "download", file, loaded: p.loaded, total: p.total, cached: !!p.cached });
       },
       onNote: (n) => post({ type: "download-note", file, ...n }),
+      expect: expected[file] || null,
     });
     return new Response(blob, { status: 200, headers: { "content-length": String(blob.size), "content-type": "application/octet-stream" } });
   } catch (e) {
@@ -131,8 +133,9 @@ export function planWindows(pcm, rate, { maxSec = 29.5, searchSec = 5 } = {}) {
   return out;
 }
 
-async function load({ model, dtype, wantDevice }) {
+async function load({ model, dtype, wantDevice, files }) {
   lastDownloadError = null;
+  expected = files || {};
   // the main thread resolves "auto" with devices.js (the same rule as the download estimate);
   // this is only a fallback for callers that still send "auto"
   let dev = wantDevice;

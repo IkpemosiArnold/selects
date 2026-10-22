@@ -140,12 +140,15 @@ test("a file that changes upstream part way is started again, not stitched toget
   assert.deepEqual(new Uint8Array(await blob.arrayBuffer()), srv.current());
 });
 
-test("a corrupt file (hash differs from the ETag) is deleted and reported", async () => {
+test("a corrupt file (SHA-256 differs from the pinned one) is deleted and reported", async () => {
   const file = bytes(2 * MB);
   const store = memoryStore();
-  const srv = fakeServer(file, { etag: "a".repeat(64) });
-  await assert.rejects(resumableDownload(URL1, { store, fetchImpl: srv.fetchImpl, ...fast }), (e) => e.kind === "integrity");
+  const srv = fakeServer(file, { etag: "xet-hash-not-a-sha" });
+  await assert.rejects(resumableDownload(URL1, { store, fetchImpl: srv.fetchImpl, expect: { size: file.length, sha256: "a".repeat(64) }, ...fast }), (e) => e.kind === "integrity");
   assert.equal((await store.info(URL1)).bytes, 0);
+  // the right hash passes, and an ETag that is not a SHA-256 (Hugging Face's Xet hash) is not mistaken for one
+  const ok = await resumableDownload(URL1, { store: memoryStore(), fetchImpl: fakeServer(file, { etag: "f".repeat(64) }).fetchImpl, expect: { size: file.length, sha256: sha(file) }, ...fast });
+  assert.equal(ok.size, file.length);
 });
 
 test("server errors are retried with backoff; a 404 is not", async () => {

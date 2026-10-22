@@ -16,6 +16,13 @@ export const MODELS = {
     // 8-bit decoder. WebGPU: the same encoder and a 4-bit decoder.
     dtype: { wasm: { encoder_model: "fp32", decoder_model_merged: "q8" }, webgpu: { encoder_model: "fp32", decoder_model_merged: "q4" } },
     bytes: { wasm: 82451730 + 53712196 + 4247506, webgpu: 82451730 + 123736279 + 4247506 },
+    // size and SHA-256 of the large files (Hugging Face API, 22 Oct 2026), checked after a
+    // resumable download; a file that changed upstream is loaded unverified
+    files: {
+      "onnx/encoder_model.onnx": { size: 82451730, sha256: "f9fafccf043f762fea42ce685a097b1c1f7c3a062d2208a568481716312f8e35" },
+      "onnx/encoder_model_quantized.onnx": { size: 23159173, sha256: "9b4d25507aef3d3a8d718695b8adcb0488e66aad8e884333c3fa73a1c3baa906" },
+      "onnx/decoder_model_merged_quantized.onnx": { size: 53712196, sha256: "afa8065a5f023f6e524417f9459cc09969023dd38149cd4dce16628b2c3a1773" },
+    },
     cache: "Origin private file system (\"models\"), and Cache Storage for the small files",
   },
   // The smaller speech model, the default on iPhones, iPads and devices with 4 GB of memory or
@@ -28,6 +35,11 @@ export const MODELS = {
     source: `${HF}/onnx-community/whisper-tiny.en_timestamped`,
     dtype: { wasm: { encoder_model: "fp32", decoder_model_merged: "q8" }, webgpu: { encoder_model: "fp32", decoder_model_merged: "q4" } },
     bytes: { wasm: 32894434 + 30729881 + 2692523, webgpu: 32894434 + 86803045 + 2692523 },
+    files: {
+      "onnx/encoder_model.onnx": { size: 32894434, sha256: "e19140280ff8ae5299e4a82566e6c33e809f45b635428f7674ac821dd64f2ccc" },
+      "onnx/encoder_model_quantized.onnx": { size: 10097112, sha256: "697eaa5668bb13343965f423d6002273479b8508f592bd26970735516ed5039e" },
+      "onnx/decoder_model_merged_quantized.onnx": { size: 30729881, sha256: "f2df67fbe1cf39c9b050d05029b55e217a9467f3453ae5110e2bcc0f5ba73652" },
+    },
     cache: "Origin private file system (\"models\"), and Cache Storage for the small files",
   },
   // The judge when the browser has WebGPU: Gemma 4 E2B through Google's web runtime

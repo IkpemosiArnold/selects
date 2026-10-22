@@ -6,11 +6,14 @@
 // Here a large file comes down in closed HTTP byte ranges (8 MB by default). Every byte that
 // arrives is written to the origin private file system (OPFS) at once, so a dropped
 // connection, a "Try again" or a reload carries on from the last byte received. Failures are
-// retried with backoff; the finished file is checked against its size and, when the server's
-// ETag is a SHA-256 (Hugging Face's large files), against that hash.
+// retried with backoff; the finished file is checked against its size and, when Selects
+// knows it (models.js), its SHA-256. Hugging Face's ETag is a Xet hash, not a SHA-256, so it
+// is used only to notice a file that changed part way.
 
 const MB = 2 ** 20;
 export const CHUNK_BYTES = 8 * MB;
+/** Files up to this size are checked against their SHA-256 (hashing reads the whole file into memory). */
+export const HASH_LIMIT_BYTES = 256 * MB;
 
 /** A download failure with a kind the UI can explain: network, http, quota, integrity. */
 export class DownloadError extends Error {
@@ -87,7 +90,7 @@ export function resumableDownload(url, opts = {}) {
   return promise;
 }
 
-async function download(url, { store, fetchImpl = (...a) => fetch(...a), chunkBytes = CHUNK_BYTES, retries = 8, maxWaitMs = 30000, sleep = defaultSleep, onProgress, onNote, signal, estimate } = {}) {
+async function download(url, { store, fetchImpl = (...a) => fetch(...a), chunkBytes = CHUNK_BYTES, retries = 8, maxWaitMs = 30000, sleep = defaultSleep, onProgress, onNote, signal, estimate, expect = null, hashLimitBytes = HASH_LIMIT_BYTES } = {}) {
   let { bytes: have, meta } = await store.info(url);
   // what happened along the way, for the console (the person sees only progress and errors)
   const note = (event, extra = {}) => onNote?.({ event, at: have, total: meta?.size ?? null, ...extra });
@@ -268,12 +271,15 @@ async function download(url, { store, fetchImpl = (...a) => fetch(...a), chunkBy
     throw new DownloadError("integrity", "The model file came out the wrong size.", { loaded: 0, total: 0 });
   }
   const blob = await store.blob(url);
-  if (meta.etag && /^[0-9a-f]{64}$/.test(meta.etag)) {
+  if (expect?.sha256 && expect.size === meta.size && meta.size <= hashLimitBytes) {
     const hex = await sha256Hex(blob);
-    if (hex !== meta.etag) {
+    if (hex !== expect.sha256) {
       await store.reset(url);
       throw new DownloadError("integrity", "The model file arrived damaged.", { loaded: 0, total: meta.size, cause: lastError });
     }
+    note("verified");
+  } else if (expect?.size && expect.size !== meta.size) {
+    note("unverified", { why: `the server's file is ${meta.size} bytes, Selects expected ${expect.size}` });
   }
   meta.done = true;
   meta.doneAt = new Date().toISOString();
