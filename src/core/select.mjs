@@ -10,6 +10,20 @@ import { toSentences } from "./sentences.mjs";
  * minutes (on a CPU, local Gemma takes 40 to 80 s a window; Smart mode about 3 s).
  */
 export const judgeBudgetSec = (duration) => Math.max(600, 0.5 * (duration || 0));
+/** Above this share of looped words, a transcript's worst loop counts against all of it (quality.mjs). */
+export const LOOP_SHARE = 0.02;
+
+/**
+ * The stretches to keep out of the shortlist: where whisper looped in an otherwise clean
+ * transcript (transcriptQuality's `loops`). When loops cover more than LOOP_SHARE of the
+ * words the transcript gate deals with it instead, so nothing is excluded (with --force on a
+ * looping transcript, the person asked to judge it anyway). The app and the eval both use it.
+ * @param {{loops?: {s:number, e:number}[], loopShare?: number}|null} q
+ */
+export function loopExclusions(q) {
+  return q?.loops?.length && q.loopShare <= LOOP_SHARE ? q.loops : [];
+}
+
 /** Never read more than this many windows in one job. */
 export const JUDGE_MAX = 120;
 

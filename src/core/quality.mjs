@@ -2,6 +2,7 @@
 // Candidates, the judge, the cuts and the captions all sit on the transcript, so a bad one
 // must stop the run (or at least warn) before Gemma spends ten minutes judging noise.
 import zlib from "node:zlib";
+import { LOOP_SHARE } from "./select.mjs";
 
 export const LOW_P = 0.5; // a word below this is "low confidence" (faint underline in the editor)
 
@@ -55,8 +56,9 @@ export function loopedChunks(texts, size = 80, limit = 2.4) {
   return out;
 }
 
-/** Above this share of looped words, a transcript's worst loop counts against all of it. */
-export const LOOP_SHARE = 0.02;
+// Above LOOP_SHARE of looped words, a transcript's worst loop counts against all of it (the
+// constant lives in select.mjs, which the browser build can import, beside loopExclusions)
+export { LOOP_SHARE };
 
 export function maxChunkCompression(texts, size = 80) {
   let worst = 1;

@@ -20,6 +20,7 @@ import { createHash } from "node:crypto";
 import { auc, spearman, aboveMedian, signFlipTest, holm, wilson, bootstrapCI, mean, rng, scoreVideo, tiou, bestIoU } from "./metrics.mjs";
 import { windowIntensity, heatmapToLabels } from "./heatmap.mjs";
 import { energyScore } from "./methods/energy.mjs";
+import { loopExclusions } from "../src/core/select.mjs";
 import { geminiKey, geminiRequest, rateLimiter, GEMMA4 } from "./llm-gemini.mjs";
 
 const EVAL = dirname(fileURLToPath(import.meta.url));
@@ -158,7 +159,13 @@ async function prep(v, C) {
 function windowsFor(v, P, C) {
   const info = readJson(resolve(ROOT, v.heatmapPath));
   const heat = (info.heatmap || []).filter((s) => s.start_time < P.end);
-  const sels = Object.fromEntries(NS.map((n) => [n, C.selectCandidates({ words: P.words, events: P.events, loudness: P.loudness, settings: { ...SETTINGS, judgeN: n }, duration: P.end })]));
+  // the same exclusions as the app (job.mjs): stretches where whisper looped never become
+  // clips. The quality is recomputed (milliseconds), as the app does on every run, so a cached
+  // prep from before `loops` existed still gets them. Results generated before 22 Oct 2026
+  // did not pass these (see RESULTS.md, "Selection parity").
+  const quality = C.transcriptQuality ? C.transcriptQuality(P.words, { duration: P.end }) : P.quality;
+  const exclude = loopExclusions(quality);
+  const sels = Object.fromEntries(NS.map((n) => [n, C.selectCandidates({ words: P.words, events: P.events, loudness: P.loudness, settings: { ...SETTINGS, judgeN: n }, duration: P.end, exclude })]));
   const windows = sels[NS[0]].windows.map((w) => ({ ...w, intensity: windowIntensity(heat, w.start, Math.min(w.end, P.end)) })).filter((w) => w.intensity != null);
   const byId = new Map(windows.map((w) => [w.id, w]));
   const short = Object.fromEntries(NS.map((n) => [n, sels[n].shortlist.map((c) => byId.get(c.id)).filter(Boolean)]));
@@ -436,11 +443,15 @@ const CHANNEL_COUNTRY = {
   vRVV1hq9WXE: "Nigeria", wBoEsrpnPHA: "United States", xlAyUkscaFg: "Nigeria", _iUeydyJc20: "Kenya",
 };
 
+// Recorded in every report: the v2 judging ran before the eval passed the app's loop exclusions.
+export const PARITY_NOTE = "**Selection parity.** These v2 numbers predate a fix. The app keeps stretches where whisper looped (the transcript-quality `loops`) out of the shortlist, but the eval's `selectCandidates` call did not pass those exclusions until 22 Oct 2026. The paid run was not repeated. Rechecking the cached transcripts of all 19 videos with the current quality check (no model calls) found no loops, so every shortlist, and so every number below, comes out the same; later runs pass the exclusions.";
+
 export function report(videos, A, { excluded = [], prefer = null, v1 = null } = {}) {
   const L = [];
   L.push("# Selects eval results", "");
   L.push(`v2, generated ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC by \`node eval/run-eval-v2.mjs --report\`. The plan, hypotheses and tests were committed before judging: [eval/PLAN.md](../PLAN.md).`, "");
   L.push(`**n = ${videos.length} videos** (the first 15 minutes of each, ${videos.reduce((s, v) => s + v.nWindows, 0)} candidate windows in total, ${videos.reduce((s, v) => s + v.nR, 0)} in the random sample R that the models judged).${excluded.length ? ` Excluded before judging: ${excluded.map((e) => `${e.id} (${e.reason.replace("whisper's transcript is unreliable", "the app's own transcript-quality gate rated it unreliable, so a real job would stop before judging")})`).join("; ")}.` : ""}`, "");
+  L.push(PARITY_NOTE, "");
   L.push("## Headline: does the model rank windows the way viewers replay them?", "");
   L.push("AUC is the chance that a window viewers replayed more than the video's median scores higher than one they replayed less (0.5 is a coin flip). Spearman rho is the rank correlation with replay intensity. Mean over videos, 95% bootstrap interval.", "");
   L.push("| Method | windows | n videos | AUC (95% CI) | Spearman rho (95% CI) |", "|---|---|---|---|---|");

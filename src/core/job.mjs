@@ -12,9 +12,9 @@ import { languageKey, loadLanguage, loadTranscript, reuseEnabled, saveLanguage, 
 import { accentRoute, nigerianCues } from "./langid/accent.mjs";
 import { applyProfile } from "./profiles.mjs";
 import { applyMadeFor } from "./madefor.mjs";
-import { LOOP_SHARE, transcriptQuality } from "./quality.mjs";
+import { transcriptQuality } from "./quality.mjs";
 import { attributionLine, captionWithCredit, mediaReminder, normaliseLicense, OWN_FOOTAGE } from "./attribution.mjs";
-import { judgeCount, selectCandidates } from "./select.mjs";
+import { judgeCount, loopExclusions, selectCandidates } from "./select.mjs";
 import { splitNonSpeech, speechOnly } from "./nonspeech.mjs";
 import { judge as realJudge, listwise as realListwise, measuredSpeeds } from "./judge.mjs";
 import { DEFAULT_RATES, diskFullError, diskNeed, estimateJob, isDiskFull, thumbCount } from "./estimate.mjs";
@@ -338,11 +338,6 @@ export function cleanBlur(blur) {
   return { faces: { mode, tracks: Array.isArray(blur.faces?.tracks) ? blur.faces.tracks.map(String) : [] }, regions };
 }
 
-/** Stretches where whisper looped in an otherwise clean transcript (with --force on a looping one, nothing is excluded). */
-function localLoops(q) {
-  return q?.loops?.length && q.loopShare <= LOOP_SHARE ? q.loops : [];
-}
-
 /** Free bytes on the drive that holds the jobs folder (null when the OS will not say). */
 function freeBytes() {
   try {
@@ -610,7 +605,7 @@ async function runStages(id, { deps = {}, signal } = {}) {
       // how many windows the judge reads: scaled with k and the length, capped by a time budget
       // at the judge's measured speed (judgeCount in select.mjs)
       const secPerCall = judgeSecPerCall(job.settings);
-      const sel = selectCandidates({ words, events: loadEvents(dir, words), loudness: readJson(path.join(dir, "loudness.json"), null), settings: job.settings, duration: job.source.duration, judge: { secPerCall }, exclude: localLoops(job.transcriptQuality) });
+      const sel = selectCandidates({ words, events: loadEvents(dir, words), loudness: readJson(path.join(dir, "loudness.json"), null), settings: job.settings, duration: job.source.duration, judge: { secPerCall }, exclude: loopExclusions(job.transcriptQuality) });
       const { sentences, windows: all } = sel;
       short = sel.shortlist;
       job.judgeN = sel.judgeN;

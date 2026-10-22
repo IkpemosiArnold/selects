@@ -4,6 +4,8 @@ v2, generated 2026-10-21 09:04 UTC by `node eval/run-eval-v2.mjs --report`. The 
 
 **n = 19 videos** (the first 15 minutes of each, 3591 candidate windows in total, 456 in the random sample R that the models judged). Excluded before judging: _iUeydyJc20 (the app's own transcript-quality gate rated it unreliable, so a real job would stop before judging); 74HTXDSsa-Q (the app's own transcript-quality gate rated it unreliable, so a real job would stop before judging); lDDq_HbDpN4 (36 foreign-language markers (dubbed audio?)); o_a-mslVsA0 (the app's own transcript-quality gate rated it unreliable, so a real job would stop before judging).
 
+**Selection parity.** These v2 numbers predate a fix. The app keeps stretches where whisper looped (the transcript-quality `loops`) out of the shortlist, but the eval's `selectCandidates` call did not pass those exclusions until 22 Oct 2026. The paid run was not repeated. Rechecking the cached transcripts of all 19 videos with the current quality check (no model calls) found no loops, so every shortlist, and so every number below, comes out the same; later runs pass the exclusions.
+
 ## Headline: does the model rank windows the way viewers replay them?
 
 AUC is the chance that a window viewers replayed more than the video's median scores higher than one they replayed less (0.5 is a coin flip). Spearman rho is the rank correlation with replay intensity. Mean over videos, 95% bootstrap interval.

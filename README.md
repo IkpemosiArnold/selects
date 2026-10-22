@@ -502,6 +502,7 @@ The question is whether a free open model picks the moments viewers come back to
 - **Exploratory (not pre-registered).** The blend the app ranks by (0.7 Gemma score plus 0.3 pre-score) scored 0.57 (0.51 to 0.64). At the effect seen, about 52 videos would be needed for 80% power against chance.
 - **Faithful cuts.** With Gemma 4, the check flagged 10 of 95 top picks. Its precision is not measured yet.
 - **Not done yet.** The blind preference test (`node eval/prefer.mjs`) has no ratings.
+- **Selection parity.** The v2 run predates a fix: the eval did not keep stretches where whisper looped out of the shortlist, as the app does. Rechecking the cached transcripts found no such loops in any of the 19 videos, so the numbers are unchanged; the run was not repeated. See [`eval/results/RESULTS.md`](eval/results/RESULTS.md).
 
 v1 (6 videos, hit@k only) is kept in [`eval/results/RESULTS-v1.md`](eval/results/RESULTS-v1.md).
 
