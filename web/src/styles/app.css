@@ -241,6 +241,9 @@ kbd {
 .proc-left .slate { gap: 16px; }
 .proc-headline { cursor: default; }
 .proc-headline.is-error { color: var(--slate-red); }
+/* the "Stopped" stamp sits in a strip kept clear below the error, so a long message never runs under it (375 to 430 px phones) */
+.proc-headline.is-error { padding-bottom: 56px; }
+.proc-left .slate-mark { bottom: 14px; }
 .proc-sub { color: var(--ink-2); max-width: 44ch; text-wrap: pretty; }
 .proc-resume { justify-self: start; }
 .steps { display: grid; gap: 8px; font-size: var(--t-13); color: var(--ink-2); margin-top: 4px; }
