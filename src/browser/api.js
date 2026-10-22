@@ -9,7 +9,7 @@
 // Differences from the HTTP client are listed in src/browser/adapter.md.
 import { Engine } from "./engine.js";
 import { geminiKeyBackend, privateBackend, proxyBackend } from "./llm.js";
-import { MODELS, SMART_MODELS } from "./models.js";
+import { MODELS, SMART_MODELS, speechModel } from "./models.js";
 import { runtimes } from "./devices.js";
 import { COPY } from "./copy.js";
 import { enableNotifications, KEEP_OPEN, registerApp } from "./device.js";
@@ -121,11 +121,12 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
       const [caps, rt] = await Promise.all([capabilities(), runtimes({ prefer: state.prefer })]);
       const judgeId = rt.judge === "gemma4-webgpu" ? "gemma4" : "gemma3";
       const judge = MODELS[judgeId];
-      const w = MODELS.whisper;
+      // whisper's size is chosen for the device (tiny.en on iPhones and small-memory devices)
+      const w = speechModel(rt.speech);
       return {
         runtimes: rt,
         items: [
-          { id: "whisper", label: w.label, bytes: w.bytes[rt.asr], device: rt.asr, licence: w.licence, source: w.source, cache: w.cache },
+          { id: "whisper", label: w.label, bytes: w.bytes[rt.asr], device: rt.asr, size: rt.speech, licence: w.licence, source: w.source, cache: w.cache },
           { id: judgeId, label: judge.label, bytes: judge.bytes, licence: judge.licence, source: judge.source, cache: judge.cache },
           { id: "ng5", label: MODELS.ng5.label, bytes: MODELS.ng5.bytes, licence: MODELS.ng5.licence, source: MODELS.ng5.source, cache: MODELS.ng5.cache },
         ],
@@ -191,7 +192,10 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
     clipUrl: (id, cid, preset) => engine.clipUrl(id, cid, preset),
 
     // Desktop-only features: they need ffmpeg, Apple Vision or models not in the browser build.
-    asrModels: async () => [{ name: "base.en", sizeMb: Math.round(MODELS.whisper.bytes.wasm / 1e6), english: true }],
+    asrModels: async () => {
+      const w = speechModel((await runtimes()).speech);
+      return [{ name: w.id.includes("tiny") ? "tiny.en" : "base.en", sizeMb: Math.round(w.bytes.wasm / 1e6), english: true }];
+    },
     setLanguage: () => wrap(async () => { throw Object.assign(new Error(COPY.desktopOnly.language), { status: 501 }); }),
     detectFaces: () => wrap(async () => { throw Object.assign(new Error(COPY.desktopOnly.faces), { status: 501 }); }),
     getFaces: () => wrap(async () => { throw Object.assign(new Error(COPY.desktopOnly.faces), { status: 404 }); }),

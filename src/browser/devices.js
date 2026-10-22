@@ -1,27 +1,42 @@
 // Which runtimes this browser uses: one choice, made in one place, for both what the page says
-// it will download and what actually runs (the judge backend in llm.js, whisper's device in
-// asr.js). chooseRuntimes is pure, so the rule is tested in Node.
+// it will download and what actually runs (the judge backend in llm.js, whisper's device and
+// size in asr.js). chooseRuntimes is pure, so the rule is tested in Node.
 
 /** The judge on WebGPU (Gemma 4 E2B, 2 GB) needs at least this much device memory, when the browser says. */
 export const MIN_GPU_MEMORY_GB = 4;
+/** At or below this much memory (navigator.deviceMemory), whisper defaults to the smaller model. */
+export const SMALL_SPEECH_MEMORY_GB = 4;
+
+/** iPhone, iPad (which reports itself as a Mac with a touch screen) or iPod. */
+export function isAppleMobile(ua = "", maxTouchPoints = 0) {
+  return /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && maxTouchPoints > 1);
+}
 
 /**
- * @param {{ webgpu?: boolean, vendor?: string, deviceMemoryGb?: number|null, prefer?: string, asrDevice?: string }} facts
- *   prefer: "auto" | "gemma4-webgpu" | "gemma3-wasm" (the judge); asrDevice: "auto" | "webgpu" | "wasm"
- * @returns {{ judge: "gemma4-webgpu" | "gemma3-wasm", asr: "webgpu" | "wasm" }}
+ * @param {{ webgpu?: boolean, vendor?: string, deviceMemoryGb?: number|null, ios?: boolean, prefer?: string, asrDevice?: string, speech?: string }} facts
+ *   prefer: "auto" | "gemma4-webgpu" | "gemma3-wasm" (the judge); asrDevice: "auto" | "webgpu" | "wasm";
+ *   speech: "auto" | "base" | "tiny" (whisper's size)
+ * @returns {{ judge: "gemma4-webgpu" | "gemma3-wasm", asr: "webgpu" | "wasm", speech: "base" | "tiny" }}
  */
-export function chooseRuntimes({ webgpu = false, vendor = "", deviceMemoryGb = null, prefer = "auto", asrDevice = "auto" } = {}) {
+export function chooseRuntimes({ webgpu = false, vendor = "", deviceMemoryGb = null, ios = false, prefer = "auto", asrDevice = "auto", speech = "auto" } = {}) {
   const memOk = !deviceMemoryGb || deviceMemoryGb >= MIN_GPU_MEMORY_GB;
-  const judge = prefer === "gemma4-webgpu" || prefer === "gemma3-wasm" ? prefer : webgpu && memOk ? "gemma4-webgpu" : "gemma3-wasm";
+  // An iPhone or iPad tab is closed by iOS long before the device's memory is used up, and
+  // Safari does not say how much memory there is, so the 2 GB WebGPU judge is not the default there
+  const judge = prefer === "gemma4-webgpu" || prefer === "gemma3-wasm" ? prefer : webgpu && memOk && !ios ? "gemma4-webgpu" : "gemma3-wasm";
   // On an Intel integrated GPU whisper ran 2.4 times slower than on the CPU (2017 MacBook Pro,
-  // notes/timings.md), so "auto" keeps whisper on the CPU there
-  const asr = asrDevice === "webgpu" || asrDevice === "wasm" ? asrDevice : webgpu && !/intel/i.test(vendor || "") ? "webgpu" : "wasm";
-  return { judge, asr };
+  // notes/timings.md), so "auto" keeps whisper on the CPU there. On iOS it stays on the CPU
+  // too: the WebAssembly path is the one tested in WebKit, and the WebGPU build of whisper
+  // needs a 4-bit decoder that is 70 MB bigger to download
+  const asr = asrDevice === "webgpu" || asrDevice === "wasm" ? asrDevice : webgpu && !ios && !/intel/i.test(vendor || "") ? "webgpu" : "wasm";
+  // phones and small-memory devices get the smaller whisper unless the person picks the bigger one
+  const small = ios || (deviceMemoryGb != null && deviceMemoryGb <= SMALL_SPEECH_MEMORY_GB);
+  const size = speech === "base" || speech === "tiny" ? speech : small ? "tiny" : "base";
+  return { judge, asr, speech: size };
 }
 
 let facts = null;
 
-/** What this browser has: { webgpu, vendor, architecture, deviceMemoryGb }. Asked once per page. */
+/** What this browser has: { webgpu, vendor, architecture, deviceMemoryGb, ios }. Asked once per page. */
 export function deviceFacts() {
   facts ??= (async () => {
     const nav = globalThis.navigator || {};
@@ -29,7 +44,7 @@ export function deviceFacts() {
     try {
       adapter = nav.gpu ? await nav.gpu.requestAdapter() : null;
     } catch {}
-    return { webgpu: !!adapter, vendor: adapter?.info?.vendor || "", architecture: adapter?.info?.architecture || "", deviceMemoryGb: nav.deviceMemory || null };
+    return { webgpu: !!adapter, vendor: adapter?.info?.vendor || "", architecture: adapter?.info?.architecture || "", deviceMemoryGb: nav.deviceMemory || null, ios: isAppleMobile(nav.userAgent || "", nav.maxTouchPoints || 0) };
   })();
   return facts;
 }
@@ -40,8 +55,8 @@ export function resetDeviceFacts() {
 }
 
 /** The runtimes for this browser, with the person's preferences. */
-export async function runtimes({ prefer = "auto", asrDevice = "auto" } = {}) {
-  return chooseRuntimes({ ...(await deviceFacts()), prefer, asrDevice });
+export async function runtimes({ prefer = "auto", asrDevice = "auto", speech = "auto" } = {}) {
+  return chooseRuntimes({ ...(await deviceFacts()), prefer, asrDevice, speech });
 }
 
 /**

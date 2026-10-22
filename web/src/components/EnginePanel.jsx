@@ -98,14 +98,14 @@ export default function EnginePanel({ engine }) {
             </div>
           )}
           {noRoute && <p className="field-error" role="alert">Smart mode needs a Gemini key here. Paste one, or switch to Private.</p>}
-          {whisper && <p className="field-hint">The first time, this browser downloads the speech model ({whisper.label.replace(/\s*\(.*\)/, "")}, {gb(whisper.bytes)}) once.</p>}
+          {whisper && <p className="field-hint">The first time, this browser downloads the speech model ({whisper.label.replace(/\s*\(.*\)/, "")}, {gb(whisper.bytes)}{whisper.size === "tiny" ? ", the smaller one for phones" : ""}) once.</p>}
         </div>
       ) : (
         downloads && (
           <div className="engine-private">
             {judge && (
               <p className="engine-dl">
-                <b>{plainLabel(judge.label)}, {gb(judge.bytes)}</b>, downloads once{whisper ? `, with the speech model (${gb(whisper.bytes)})` : ""}.
+                <b>{plainLabel(judge.label)}, {gb(judge.bytes)}</b>, downloads once{whisper ? `, with the speech model (${plainLabel(whisper.label)}, ${gb(whisper.bytes)}${whisper.size === "tiny" ? ", the smaller one for phones" : ""})` : ""}.
               </p>
             )}
             <p className="field-hint">

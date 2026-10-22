@@ -16,7 +16,19 @@ export const MODELS = {
     // 8-bit decoder. WebGPU: the same encoder and a 4-bit decoder.
     dtype: { wasm: { encoder_model: "fp32", decoder_model_merged: "q8" }, webgpu: { encoder_model: "fp32", decoder_model_merged: "q4" } },
     bytes: { wasm: 82451730 + 53712196 + 4247506, webgpu: 82451730 + 123736279 + 4247506 },
-    cache: "Cache Storage, \"transformers-cache\"",
+    cache: "Origin private file system (\"models\"), and Cache Storage for the small files",
+  },
+  // The smaller speech model, the default on iPhones, iPads and devices with 4 GB of memory or
+  // less (devices.js). Same tokenizer and word timestamps as base.en; quality and size against
+  // base.en on the test clips are in notes/timings.md ("Speech model for phones").
+  whisperTiny: {
+    id: "onnx-community/whisper-tiny.en_timestamped",
+    label: "Whisper tiny.en (speech to text, smaller)",
+    licence: "MIT (OpenAI Whisper), ONNX export by onnx-community",
+    source: `${HF}/onnx-community/whisper-tiny.en_timestamped`,
+    dtype: { wasm: { encoder_model: "fp32", decoder_model_merged: "q8" }, webgpu: { encoder_model: "fp32", decoder_model_merged: "q4" } },
+    bytes: { wasm: 32894434 + 30729881 + 2692523, webgpu: 32894434 + 86803045 + 2692523 },
+    cache: "Origin private file system (\"models\"), and Cache Storage for the small files",
   },
   // The judge when the browser has WebGPU: Gemma 4 E2B through Google's web runtime
   // (MediaPipe LLM Inference, @mediapipe/tasks-genai). Text only on the web.
@@ -59,6 +71,10 @@ export const MODELS = {
 // The only Gemma models the Gemini API listed on 16 Oct 2026. The 26B MoE (about 4B active)
 // answered judge calls in about 2 s; the 31B dense model took up to a minute.
 export const SMART_MODELS = ["gemma-4-26b-a4b-it", "gemma-4-31b-it"];
+
+/** whisper by size: "base" (the default on computers) or "tiny" (phones). */
+export const SPEECH_MODELS = { base: "whisper", tiny: "whisperTiny" };
+export const speechModel = (size = "base") => MODELS[SPEECH_MODELS[size] || "whisper"];
 
 export const mb = (bytes) => `${Math.round(bytes / 1e6)} MB`;
 export const gb = (bytes) => `${(bytes / 1e9).toFixed(1)} GB`;
