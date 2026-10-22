@@ -12,6 +12,8 @@
 
 const MB = 2 ** 20;
 export const CHUNK_BYTES = 8 * MB;
+/** What arrives is written out at least this often, so a closed tab loses at most this much per file. */
+export const FLUSH_BYTES = 2 * MB;
 /** Files up to this size are checked against their SHA-256 (hashing reads the whole file into memory). */
 export const HASH_LIMIT_BYTES = 256 * MB;
 
@@ -211,8 +213,8 @@ async function download(url, { store, fetchImpl = (...a) => fetch(...a), chunkBy
     }
     if (res.url && res.url !== url) src = res.url;
 
-    // read what arrives, keeping it even if the connection drops part way; a long answer is
-    // written out every chunkBytes so it never sits whole in memory
+    // read what arrives, keeping it even if the connection drops part way; it is written out
+    // every 2 MB, so a closed tab loses little and a long answer never sits whole in memory
     let skip = skipBytes;
     let parts = [];
     let pending = 0;
@@ -250,7 +252,7 @@ async function download(url, { store, fetchImpl = (...a) => fetch(...a), chunkBy
       pending += v.length;
       got += v.length;
       progress(have + pending);
-      if (pending >= chunkBytes) await flush();
+      if (pending >= Math.min(chunkBytes, FLUSH_BYTES)) await flush();
     }
     await flush();
     if (meta.size == null && !readError) {
