@@ -26,7 +26,10 @@
 //                    the socket address)
 //   PORT             default 8787
 //
-// Run: node server-proxy/server.mjs     Health: GET /healthz     Task: POST /v1/task
+//   GROQ_API_KEY     Light mode (POST /transcribe): a Groq key for hosted whisper; other
+//                    providers and limits in server-proxy/asr.mjs (asrFromEnv) and LIMITS.asr*
+//
+// Run: node server-proxy/server.mjs     Health: GET /healthz     Task: POST /v1/task     Light mode: POST /transcribe
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
@@ -34,6 +37,7 @@ import { fileURLToPath } from "node:url";
 import { geminiGenerate, GEMINI_BASE } from "../src/core/gemini.mjs";
 import { MADE_FOR } from "../src/core/madefor.mjs";
 import { buildTask, checkTaskShape, slimTask } from "../src/core/tasks.mjs";
+import { asrFromEnv, checkAudio } from "./asr.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PROMPTS = Object.fromEntries(["judge", "listwise", "kit", "faithful"].map((k) => [k, fs.readFileSync(path.join(here, "../src/core/prompts", `${k}.md`), "utf8")]));
@@ -49,6 +53,20 @@ export const LIMITS = {
   globalPerDay: 12000, // and about 14,400 a day
   // 2. the body cap: a judge task is a few KB of clip text
   bodyBytes: 16 * 1024,
+  // Light mode, POST /transcribe: the same three gates with their own counters, plus audio
+  // seconds (the hosted whisper's free tier is metered in audio seconds, Groq: 7,200 an hour
+  // and 28,800 a day), charged after each answer with the length the model reports
+  asrIngressPerIpPerMinute: 30,
+  asrIngressPerIpPerDay: 1000,
+  asrBodyBytes: 1536 * 1024, // a 2-minute piece is about 0.25 MB as 16 kbps Opus
+  asrMaxSec: 180,
+  asrPerIpPerMinute: 12,
+  asrPerIpPerDay: 400,
+  asrGlobalPerMinute: 18, // Groq's free whisper allows 20 requests a minute
+  asrGlobalPerDay: 1900, // and 2,000 a day
+  asrSecPerIpPerDay: 2 * 3600,
+  asrSecGlobalPerHour: 7000,
+  asrSecGlobalPerDay: 27000,
 };
 
 /** How many X-Forwarded-For hops to trust: TRUST_PROXY_HOPS, else 3 on Render (measured 21 Oct 2026), else 0. */
@@ -176,12 +194,24 @@ export function createProxy({
   limiter = makeLimiter(),
   timeoutMs = Number(process.env.GEMMA_TIMEOUT_MS || 25000), // per call, then one retry (src/core/gemini.mjs)
   log = (line) => console.log(line),
+  asr = asrFromEnv(), // Light mode's speech to text (server-proxy/asr.mjs), or null when not set up
 } = {}) {
   const limits = { ...LIMITS, ...given };
   let features = {};
   let current = model;
-  const counts = { ok: 0, refused: 0, limited: 0, failed: 0 };
-  setInterval(() => limiter.sweep(), 3600000).unref?.();
+  const counts = { ok: 0, refused: 0, limited: 0, failed: 0, transcribed: 0 };
+  // audio seconds used, per fixed window (Light mode), charged after each answer
+  const meter = new Map();
+  const secBucket = (key, windowMs, t = Date.now()) => {
+    let b = meter.get(key);
+    if (!b || t - b.start >= windowMs) meter.set(key, (b = { start: t, sec: 0 }));
+    return b;
+  };
+  setInterval(() => {
+    limiter.sweep();
+    const t = Date.now();
+    for (const [k, b] of meter) if (t - b.start > 86400000) meter.delete(k);
+  }, 3600000).unref?.();
 
   const send = (res, status, body, origin) => {
     const headers = { "content-type": "application/json", "cache-control": "no-store", "x-content-type-options": "nosniff" };
@@ -202,6 +232,73 @@ export function createProxy({
   });
   return server;
 
+  /**
+   * POST /transcribe (Light mode): one piece of speech-only audio in the body (Ogg Opus, M4A,
+   * MP3, WAV...), at most LIMITS.asrBodyBytes and LIMITS.asrMaxSec. Answers { words: [{ w, s, e }],
+   * duration, model } with times from the start of the piece. Gates as for /v1/task: ingress per
+   * IP before the body is read, then the size and audio checks, then the model quota (requests
+   * and audio seconds, per IP and for everyone) only for a valid piece. The audio and the words
+   * pass through memory for this request only; the log has sizes and timings, never content.
+   */
+  async function transcribe(req, res, origin, reqOrigin, t0) {
+    if (reqOrigin && !origin) {
+      counts.refused++;
+      return send(res, 403, { error: "This origin may not use the proxy." }, null);
+    }
+    if (!asr) return send(res, 503, { error: "Light mode is not set up on this server.", hint: "Switch to Private or Smart mode: the speech is then transcribed on this device." }, origin);
+    const ip = clientIp(req, trustProxyHops);
+    const limited = (a, scope, what = "requests") => {
+      counts.limited++;
+      res.setHeader("retry-after", String(a.retrySec));
+      if (scope === "ingress") {
+        res.on("finish", () => req.destroy());
+        res.setHeader("connection", "close");
+      }
+      const hint = scope === "global"
+        ? `Light mode is at capacity for everyone right now. Try again in ${Math.ceil(a.retrySec / 60)} min, or switch to Private mode.`
+        : `Too many ${what} from this connection. Try again in ${Math.ceil(a.retrySec / 60)} min, or switch to Private mode.`;
+      return send(res, 429, { error: "Too many requests.", hint, retrySec: a.retrySec, scope }, origin);
+    };
+    const gate = limiter.allowAll([[`ti:${ip}`, limits.asrIngressPerIpPerMinute, 60000], [`td:${ip}`, limits.asrIngressPerIpPerDay, 86400000]]);
+    if (!gate.ok) return limited(gate, "ingress");
+    const body = await readBody(req, limits.asrBodyBytes);
+    if (body.tooBig) {
+      counts.refused++;
+      res.on("finish", () => req.destroy());
+      res.setHeader("connection", "close");
+      return send(res, 413, { error: "Refused: the audio piece is too large.", hint: `Send at most ${Math.round(limits.asrBodyBytes / 1024)} KB of compressed audio at a time.` }, origin);
+    }
+    const check = checkAudio(body.buf, { maxSec: limits.asrMaxSec });
+    if (!check.ok) {
+      counts.refused++;
+      return send(res, 400, { error: `Refused: ${check.reason}.`, hint: "The proxy only transcribes Selects audio pieces." }, origin);
+    }
+    // audio seconds already used (charged after each answer): refuse before spending more
+    const t = Date.now();
+    const secs = [[`sd:${ip}`, limits.asrSecPerIpPerDay, 86400000, "ip"], ["sgh", limits.asrSecGlobalPerHour, 3600000, "global"], ["sgd", limits.asrSecGlobalPerDay, 86400000, "global"]];
+    for (const [k, lim, win, scope] of secs) {
+      const b = secBucket(k, win, t);
+      if (b.sec >= lim) return limited({ retrySec: Math.ceil((b.start + win - t) / 1000) }, scope, "minutes of audio");
+    }
+    const quota = limiter.allowAll([[`tm:${ip}`, limits.asrPerIpPerMinute, 60000], [`tdq:${ip}`, limits.asrPerIpPerDay, 86400000], ["tgm", limits.asrGlobalPerMinute, 60000], ["tgd", limits.asrGlobalPerDay, 86400000]]);
+    if (!quota.ok) return limited(quota, quota.key.startsWith("tg") ? "global" : "ip");
+    const { kind, mime, ext, sec } = check.audio;
+    try {
+      const out = await asr.transcribe({ buf: body.buf, mime, ext, language: "en" });
+      const used = Math.max(10, out.duration || sec || 0); // hosted whisper bills at least 10 s a request
+      for (const [k, , win] of secs) secBucket(k, win).sec += used;
+      counts.transcribed++;
+      log(JSON.stringify({ at: new Date().toISOString(), kind: "transcribe", provider: asr.id, model: out.model, audio: kind, kb: Math.round(body.buf.length / 1024), sec: out.duration ?? sec, words: out.words.length, ms: Date.now() - t0 }));
+      return send(res, 200, { words: out.words, duration: out.duration ?? sec, model: out.model, provider: asr.id }, origin);
+    } catch (e) {
+      counts.failed++;
+      log(JSON.stringify({ at: new Date().toISOString(), kind: "transcribe", provider: asr.id, audio: kind, kb: Math.round(body.buf.length / 1024), ms: Date.now() - t0, error: e.status || "network" }));
+      const status = e.status === 429 ? 429 : e.status === 0 ? 504 : 502;
+      if (e.retrySec) res.setHeader("retry-after", String(e.retrySec));
+      return send(res, status, { error: status === 429 ? "The free transcription quota is used up for now." : status === 504 ? "Transcription did not answer in time." : "Transcription failed.", hint: "Try again in a minute, or switch to Private mode to transcribe on this device.", transient: e.transient !== false }, origin);
+    }
+  }
+
   async function handle(req, res) {
     const t0 = Date.now();
     const reqOrigin = req.headers.origin || "";
@@ -214,8 +311,9 @@ export function createProxy({
     if (req.method === "GET" && (url.pathname === "/healthz" || url.pathname === "/")) {
       // "you" is the caller's own rate-limit key, so a deploy can check that a spoofed
       // X-Forwarded-For does not change it
-      return send(res, 200, { ok: !!key, model: current, limits, counts, you: clientIp(req, trustProxyHops) }, origin);
+      return send(res, 200, { ok: !!key, model: current, light: !!asr, asrModel: asr?.model ?? null, limits, counts, you: clientIp(req, trustProxyHops) }, origin);
     }
+    if (req.method === "POST" && url.pathname === "/transcribe") return transcribe(req, res, origin, reqOrigin, t0);
     if (req.method !== "POST" || url.pathname !== "/v1/task") return send(res, 404, { error: "Not found." }, origin);
     if (reqOrigin && !origin) {
       counts.refused++;

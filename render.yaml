@@ -70,3 +70,14 @@ services:
       # own public address in "you".
       - key: TRUST_PROXY_HOPS
         value: "3"
+      # Light mode (POST /transcribe), free tiers only, never billed: a Groq key from a FREE
+      # GroqCloud account (no card on file; at its limit it answers 429, which the page turns
+      # into "The free transcriber is busy right now"). Optional failover: Cloudflare Workers AI
+      # on the FREE Workers plan only (10,000 neurons a day, then errors, never charges).
+      # Leave them unset and Light mode stays off; the page then never suggests it.
+      - key: GROQ_API_KEY
+        sync: false
+      - key: CF_ACCOUNT_ID
+        sync: false
+      - key: CF_API_TOKEN
+        sync: false
