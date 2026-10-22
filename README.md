@@ -173,12 +173,17 @@ Tell Selects where the clips will go with `--made-for` (or `settings.madeFor`). 
 
 Selects Web runs the whole pipeline in a browser tab: speech to text, the clip judge and the captioned 9:16 render. The host only serves static files, and in Private mode the video, its audio and its transcript never leave the device.
 
-### Private mode and Smart mode
+### Private, Light and Smart modes
 
 | Mode | What runs where | What leaves the device |
 |---|---|---|
-| Private (the default) | Everything in the tab: whisper, Gemma and the render | Nothing. The models are downloaded once and cached by the browser |
+| Private | Everything in the tab: whisper, Gemma and the render | Nothing. The models are downloaded once and cached by the browser |
+| Light | Speech to text on a free hosted whisper (Groq's whisper-large-v3); the judge as in Smart mode; the render in the tab | The audio, compressed to about 0.12 MB a minute, and the text of the shortlisted passages. Never the video |
 | Smart | Whisper and the render in the tab; the judge is Gemma 4 26B on Google's Gemini API | The transcript text of the 8 shortlisted passages, sent to Google. Never the video or the audio |
+
+**Light mode** is for slow or costly data and for phones: "Light mode sends your audio, not your video, to be transcribed." It is the default whenever the speech model is not already in this browser and Light can run; Private stays one tap away, and stays the default once the speech model is cached. The audio is decoded in 15-second blocks and cut at quiet moments into pieces (30 seconds first, then up to 2 minutes; long silences are not sent), each compressed on the device (Opus at 16 kbps in Ogg through WebCodecs; AAC, MP3 or WAV where Opus encoding is missing) and sent while the rest is still being read. Words come back in order on the recording's clock, and after about 3 minutes of transcript the page shows **early picks**: the best 1 to 3 moments so far by the first-stage score (no model), previewed by playing that stretch of the video with its words drawn on top. Nothing is rendered until you approve a clip, and Gemma's ranking replaces the early picks when the whole video has been heard. Where the browser reports no connection speed (Safari), a timed 1 MB download estimates how long Private would take.
+
+Light mode never costs anything. The shared transcriber is Groq's free tier through the Selects proxy, which refuses at its limit instead of charging; you can also paste your own free Groq key (kept in the tab, sent only to Groq). When the free transcriber is busy, the words already back are kept: if the speech model is already saved in this browser the rest is transcribed on the device, and otherwise the page stops and says "The free transcriber is busy right now. Use your own free key, or transcribe on this phone.", with the download size of the device option. Until the proxy has a Groq key, the shared transcriber is off: the page does not choose Light by itself and says that Light needs your own free key. Models and limits: [`notes/MODELS.md`](notes/MODELS.md), "Light mode"; measurements: [`notes/timings.md`](notes/timings.md), "Light mode".
 
 Smart mode works with your own free key from Google AI Studio (kept in the tab for the session and sent only to Google), or through a small Selects proxy that holds the project's key. The proxy accepts only Selects judge requests, limits how often each visitor can call it, and does not log the text. If Google's free tier is slow on one clip (calls time out after 25 seconds and are tried once more), that clip is judged on your device when the private model is already saved in the browser, and otherwise keeps its first-stage score; the page says which. If Smart mode does not answer at all, the page never starts the private model's download on its own: with the model already saved it judges on the device and says so, and otherwise it asks whether to try Smart mode again, use the preliminary ranking (the first-stage score, no model) now, or download the private model, showing its size, an estimate on your connection, and a warning on mobile data where the browser reports it.
 
@@ -204,7 +209,7 @@ Phones pause background tabs, so Selects Web does not promise to keep working wh
 
 - Best for videos up to about 10 to 15 minutes. Longer videos are slow in a tab and can run out of memory.
 - English speech only. For other languages, Nigerian-accented English, face blur, whole-video captions or long videos, use the desktop app.
-- The first run downloads 0.9 GB (CPU) or 2.2 GB (WebGPU) of models once.
+- The first run downloads 0.9 GB (CPU) or 2.2 GB (WebGPU) of models once in Private mode. Light mode downloads no model: about 1.2 MB of page, 1.1 MB for the language check, and about 0.12 MB of audio a minute sent.
 - No transcript quality gate yet: the browser's whisper does not report word confidence.
 - Measured on the 2017 laptop (details in [`notes/timings.md`](notes/timings.md), "Browser build"): 2 minutes of video took 11.2 minutes to analyse on the WebGPU path (whisper at 0.31 times real time on the Intel GPU, Gemma 4 E2B at about 19 seconds a call), and a 41-second clip rendered in 57 seconds. On this machine whisper on the CPU was faster (0.75 times real time).
 
@@ -217,11 +222,14 @@ npm --prefix web run build:web          # the review app on the browser engine, 
 npm --prefix web run preview:web        # http://localhost:4173 with the right headers
 ```
 
-The same React app runs on either engine: `npm --prefix web run build` talks to `selects serve` on a laptop, and `build:web` (`VITE_ENGINE=browser`) runs everything in the tab. The engine's own test page still builds with `npm --prefix src/browser run build` (into `dist-engine/`). To try Smart mode without a key, run the stand-in API and the proxy:
+The same React app runs on either engine: `npm --prefix web run build` talks to `selects serve` on a laptop, and `build:web` (`VITE_ENGINE=browser`) runs everything in the tab. The engine's own test page still builds with `npm --prefix src/browser run build` (into `dist-engine/`). To try Smart and Light modes without keys, run the stand-in APIs and the proxy:
 
 ```sh
 PORT=8788 node server-proxy/mock-gemini.mjs
-PORT=8787 GEMINI_API_KEY=test GEMINI_BASE=http://127.0.0.1:8788/v1beta ALLOWED_ORIGINS=http://localhost:4173 node server-proxy/server.mjs
+PORT=8789 node server-proxy/mock-whisper.mjs     # an OpenAI-compatible whisper that answers "Hello, world."
+PORT=8787 GEMINI_API_KEY=test GEMINI_BASE=http://127.0.0.1:8788/v1beta \
+  ASR_PROVIDER=openai-compatible ASR_BASE=http://127.0.0.1:8789/openai/v1 ASR_API_KEY=test \
+  ALLOWED_ORIGINS=http://localhost:4173 node server-proxy/server.mjs
 ```
 
 ### Deploy
@@ -235,7 +243,7 @@ Cross-Origin-Embedder-Policy: require-corp
 
 Use `require-corp`, not `credentialless`. Safari (on iPhone, iPad and Mac, checked up to 27.2 on caniuse.com, 22 Oct 2026; WebKit bug 230550 is still open) does not support `credentialless` and treats it as no policy at all, so the page is not cross-origin isolated there and whisper runs on one thread. `require-corp` is supported by Safari 15.2 and later, Chrome and Firefox. It blocks cross-origin files loaded without CORS unless they send `Cross-Origin-Resource-Policy`, and Selects Web loads none: model downloads from Hugging Face and calls to the Gemini API and the proxy are CORS fetches (allowed), and ONNX Runtime's and MediaPipe's WebAssembly are built into the site instead of fetched from a CDN. Measured in Playwright's WebKit (Safari 18.4 engine) and Chromium 136: with `require-corp` both report `crossOriginIsolated: true` and range requests to Hugging Face still work; with `credentialless`, WebKit reports `false`. `src/browser/public/_headers` sets the headers on Netlify and Cloudflare Pages.
 
-On Render, `render.yaml` describes both services: the static site `selects-web` (the React app in `web/` built on the browser engine, published from `dist-web`, with the headers) and the free web service `selects-smart-proxy` (`node server-proxy/server.mjs`). In the Render dashboard, create a Blueprint from the repository, then set three values: `GEMINI_API_KEY` on the proxy (from Google AI Studio; never commit it), `ALLOWED_ORIGINS` on the proxy (the static site's URL), and `VITE_SELECTS_PROXY_URL` on the static site (the proxy's URL). A free Render web service sleeps after 15 minutes without requests and takes up to about a minute to wake; the page shows "Waking the Smart mode server" while it waits.
+On Render, `render.yaml` describes both services: the static site `selects-web` (the React app in `web/` built on the browser engine, published from `dist-web`, with the headers) and the free web service `selects-smart-proxy` (`node server-proxy/server.mjs`). In the Render dashboard, create a Blueprint from the repository, then set three values: `GEMINI_API_KEY` on the proxy (from Google AI Studio; never commit it), `ALLOWED_ORIGINS` on the proxy (the static site's URL), and `VITE_SELECTS_PROXY_URL` on the static site (the proxy's URL). For Light mode's shared transcriber, also set on the proxy `GROQ_API_KEY`, from a free GroqCloud account with no card on file (console.groq.com); at its limit Groq answers 429 and the page says the free transcriber is busy. Optional failover: `CF_ACCOUNT_ID` and `CF_API_TOKEN` (a token with Workers AI access) from a Cloudflare account on the free Workers plan only, which errors after 10,000 neurons a day instead of billing. Leave them unset and Light mode's shared transcriber is simply off. A free Render web service sleeps after 15 minutes without requests and takes up to about a minute to wake; the page shows "Waking the Smart mode server" while it waits.
 
 ### The Smart mode proxy: limits
 
@@ -246,6 +254,8 @@ The proxy spends one shared, free Gemini quota, so its limits are the protection
 | Ingress, per client IP, before the body is read | 60 a minute, 2,000 a day | nothing: 429, the body is not read |
 | Body cap and task check | 16 KB; only the judge, listwise, faithful and kit task shapes | nothing: 413 or 400, no model quota used |
 | Model quota, per client IP and for everyone | 20 a minute and 300 a day per IP; 25 a minute and 12,000 a day in total | charged only when every counter has room |
+
+Light mode's `POST /transcribe` has the same three gates with its own counters: ingress (30 a minute and 1,000 a day per IP, before the body is read); the checks (at most 1.5 MB and 180 seconds of audio, sniffed from its bytes as Ogg, WebM, M4A, MP3, AAC, WAV or FLAC, and refused if it carries a video track); then the quota (12 pieces a minute and 400 a day per IP; 18 a minute and 1,900 a day in total, under Groq's free 20 and 2,000), plus audio seconds charged after each answer (2 hours a day per IP; 7,000 an hour and 27,000 a day in total, under Groq's free 7,200 and 28,800). The audio and the words pass through memory for that one request: nothing is stored, and the log has sizes and timings only.
 
 The client IP is read from `X-Forwarded-For` with 3 trusted hops on Render (the client, Cloudflare's edge, Render), so a client cannot pick its own key by sending the header. At capacity the proxy answers 429 with `retry-after` and says whether the limit was this visitor's or everyone's. Nothing is queued: the page keeps that clip's first-stage score, or judges it on the device when the private model is already saved in the browser. `GET /healthz` shows the limits and counts.
 

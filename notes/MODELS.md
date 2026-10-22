@@ -44,3 +44,28 @@ Downloads on 16 Oct for the browser build: 209 + 140 MB (whisper, both sets), 2,
 | Silero VAD v6.2.0 (ggml, for whisper.cpp's built-in `--vad`) | MIT, 0.9 MB, https://huggingface.co/ggml-org/whisper-vad | Measured with base.en on 3 recordings: 2.3 times faster on the pause-heavy phone recording, 1.2 times faster on an interview, 1.3 times slower on the talk. But word start times moved (median 0.2 to 0.7 s, worst 2.6 to 4.0 s) and real pauses were squashed (1.9 s pauses became 1.0 s; on the talk, 1.7 s became 0). Captions, cut snapping and pause-based sentences all rely on those times. |
 | Speaker diarization (sherpa-onnx: pyannote segmentation 3.0 plus a speaker-embedding model) | MIT and Apache-2.0, about 6 MB plus 25 to 40 MB | Not built (stretch goal). Feasible: `OfflineSpeakerDiarization` is in the macOS x64 build of sherpa-onnx-node. |
 | ct-transformer zh-en punctuation (FunASR) | FunASR model licence, 65 MB int8 | English-only transcripts here; the 7.5 MB English model is enough. |
+
+## Light mode: speech to text on a free hosted whisper (chosen 22 Oct 2026)
+
+Light mode sends compressed speech-only audio pieces (never the video) to be transcribed, judges as Smart mode does, and renders on the device. Everything here must cost nothing: free tiers that refuse at their limit, never a card on file, or the person's own free key. Full research: [`notes/research/slow-internet.md`](research/slow-internet.md).
+
+| Role | Provider and model | Licence of the weights | Word timestamps | Free limit (fails closed) | Data use | Checked from Lagos (Airtel), 22 Oct 2026 |
+|---|---|---|---|---|---|---|
+| Primary (the shared transcriber, through `server-proxy`) | Groq, `whisper-large-v3` | MIT (OpenAI Whisper) | Yes: `response_format=verbose_json` with `timestamp_granularities[]=word`; the word entries have no punctuation, so `src/core/asr-words.mjs` puts it back from the text | 20 requests a minute, 2,000 a day, 7,200 audio seconds an hour, 28,800 a day; 25 MB a file; 10 s minimum billed a request. At the limit it answers 429 and charges nothing | Not retained by default, not used for training (services agreement 4.2) | API answered 401 (no key), not a geo-block; browser calls allowed (CORS `*`) |
+| Failover | Cloudflare Workers AI, `@cf/openai/whisper-large-v3-turbo` | MIT | Yes, in `segments[].words[]` | 10,000 neurons a day on the free Workers plan, about 214 audio minutes; errors after that on the free plan | Not retained, not used for training | 401 through the Lagos edge, not a geo-block |
+| The person's own key | Groq, `whisper-large-v3`, called from the tab | MIT | As above | That person's own free quota | As above; the key stays in the tab | As above |
+
+Why `whisper-large-v3` and not `-turbo`: the same free limits, and a lower error rate (Groq's table: 10.3% against 12% WER); on African-accented English large-v3 measured about 21% WER on AfriSpeech-MultiBench (arXiv 2511.14255), still well ahead of any model small enough for a phone. Rejected: Hugging Face Inference Providers (no free monthly credits for free accounts, and only chunk-level timestamps through the router), DeepInfra and Fireworks (a card or prepaid credit; Fireworks' audio endpoint answered 503), fal (needs a public audio URL), and whisper.cpp on Render's free plan (0.1 CPU and 512 MB; a live test needed a new Render service, which was not created; the research estimates base.en at well under 1x real time there, and small.en does not fit in the memory). Sources: [Groq speech-to-text](https://console.groq.com/docs/speech-to-text), [Groq rate limits](https://console.groq.com/docs/rate-limits), [Groq data](https://console.groq.com/docs/your-data), [Cloudflare pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/), [Cloudflare privacy](https://developers.cloudflare.com/workers-ai/platform/privacy/), [HF pricing](https://huggingface.co/docs/inference-providers/pricing), [Render free](https://render.com/docs/free), all read 22 Oct 2026.
+
+Not set up yet: the proxy has no `GROQ_API_KEY`, so the shared transcriber is off. The page then does not choose Light by itself, says so when Light is picked, and Light works only with the person's own free Groq key.
+
+### On-device speech model for phones (Private mode): the recommendation handed to the model builder
+
+| Model | Download | Word timestamps on Selects' runtime (transformers.js) | Verdict |
+|---|---|---|---|
+| whisper base.en today (fp32 encoder, q8 decoder) | 140 MB (209 MB on WebGPU) | Yes | What failed on the iPhone |
+| whisper base or base.en, all q8 | 76.9 MB | Yes | Recommended phone default for Private mode, after a q8 accuracy check on Nigerian clips |
+| whisper tiny.en, q8 | 40.8 MB | Yes | Smallest usable; accuracy on Nigerian speech unknown |
+| Moonshine tiny / base, q8 (Useful Sensors, MIT) | 28.1 / 62.9 MB | **No**: transformers.js returns no word times and the ONNX exports have no cross-attention outputs to align with | Rejected: Selects needs word times for cuts and captions |
+
+Sizes from the Hugging Face listings, 22 Oct 2026. The q4 "timestamped" decoder is bigger than the q8 one (the token-embedding table stays unquantised), so all-q8 is the small set. The planned word-error-rate and speed comparison on the CC BY eval clips (a pseudo-reference from whisper large) was lost when this machine restarted on 22 Oct and has not been re-run: the numbers above are sizes and capabilities, not accuracy. For phones with no cached model, Light mode is now the default.
