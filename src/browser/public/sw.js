@@ -1,8 +1,12 @@
 // Selects Web service worker: keeps the app shell available offline and installable.
 // It never runs inference (phones stop service workers after seconds), and it does not
-// touch cross-origin requests: the models are cached by the page itself (Cache Storage
-// "transformers-cache" and "selects-models", and wllama's OPFS cache).
-const SHELL = "selects-shell-v1";
+// touch cross-origin requests: the models are kept by the page itself (OPFS "models",
+// Cache Storage, and wllama's OPFS cache). The WebAssembly runtimes and the module scripts
+// workers import (ONNX Runtime, MediaPipe, wllama: 15 to 27 MB each) are left to the HTTP
+// cache (immutable, hashed names): a copy here would double them on a phone, and a failed
+// fetch inside the service worker made a worker's import fail in WebKit ("Importing a module
+// script failed"), which stopped the speech model from loading.
+const SHELL = "selects-shell-v2";
 const CORE = ["./", "./demo.html", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {
@@ -19,6 +23,7 @@ self.addEventListener("fetch", (e) => {
   const req = e.request;
   const url = new URL(req.url);
   if (req.method !== "GET" || url.origin !== self.location.origin) return;
+  if (/\.(wasm|mjs)$/.test(url.pathname) || req.destination === "worker") return;
   // hashed build assets never change: cache first
   if (url.pathname.includes("/assets/")) {
     e.respondWith(

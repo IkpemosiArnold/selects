@@ -4,7 +4,7 @@
 
 const mbs = (b) => Math.round(b / 1e6);
 
-const NETWORK = /load failed|failed to fetch|networkerror|network connection was lost|network error|appears to be offline|connection (was )?(reset|refused|closed)|err_network|timed out|the operation couldn.t be completed/i;
+const NETWORK = /importing a module script failed|dynamically imported module|cannot load http|load failed|failed to fetch|networkerror|network connection was lost|network error|appears to be offline|connection (was )?(reset|refused|closed)|err_network|timed out|the operation couldn.t be completed/i;
 const MEMORY = /out of memory|\boom\b|bad_alloc|allocation failed|failed to allocate|cannot allocate|memory access out of bounds|could not allocate|maximum call stack/i;
 const BLOCKED = /cross-origin|cors|access control|not allowed by|blocked|crossoriginisolated|sharedarraybuffer is not defined/i;
 const UNSUPPORTED = /no available backend|webassembly is not defined|not supported|unsupported|unimplemented|webgpu is not|requestadapter/i;

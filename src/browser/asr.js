@@ -59,6 +59,10 @@ export function loadAsr({ device = "auto", model = MODELS.whisper, onDownload } 
       } else if (m.type === "error") {
         w.removeEventListener("message", onMsg);
         ready = null;
+        // a fresh worker for the next try: ONNX Runtime keeps a failed start for the life of the
+        // worker. What was downloaded is kept in OPFS, so the next try carries on from there.
+        w.terminate();
+        if (worker === w) worker = null;
         const x = explainModelError(m, { sizeBytes: model.bytes?.[wantDevice] || null });
         console.error("speech model load failed:", m.name, m.message, m.kind || "", m.stack || "");
         reject(Object.assign(new Error(x.message), { hint: x.hint, kind: x.kind, cause: m }));

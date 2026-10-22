@@ -19,6 +19,9 @@ test("every browser's network failure wording is a network failure", () => {
     assert.equal(explainModelError({ name: "TypeError", message }).kind, "network", message);
   }
   assert.equal(explainModelError({ name: "DownloadError", kind: "network", message: "The connection dropped 9 times in a row." }).kind, "network");
+  // ONNX Runtime's own module failing to arrive is a network failure, not an unsupported browser
+  assert.equal(explainModelError({ name: "Error", message: "no available backend found. ERR: [wasm] TypeError: Importing a module script failed." }).kind, "network");
+  assert.equal(explainModelError({ name: "Error", message: "no available backend found. ERR: [wasm] TypeError: Failed to fetch dynamically imported module: https://x/ort.mjs" }).kind, "network");
 });
 
 test("nothing saved yet: no promise of resuming from a part", () => {
