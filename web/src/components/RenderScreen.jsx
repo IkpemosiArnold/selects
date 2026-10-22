@@ -77,6 +77,40 @@ function ShareSave({ url, name, title, text }) {
   );
 }
 
+// The kit's own status: the clip is ready before its title and caption are written, and a
+// kit that failed can be written again without rendering the clip again.
+function KitStatus({ job, c }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const st = c.render?.kitStatus;
+  if (st === "pending" || st === "running") return <p className="take-note" role="status">Writing the title and caption. The clip is ready to play and save.</p>;
+  if (st !== "error") return null;
+  return (
+    <div className="take-kit-error">
+      <p className="take-stale" role="alert">{c.render.kitError || "The title and caption could not be written. These are the clip's own words."}</p>
+      <button
+        type="button"
+        className="btn btn-chip"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setErr(null);
+          try {
+            await api.retryKit(job.id, c.id);
+          } catch (e) {
+            setErr(e.message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {busy ? "Asking again" : "Write the title and caption again"}
+      </button>
+      {err && <p className="field-error" role="alert">{err}</p>}
+    </div>
+  );
+}
+
 // One rendered clip as a take: the MP4 itself at 9:16 (its first frame until
 // you play it), with share and save, and the posting kit beside it.
 function Row({ job, c, kit }) {
@@ -131,6 +165,7 @@ function Row({ job, c, kit }) {
         {done && r.stale && <p className="take-stale">You changed the captions or the blur after this render. Render it again to use the changes.</p>}
         {done && clip && <ShareSave url={clip} name={clipFileName(c.rank, title || c.hook)} title={title || ""} text={fullCaption} />}
         {r.status === "error" && <p className="take-error">{r.message || r.error || "This clip did not render."}</p>}
+        {done && <KitStatus job={job} c={c} />}
         {done && (
           <dl className="take-kit">
             <div className="kit-field">
@@ -141,7 +176,7 @@ function Row({ job, c, kit }) {
             <div className="kit-field">
               <dt className="label">Caption</dt>
               <dd className="kit-caption">
-                <p>{captionBody || (kit === null ? "Loading the caption" : "No caption yet")}</p>
+                <p>{captionBody || (kit === null || ["pending", "running"].includes(r.kitStatus) ? "Being written" : "No caption yet")}</p>
                 {hashtags.length > 0 && <p className="kit-tags">{hashtags.join(" ")}</p>}
                 {kit?.attribution && <p className="kit-credit">Copying or sharing adds the credit line.</p>}
               </dd>
@@ -283,11 +318,12 @@ export default function RenderScreen({ job, refetch }) {
   const stale = list.filter((c) => c.render.status === "done" && c.render.stale);
   const [kits, setKits] = useState({});
   const [kitVersion, setKitVersion] = useState(0);
-  const doneIds = list.filter((c) => c.render.status === "done").map((c) => c.id).join(",");
+  // a kit is fetched when its clip is done and again whenever the kit itself changes
+  const doneIds = list.filter((c) => c.render.status === "done").map((c) => `${c.id}:${c.render.kitStatus || ""}:${c.render.kitSec ?? ""}`).join(",");
 
   useEffect(() => {
     let alive = true;
-    for (const id of doneIds.split(",").filter(Boolean)) {
+    for (const id of doneIds.split(",").filter(Boolean).map((x) => x.split(":")[0])) {
       api
         .getKit(job.id, id)
         .then((k) => alive && setKits((m) => ({ ...m, [id]: k })))

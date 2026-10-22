@@ -41,6 +41,7 @@ function createHttpApi() {
     patchCandidate: (id, cid, body) => send("PATCH", `/api/jobs/${id}/candidates/${cid}`, body),
     patchJob: (id, settings) => send("PATCH", `/api/jobs/${id}`, { settings }),
     getKit: (id, cid) => get(`/api/jobs/${id}/candidates/${cid}/kit`),
+    retryKit: (id, cid) => send("POST", `/api/jobs/${id}/candidates/${cid}/kit`, {}),
     queue: () => get("/api/queue"),
     render: (id, ids) => send("POST", `/api/jobs/${id}/render`, ids ? { ids } : {}),
     // Approve the best N clips not skipped, and queue their render when asked: { approved, candidates }.

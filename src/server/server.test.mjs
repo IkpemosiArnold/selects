@@ -177,6 +177,21 @@ test("GET a clip's posting kit with absolute paths", async () => {
   assert.equal((await req("GET", `/api/jobs/${j.id}/candidates/${j.candidates[1].id}/kit`)).status, 404);
 });
 
+test("POST a clip's kit writes it again; an unrendered clip is refused", async () => {
+  const j = loadJob(job.id);
+  assert.equal((await req("POST", `/api/jobs/${j.id}/candidates/${j.candidates[1].id}/kit`, { body: {} })).status, 409);
+  const c = j.candidates[0];
+  c.render = { status: "done", path: `clips/${c.id}.mp4`, srt: `clips/${c.id}.srt`, kit: null, progress: 1, kitStatus: "error" };
+  j.settings.kit = "plain"; // no model in this test
+  saveJob(j);
+  const r = await req("POST", `/api/jobs/${j.id}/candidates/${c.id}/kit`, { body: {} });
+  assert.equal(r.status, 202);
+  for (let i = 0; i < 50 && loadJob(j.id).candidates[0].render.kitStatus !== "done"; i++) await new Promise((t) => setTimeout(t, 20));
+  assert.equal(loadJob(j.id).candidates[0].render.kitStatus, "done");
+  const kit = await req("GET", `/api/jobs/${j.id}/candidates/${c.id}/kit`);
+  assert.equal(kit.json.title, c.hook.replace(/[.!?]+$/, "").slice(0, 60));
+});
+
 test("captions: get, edit keeping timings, SRT and VTT downloads, reset", async () => {
   const g = await req("GET", `/api/jobs/${job.id}/captions`);
   assert.equal(g.status, 200);

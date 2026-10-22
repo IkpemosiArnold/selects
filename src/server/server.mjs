@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { REPO, asrModels, ollamaModels, ollamaUrl, selectsHome, whisperBin, whisperModel } from "../core/config.mjs";
 import { measuredSpeeds } from "../core/judge.mjs";
 import { editCaptions, loadCaptions, resetCaptions, toSrt, toVtt } from "../core/captions.mjs";
-import { approveTop, confirmLanguage, createJob, detectJobFaces, refreshStale, isRunning, jobDir, jobEvents, listJobs, loadJob, loadWords, resetTranscript, saveJob, updateCandidate, updateJobSettings } from "../core/job.mjs";
+import { approveTop, confirmLanguage, createJob, detectJobFaces, refreshStale, isRunning, jobDir, jobEvents, listJobs, loadJob, loadWords, resetTranscript, retryKit, saveJob, updateCandidate, updateJobSettings } from "../core/job.mjs";
 import { LOW_P } from "../core/quality.mjs";
 import { loadProfiles } from "../core/profiles.mjs";
 import { hwaccelArgs } from "../core/render.mjs";
@@ -350,9 +350,20 @@ async function route(req, res) {
     try {
       kit = c.render?.kit ? JSON.parse(fs.readFileSync(inside(jobDir(job.id), c.render.kit), "utf8")) : null;
     } catch {}
+    if (!kit && c.render?.status === "done" && ["pending", "running"].includes(c.render.kitStatus)) throw new HttpError(404, "This clip's title and caption are still being written.", "The clip itself is ready to play and save.");
     if (!kit) throw new HttpError(404, "This clip has no posting kit yet.", "Render it first. The kit is written after the video.");
     const abs = (f) => (f ? (path.isAbsolute(f) ? f : path.join(jobDir(job.id), f)) : null);
     return sendJson(res, 200, { ...kit, file: abs(c.render.path), srtFile: abs(c.render.srt) });
+  }
+  if ((r = m(/^\/api\/jobs\/([^/]+)\/candidates\/([^/]+)\/kit$/)) && method === "POST") {
+    // write the posting kit again (after it failed, or for a new suggestion); progress comes as render events
+    const job = getJob(r[1]);
+    const c = job.candidates.find((x) => x.id === r[2]);
+    if (!c) throw new HttpError(404, `No clip called ${r[2]} in this job.`);
+    if (c.render?.status !== "done") throw new HttpError(409, "This clip has not been rendered yet.", "Render the clip first.");
+    if (isRunning(job.id)) throw new HttpError(409, "This job is still rendering.", "Try the kit again when the render queue is done.");
+    retryKit(job.id, c.id).catch(() => {}); // the outcome is in render.kitStatus and the render events
+    return sendJson(res, 202, { queued: true, id: c.id });
   }
   if ((r = m(/^\/api\/jobs\/([^/]+)\/candidates\/([^/]+)$/)) && method === "PATCH") {
     getJob(r[1]);

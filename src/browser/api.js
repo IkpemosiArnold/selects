@@ -155,6 +155,11 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
     patchCandidate: (id, cid, body) => wrap(() => engine.patchCandidate(id, cid, body)),
     patchJob: (id, settings) => wrap(() => engine.patchJob(id, settings)),
     getKit: (id, cid) => wrap(() => engine.getKit(id, cid)),
+    /** Write a rendered clip's title and caption again; progress comes as render events (kitStatus). */
+    retryKit: (id, cid) => wrap(async () => {
+      engine.retryKit(id, cid);
+      return { queued: true, id: cid };
+    }),
     queue: async () => ({ running: null, items: [] }),
     render: (id, ids, preset) => wrap(async () => {
       const job = engine.getJob(id);

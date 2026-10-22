@@ -11,7 +11,8 @@ import { orderByFaithful } from "../core/faithful-core.mjs";
 import { applyMadeFor, clipCaptionStyle } from "../core/madefor.mjs";
 import { applyQualityBar, qualityVerdict } from "../core/rank.mjs";
 import { snapTrim, toSentences } from "../core/sentences.mjs";
-import { judgeIdentity, judgmentSignature, selectionSignature, transcriptHash, transcriptSignature } from "../core/signatures.mjs";
+import { judgeIdentity, judgmentSignature, kitSignature, selectionSignature, transcriptHash, transcriptSignature } from "../core/signatures.mjs";
+import { kitSourceFromCaptions, plainKit } from "../core/kit-core.mjs";
 import { applyDecisions, captureDecisions } from "../core/decisions.mjs";
 import { loadAsr, transcribePcm } from "./asr.js";
 import { cachedFetch } from "./cache.js";
@@ -499,6 +500,8 @@ export class Engine {
         r.clips[`${cid}:${preset}`] = { url: URL.createObjectURL(c.mp4), srtUrl: URL.createObjectURL(new Blob([c.srt || ""], { type: "application/x-subrip" })), bytes: c.mp4.size, start: c.start ?? null, end: c.end ?? null };
       }
       this.attachRenders(r);
+      // kits a closed tab left unwritten are written now
+      for (const c of r.job.candidates || []) if (c.render?.status === "done" && ["pending", "running"].includes(c.render.kitStatus)) this.queueKit(r, c.id);
     } catch {}
   }
 
@@ -706,6 +709,7 @@ export class Engine {
     if (bad.length) throw Object.assign(new Error(`These settings cannot be changed here: ${bad.join(", ")}.`), { status: 400 });
     Object.assign(r.job.settings, settings, settings.license ? { license: normaliseLicense(settings.license) ?? settings.license } : {});
     for (const [cid, k] of Object.entries(r.kits)) r.kits[cid] = this.kitWithCredit(r.job, k);
+    if (settings.kit !== undefined) this.refreshKits(r); // plain or model kits
     this.emit(id, "job", structuredClone(r.job));
     this.save(r, null);
     this.store.savePart(r.key, "kits", r.kits).catch(() => {});
@@ -730,12 +734,15 @@ export class Engine {
     r.captions = { edited: true, style: cur.style, updatedAt: now(), cues: applyCueEdits(cur.cues, cues) };
     this.store.savePart(r.key, "captions", r.captions).catch(() => {});
     this.emit(id, "captions", { cues: r.captions.cues.length, edited: true });
+    this.refreshKits(r); // a kit written from words that changed is written again
     return this.getCaptions(id);
   }
 
   resetCaptions(id) {
-    this.rec(id).captions = null;
-    this.store.savePart(this.rec(id).key, "captions", null).catch(() => {});
+    const r = this.rec(id);
+    r.captions = null;
+    this.store.savePart(r.key, "captions", null).catch(() => {});
+    this.refreshKits(r);
     return this.getCaptions(id);
   }
 
@@ -751,7 +758,12 @@ export class Engine {
     return { ...k, caption: captionWithCredit(base, job.settings), captionText: base, attribution: attributionLine(job.settings), reminder: mediaReminder(job.settings) };
   }
 
-  /** Render approved clips (or ids), one at a time. Progress via "render" events. */
+  /**
+   * Render approved clips (or ids), one at a time. Progress via "render" events. Each clip is
+   * ready (status "done", playable, saved) the moment its MP4 is stored; its posting kit is
+   * written afterwards on its own queue, with its own status (render.kitStatus) and retry
+   * (retryKit), so a slow or failing model never holds a finished clip back.
+   */
   async render(id, { ids, preset = "shorts" } = {}) {
     const r = this.rec(id);
     const job = r.job;
@@ -766,7 +778,6 @@ export class Engine {
     const caps = job.settings.captions === false ? null : this.captions(id);
     const cues = caps?.cues ?? null;
     const style = clipCaptionStyle(job.settings);
-    const llm = job.settings.kit === "plain" || preset === "preview" ? null : await this.getJudge().catch(() => null);
     job.timings[field] ||= [];
     for (const [i, c] of targets.entries()) {
       c[field] = { status: "running", progress: 0, path: null, srt: null, kit: null };
@@ -785,18 +796,16 @@ export class Engine {
         const url = URL.createObjectURL(new Blob([result.mp4], { type: "video/mp4" }));
         const srtUrl = URL.createObjectURL(new Blob([result.srt], { type: "application/x-subrip" }));
         r.clips[`${c.id}:${preset}`] = { url, srtUrl, bytes: result.mp4.byteLength, start: c.start, end: c.end };
-        this.store.saveClip(r.key, c.id, preset, { mp4: new Blob([result.mp4], { type: "video/mp4" }), srt: result.srt, start: c.start, end: c.end }).catch(() => {});
-        let kitSec = null;
+        await this.store.saveClip(r.key, c.id, preset, { mp4: new Blob([result.mp4], { type: "video/mp4" }), srt: result.srt, start: c.start, end: c.end }).catch(() => {});
+        // the clip is ready now; the kit follows on its own
+        const kitStatus = field === "render" ? "pending" : null;
+        c[field] = { status: "done", progress: 1, path: url, srt: srtUrl, kit: null, ...(kitStatus ? { kitStatus } : {}), reframe: result.reframe, frames: result.frames, bytes: result.mp4.byteLength, wallSec: result.wallSec, audioCodec: result.audioCodec };
+        job.timings[field] = job.timings[field].filter((t) => t.id !== c.id).concat({ id: c.id, sec: result.wallSec, clipSec: +(c.end - c.start).toFixed(1) });
+        this.emit(id, "render", { id: c.id, preset, ...c[field] });
         if (field === "render") {
-          const k0 = performance.now();
-          const k = await makeKit(c, llm, { plain: !llm, madeFor: job.settings.madeFor });
-          kitSec = +((performance.now() - k0) / 1000).toFixed(1);
-          c.title = k.title;
-          r.kits[c.id] = this.kitWithCredit(job, { ...k, captionText: k.caption });
+          if (r.kits[c.id]) delete r.kits[c.id]; // the old kit was for the old cut
+          this.queueKit(r, c.id);
         }
-        c[field] = { status: "done", progress: 1, path: url, srt: srtUrl, kit: field === "render" ? `kit:${c.id}` : null, reframe: result.reframe, frames: result.frames, bytes: result.mp4.byteLength, wallSec: result.wallSec, kitSec, audioCodec: result.audioCodec };
-        job.timings[field] = job.timings[field].filter((t) => t.id !== c.id).concat({ id: c.id, sec: result.wallSec, clipSec: +(c.end - c.start).toFixed(1), kitSec });
-        this.emit(id, "render", { id: c.id, preset, ...c[field], title: c.title });
       } catch (e) {
         c[field] = { status: "error", progress: 0, message: e.message, hint: e.hint || null };
         this.emit(id, "render", { id: c.id, preset, ...c[field] });
@@ -806,16 +815,115 @@ export class Engine {
     job.stage = "done";
     awake?.release();
     await this.save(r, null);
-    this.store.savePart(r.key, "kits", r.kits).catch(() => {});
     notifyDone(`${targets.length} clip${targets.length === 1 ? " is" : "s are"} ready`, "Rendered on this device.");
     this.emit(id, "stage", { stage: "done", name: "render", state: { ...job.stages.render } });
     return { queued: true, clips: targets.map((c) => c.id) };
   }
 
+  // ---------------------------------------------------------------- posting kits
+
+  /** Write (or rewrite) a rendered clip's kit, on the job's kit queue: one at a time, the latest request for a clip wins. */
+  queueKit(r, cid) {
+    const c = r.job.candidates.find((x) => x.id === cid);
+    if (!c?.render || c.render.status !== "done") return r.kitQueue;
+    (r.kitWanted ||= new Set()).add(cid);
+    if (c.render.kitStatus !== "running") {
+      c.render.kitStatus = "pending";
+      this.emit(r.job.id, "render", { id: cid, preset: "shorts", ...c.render });
+    }
+    r.kitQueue = (r.kitQueue || Promise.resolve()).then(() => (r.kitWanted.delete(cid) ? this.writeKit(r, cid) : null)).catch((e) => console.error(e));
+    return r.kitQueue;
+  }
+
+  /** Try a clip's kit again (after an error, or to get a new suggestion). Resolves when it is written. */
+  retryKit(id, cid) {
+    const r = this.rec(id);
+    const c = r.job.candidates.find((x) => x.id === cid);
+    if (!c?.render || c.render.status !== "done") throw Object.assign(new Error("This clip has not been rendered yet."), { status: 409, hint: "Render the clip first." });
+    return this.queueKit(r, cid);
+  }
+
+  /** What a clip's kit is written from, and the signature of those inputs (signatures.mjs kitSignature). */
+  kitInputs(r, c) {
+    const source = kitSourceFromCaptions(r.captions, c);
+    const mode = r.job.settings.kit === "plain" ? "plain" : "model";
+    return { source, mode, sig: kitSignature({ source, mode, madeFor: r.job.settings.madeFor || "shorts", prompts: PROMPTS }) };
+  }
+
+  /**
+   * The judge for a kit, without a surprise download: Smart mode is woken, a private model is
+   * used when it is loaded or already saved in this browser, and otherwise the kit is the
+   * plain one (the clip's opening line), and says why.
+   */
+  async kitModel() {
+    let llm;
+    try {
+      llm = await this.getJudge();
+    } catch (e) {
+      return { llm: null, note: "No model is set up, so the title is the clip's opening line." };
+    }
+    if (llm.where !== "google" && !llm.loaded && !(await llm.isCached?.().catch(() => false))) {
+      return { llm: null, note: "Gemma is not saved in this browser yet, so the title is the clip's opening line." };
+    }
+    await llm.load?.({});
+    return { llm, note: null };
+  }
+
+  async writeKit(r, cid) {
+    const job = r.job;
+    const c = job.candidates.find((x) => x.id === cid);
+    if (!c?.render || c.render.status !== "done") return;
+    const emit = () => this.emit(job.id, "render", { id: cid, preset: "shorts", ...c.render, title: c.title });
+    Object.assign(c.render, { kitStatus: "running" });
+    delete c.render.kitError;
+    emit();
+    const { source, mode, sig } = this.kitInputs(r, c);
+    const k0 = performance.now();
+    let k;
+    let madeBy = "plain";
+    let note = null;
+    try {
+      if (mode === "plain") k = plainKit(source);
+      else {
+        const m = await this.kitModel();
+        note = m.note;
+        k = m.llm ? await makeKit(source, m.llm, { madeFor: job.settings.madeFor, strict: true }) : plainKit(source);
+        if (m.llm) madeBy = `${m.llm.id}:${m.llm.model}`;
+      }
+      c.render.kitStatus = "done";
+    } catch (e) {
+      k = plainKit(source);
+      c.render.kitStatus = "error";
+      c.render.kitError = `The title and caption could not be written (${String(e?.message || e).slice(0, 120)}). These are the clip's own words; try again for a suggestion.`;
+    }
+    const kitSec = +((performance.now() - k0) / 1000).toFixed(1);
+    r.kits[cid] = this.kitWithCredit(job, { ...k, captionText: k.caption, start: c.start, end: c.end, sig, madeBy, ...(note ? { note } : {}) });
+    c.title = k.title;
+    Object.assign(c.render, { kit: `kit:${cid}`, kitSec });
+    job.timings.render = (job.timings.render || []).map((t) => (t.id === cid ? { ...t, kitSec } : t));
+    emit();
+    await this.store.savePart(r.key, "kits", r.kits).catch(() => {});
+    await this.save(r, null);
+  }
+
+  /** After a caption or kit-mode change: rewrite the kits whose inputs changed (only those). */
+  refreshKits(r) {
+    for (const c of r.job.candidates || []) {
+      const k = r.kits[c.id];
+      if (c.render?.status !== "done" || !k) continue;
+      if (k.sig !== this.kitInputs(r, c).sig) this.queueKit(r, c.id);
+    }
+  }
+
   getKit(id, cid) {
     const r = this.rec(id);
+    const c = r.job.candidates.find((x) => x.id === cid);
     const k = r.kits[cid];
-    if (!k) throw Object.assign(new Error("This clip has no posting kit yet."), { status: 404, hint: "Render the clip first." });
+    const fits = k && (k.start == null || !c || (Math.abs(k.start - c.start) < 0.01 && Math.abs(k.end - c.end) < 0.01));
+    if (!fits) {
+      if (c?.render?.status === "done" && ["pending", "running"].includes(c.render.kitStatus)) throw Object.assign(new Error("This clip's title and caption are still being written."), { status: 404, hint: "The clip itself is ready to play and save." });
+      throw Object.assign(new Error("This clip has no posting kit yet."), { status: 404, hint: "Render the clip first." });
+    }
     const clip = r.clips[`${cid}:shorts`];
     return { ...k, file: clip?.url ?? null, srtFile: clip?.srtUrl ?? null };
   }

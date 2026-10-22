@@ -3,6 +3,7 @@
 // browser build (src/browser) share them.
 import { splitPrompt } from "./judge-core.mjs";
 import { DEFAULT_MADE_FOR, MADE_FOR, madeForBlock } from "./madefor.mjs";
+import { textInRange } from "./cues.mjs";
 
 export const KIT_SCHEMA = {
   type: "object",
@@ -15,6 +16,21 @@ export const KIT_SCHEMA = {
 };
 
 const noDash = (s) => String(s || "").replace(/\s*[—–]\s*/g, ", ").replace(/\s+/g, " ").trim();
+
+/**
+ * What the posting kit reads for a clip: the person's edited captions when there are any, so a
+ * fixed ASR error (a misheard name) is not repeated in the title or caption. Without edits,
+ * the candidate as it is. The candidate itself is never rewritten. Used by the desktop
+ * (job.mjs kitSource) and the browser engine.
+ * @param {{edited?: boolean, cues?: object[]}|null} caps  the captions (captions.json's shape)
+ */
+export function kitSourceFromCaptions(caps, c) {
+  if (!caps?.edited || !Array.isArray(caps.cues)) return c;
+  const text = textInRange(caps.cues, c.start, c.end);
+  if (!text) return c;
+  const hook = text.match(/^.*?[.!?]["')\]]*(?=\s|$)/)?.[0] || text.split(/\s+/).slice(0, 14).join(" ");
+  return { ...c, text, hook };
+}
 
 /** Fallback when no model is available: the hook line as the title. */
 export function plainKit(candidate) {

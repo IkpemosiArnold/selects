@@ -44,6 +44,7 @@ Same as the HTTP client:
 | `captionsFileUrl(id, "srt" \| "vtt")` | returns a `blob:` URL |
 | `render(id, ids?, preset?)` | `preset` is `"shorts"` (1080x1920) or `"preview"` (720x1280); progress through `render` events |
 | `getKit(id, cid)` | the posting kit; `file` and `srtFile` are `blob:` URLs (use them as download links with a `download` attribute) |
+| `retryKit(id, cid)` | write a rendered clip's title and caption again; progress comes as `render` events with `kitStatus` |
 | `events(id, onEvent)` | sends `job` first, then `stage`, `progress`, `words`, `candidates`, `render`, `captions`, `error` with the server's payloads |
 | `thumbUrl(id, n)`, `sourceUrl(id)`, `clipUrl(id, cid, preset?)` | `blob:` URLs (`n` from 1) |
 

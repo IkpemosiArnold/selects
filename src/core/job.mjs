@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { DEFAULT_SETTINGS, jobsDir, languageCheckModel, resolveAsrModel, resolveModel, selectsHome } from "./config.mjs";
-import { captionsFile, clipCues, loadCaptions, textInRange } from "./captions.mjs";
+import { captionsFile, clipCues, loadCaptions } from "./captions.mjs";
 import { detectFaces as realDetectFaces } from "./faces.mjs";
 import { decideLanguage as realDecideLanguage, LANGUAGE_RULE } from "./language.mjs";
 import { languageKey, loadLanguage, loadTranscript, reuseEnabled, saveLanguage, saveTranscript, sourceFingerprint, transcriptKey } from "./reuse.mjs";
@@ -21,6 +21,7 @@ import { DEFAULT_RATES, diskFullError, diskNeed, estimateJob, isDiskFull, thumbC
 import { checkFaithful as realFaithful } from "./faithful.mjs";
 import { orderByFaithful } from "./faithful-core.mjs";
 import { plainKit, postingKit as realKit } from "./kit.mjs";
+import { kitSourceFromCaptions } from "./kit-core.mjs";
 import { probe as realProbe } from "./probe.mjs";
 import { applyQualityBar, curve, qualityVerdict, rank } from "./rank.mjs";
 import { hwaccelArgs, render as realRender, renderFull as realRenderFull } from "./render.mjs";
@@ -833,12 +834,7 @@ export function updateCandidate(id, cid, patch = {}) {
  * edits, the candidate as it is.
  */
 export function kitSource(dir, c) {
-  const caps = readJson(captionsFile(dir), null);
-  if (!caps?.edited || !Array.isArray(caps.cues)) return c;
-  const text = textInRange(caps.cues, c.start, c.end);
-  if (!text) return c;
-  const hook = text.match(/^.*?[.!?]["')\]]*(?=\s|$)/)?.[0] || text.split(/\s+/).slice(0, 14).join(" ");
-  return { ...c, text, hook };
+  return kitSourceFromCaptions(readJson(captionsFile(dir), null), c);
 }
 
 /** Write clips/<cid>.kit.json: the model's (or plain) kit plus credit for the source. */
@@ -1015,6 +1011,58 @@ export function approveTop(id, n, { includeWeak = true } = {}) {
   return job;
 }
 
+/**
+ * Write one rendered clip's posting kit: render.kitStatus goes "running", then "done", or
+ * "error" with render.kitError and a plain kit (the clip's own opening line) to copy meanwhile.
+ * Saved and announced at each step. The kit reads the edited captions (kitSource).
+ */
+async function writeClipKit(job, c, { mode = "model", postingKit = realKit, signal } = {}) {
+  const dir = jobDir(job.id);
+  const announce = () => emit(job.id, "render", { id: c.id, preset: "shorts", ...c.render, title: c.title });
+  Object.assign(c.render, { kitStatus: "running" });
+  delete c.render.kitError;
+  saveRendering(job);
+  announce();
+  const src = kitSource(dir, c);
+  const k0 = Date.now();
+  let k;
+  try {
+    k = mode === "model" ? await postingKit(src, { model: job.settings.model, madeFor: job.settings.madeFor || "shorts", signal, cacheDir: dir }) : plainKit(src);
+    c.render.kitStatus = "done";
+  } catch (e) {
+    if (e?.name === "AbortError") throw e;
+    k = plainKit(src);
+    c.render.kitStatus = "error";
+    c.render.kitError = `The title and caption could not be written (${String(e?.message || e).slice(0, 120)}). These are the clip's own words; try again for a suggestion.`;
+  }
+  c.render.kit = writeKit(job, c, k);
+  c.render.kitSec = +((Date.now() - k0) / 1000).toFixed(1);
+  c.title = k.title;
+  saveRendering(job);
+  announce();
+  return c;
+}
+
+/**
+ * Write a rendered clip's posting kit again (after a failed kit, or for a new suggestion),
+ * without touching the MP4. Returns the candidate.
+ */
+export async function retryKit(id, cid, { deps = {}, signal } = {}) {
+  if (running.has(id)) throw Object.assign(new Error("This job is still rendering."), { status: 409, hint: "Try the kit again when the render queue is done." });
+  const job = loadJob(id);
+  const c = job.candidates.find((x) => x.id === cid);
+  if (!c) throw Object.assign(new Error(`No candidate ${cid} in job ${id}.`), { status: 404 });
+  if (c.render?.status !== "done") throw Object.assign(new Error("This clip has not been rendered yet."), { status: 409, hint: "Render the clip first." });
+  const mode = (job.settings.kit ?? "model") === "plain" ? "plain" : "model";
+  const p = writeClipKit(job, c, { mode, postingKit: deps.postingKit || realKit, signal });
+  running.set(id, p);
+  try {
+    return await p;
+  } finally {
+    running.delete(id);
+  }
+}
+
 async function renderClips(id, { ids, deps = {}, signal, kit, preset } = {}) {
   const d = { render: realRender, postingKit: realKit, ...deps };
   const job = loadJob(id);
@@ -1090,26 +1138,19 @@ async function renderClips(id, { ids, deps = {}, signal, kit, preset } = {}) {
           emit(id, "render", { id: c.id, preset: usePreset, ...c[field] });
           continue;
         }
-        c[field] = { status: "done", inputs: renderFingerprint(job, c), stale: false, path: r.path, srt: r.srt, kit: null, progress: 1, reframe: r.reframe?.mode, decode: r.decode, blurBoxes: r.blurBoxes, wallSec: r.wallSec };
-        if (kitMode) {
-          let k;
-          const k0 = Date.now();
-          try {
-            k = kitMode === "model" ? await d.postingKit(kitSource(dir, c), { model: job.settings.model, madeFor: job.settings.madeFor || "shorts", signal, cacheDir: dir }) : plainKit(kitSource(dir, c));
-          } catch (e) {
-            if (e?.name === "AbortError") throw e;
-            k = plainKit(kitSource(dir, c));
-          }
-          const kitRel = writeKit(job, c, k);
-          c.title = k.title;
-          c[field].kit = kitRel;
-          c[field].kitSec = +((Date.now() - k0) / 1000).toFixed(1);
-        }
+        // the clip is ready the moment its MP4 is written: saved and announced before the kit
+        c[field] = { status: "done", inputs: renderFingerprint(job, c), stale: false, path: r.path, srt: r.srt, kit: null, progress: 1, reframe: r.reframe?.mode, decode: r.decode, blurBoxes: r.blurBoxes, wallSec: r.wallSec, ...(kitMode ? { kitStatus: "pending" } : {}) };
         job.timings = job.timings || {};
         const key = field === "preview" ? "preview" : "render";
-        job.timings[key] = (Array.isArray(job.timings[key]) ? job.timings[key] : []).filter((t) => t.id !== c.id).concat({ id: c.id, sec: r.wallSec, clipSec: +(c.end - c.start).toFixed(1), kitSec: c[field].kitSec ?? null });
+        job.timings[key] = (Array.isArray(job.timings[key]) ? job.timings[key] : []).filter((t) => t.id !== c.id).concat({ id: c.id, sec: r.wallSec, clipSec: +(c.end - c.start).toFixed(1), kitSec: null });
         saveRendering(job);
         emit(id, "render", { id: c.id, preset: usePreset, ...c[field], title: c.title, queue: { done: doneSoFar + 1, total: targets.length } });
+        // then the posting kit, with its own status (render.kitStatus) and retry (retryKit)
+        if (kitMode) {
+          await writeClipKit(job, c, { mode: kitMode, postingKit: d.postingKit, signal });
+          job.timings[key] = job.timings[key].map((t) => (t.id === c.id ? { ...t, kitSec: c[field].kitSec ?? null } : t));
+          saveRendering(job);
+        }
       }
       // clips the person approved while this ran (saveRendering kept their decisions)
       if (!ids) {

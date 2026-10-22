@@ -600,6 +600,10 @@ export function createMockApi(params) {
       sims.set(id, runSim(job));
       return summary(job);
     },
+    async retryKit(id, cid) {
+      await wait(80);
+      return { queued: true, id: cid };
+    },
     async getKit(id, cid) {
       await wait(90);
       const job = jobs.get(id);

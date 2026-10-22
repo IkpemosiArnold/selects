@@ -354,6 +354,7 @@ kbd {
 .take-title { font: 500 clamp(1.4rem, 2vw, 1.75rem)/1.15 var(--mono); letter-spacing: -0.025em; text-wrap: balance; overflow-wrap: anywhere; }
 .take-stale { font-size: var(--t-13); box-shadow: inset 3px 0 0 var(--yellow); padding-left: 12px; }
 .take-error { color: var(--red-ink); font-weight: 600; }
+.take-kit-error { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .take-kit { display: grid; gap: 14px; margin-top: 4px; }
 .take-kit dd { min-width: 0; }
 .kit-field { display: grid; grid-template-columns: 5em minmax(0, 1fr) auto; gap: 4px 12px; align-items: baseline; }

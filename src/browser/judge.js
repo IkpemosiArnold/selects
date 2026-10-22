@@ -161,13 +161,20 @@ export function rankAndCurve(judged, { k = 5, duration }) {
   return { ranked: rank(judged, { k, iou: 0.3 }), curve: curve(judged, duration, { step: 5 }) };
 }
 
-/** A posting kit for an approved clip, or the plain one (the hook as the title) with kit: "plain". */
-export async function makeKit(candidate, llm, { plain = false, madeFor } = {}) {
+/**
+ * A posting kit for an approved clip, or the plain one (the hook as the title) with kit: "plain".
+ * strict: a failed or empty answer throws (the engine then shows the kit's own error and a
+ * retry) instead of quietly returning the plain kit.
+ */
+export async function makeKit(candidate, llm, { plain = false, madeFor, strict = false } = {}) {
   if (plain || !llm) return plainKit(candidate);
   try {
     const r = await ask(llm, { kind: "kit", candidate, madeFor });
-    return r.parsed.title ? r.parsed : plainKit(candidate);
-  } catch {
+    if (r.parsed.title) return r.parsed;
+    if (strict) throw new Error("The model's answer had no title.");
+    return plainKit(candidate);
+  } catch (e) {
+    if (strict) throw e;
     return plainKit(candidate);
   }
 }

@@ -544,3 +544,40 @@ test("signatures: a finished job whose judge inputs changed is judged again, kee
   assert.ok(third.candidates.every((c) => c.end - c.start <= 40 + 1e-6), "selected again with the new range");
   assert.equal(counter.transcribe, 1);
 });
+
+test("render: the MP4 is announced before the posting kit is written, and a failed kit can be retried", async () => {
+  const { retryKit } = await import("./job.mjs");
+  const job = createJob(video, { k: 2, model: "mock", qualityGate: false });
+  const ready = await runJob(job.id, { deps: mocks({ probe: 0, transcribe: 0, judge: 0 }) });
+  const c = ready.candidates[0];
+  updateCandidate(job.id, c.id, { status: "approved" });
+  const order = [];
+  const listen = (e) => e.type === "render" && e.data.id === c.id && e.data.status === "done" && !order.includes("mp4") && order.push("mp4");
+  jobEvents.on(job.id, listen);
+  const render = async (_j, cand, { jobDir: d }) => {
+    fs.mkdirSync(path.join(d, "clips"), { recursive: true });
+    fs.writeFileSync(path.join(d, "clips", `${cand.id}.mp4`), "mp4");
+    return { path: `clips/${cand.id}.mp4`, srt: `clips/${cand.id}.srt`, wallSec: 1 };
+  };
+  const done = await renderJob(job.id, {
+    deps: {
+      render,
+      postingKit: async () => {
+        order.push("kit");
+        throw new Error("Ollama went away.");
+      },
+    },
+  });
+  jobEvents.off(job.id, listen);
+  assert.deepEqual(order, ["mp4", "kit"], "the clip was ready before its kit was asked for");
+  const r = done.candidates.find((x) => x.id === c.id).render;
+  assert.equal(r.status, "done");
+  assert.equal(r.kitStatus, "error");
+  assert.match(r.kitError, /Ollama went away/);
+  assert.ok(fs.existsSync(path.join(jobDir(job.id), r.kit)), "a plain kit is there to copy meanwhile");
+  const retried = await retryKit(job.id, c.id, { deps: { postingKit: async () => ({ title: "Better title", caption: "Better caption.", hashtags: [] }) } });
+  assert.equal(retried.render.kitStatus, "done");
+  const kit = JSON.parse(fs.readFileSync(path.join(jobDir(job.id), retried.render.kit), "utf8"));
+  assert.equal(kit.title, "Better title");
+  assert.equal(loadJob(job.id).candidates.find((x) => x.id === c.id).title, "Better title");
+});
