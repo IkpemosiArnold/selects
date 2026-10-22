@@ -1,5 +1,6 @@
 // Main-thread side of the whisper worker: load once, transcribe, report progress.
 import { MODELS } from "./models.js";
+import { runtimes } from "./devices.js";
 
 let worker = null;
 let ready = null;
@@ -10,6 +11,11 @@ function getWorker() {
   return worker;
 }
 
+/** The device whisper runs on: "auto" resolves with the same rule as the download estimate (devices.js). */
+export async function resolveAsrDevice(device = "auto") {
+  return (await runtimes({ asrDevice: device })).asr;
+}
+
 /**
  * Load whisper (downloads on first use, then from the browser's cache).
  * onDownload({ file, loaded, total }) for each model file.
@@ -17,8 +23,8 @@ function getWorker() {
  */
 export function loadAsr({ device = "auto", onDownload } = {}) {
   if (ready) return ready;
-  const w = getWorker();
-  ready = new Promise((resolve, reject) => {
+  ready = resolveAsrDevice(device).then((wantDevice) => new Promise((resolve, reject) => {
+    const w = getWorker();
     const onMsg = (ev) => {
       const m = ev.data;
       if (m.type === "download") onDownload?.(m);
@@ -33,8 +39,8 @@ export function loadAsr({ device = "auto", onDownload } = {}) {
       }
     };
     w.addEventListener("message", onMsg);
-    w.postMessage({ type: "load", model: MODELS.whisper.id, dtype: MODELS.whisper.dtype, wantDevice: device });
-  });
+    w.postMessage({ type: "load", model: MODELS.whisper.id, dtype: MODELS.whisper.dtype, wantDevice });
+  }));
   return ready;
 }
 

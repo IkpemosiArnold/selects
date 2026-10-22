@@ -40,6 +40,8 @@ export function planWindows(pcm, rate, { maxSec = 29.5, searchSec = 5 } = {}) {
 }
 
 async function load({ model, dtype, wantDevice }) {
+  // the main thread resolves "auto" with devices.js (the same rule as the download estimate);
+  // this is only a fallback for callers that still send "auto"
   let dev = wantDevice;
   if (!dev || dev === "auto") {
     dev = "wasm";

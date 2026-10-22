@@ -47,7 +47,7 @@ Same as the HTTP client:
 | `events(id, onEvent)` | sends `job` first, then `stage`, `progress`, `words`, `candidates`, `render`, `captions`, `error` with the server's payloads |
 | `thumbUrl(id, n)`, `sourceUrl(id)`, `clipUrl(id, cid, preset?)` | `blob:` URLs (`n` from 1) |
 
-Browser-only additions: `setMode`, `getMode`, `preferBackend`, `capabilities()` (WebGPU, cross-origin isolation, threads, WebCodecs, H.264 encoding), `downloads()` (what Private mode will download on this browser, with sizes, licences and where each is cached), `copy`, and `engine` (the engine itself, for tests).
+Browser-only additions: `setMode`, `getMode`, `preferBackend`, `capabilities()` (WebGPU, cross-origin isolation, threads, WebCodecs, H.264 encoding), `downloads()` (what Private mode will download on this browser, with sizes, licences and where each is cached; the runtimes come from `chooseRuntimes` in `devices.js`, the same function the engine runs with, so the sizes shown are the sizes fetched), `copy`, and `engine` (the engine itself, for tests).
 
 ## Resume, phones and installing
 

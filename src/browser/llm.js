@@ -16,6 +16,7 @@ import kitMd from "../core/prompts/kit.md?raw";
 import faithfulMd from "../core/prompts/faithful.md?raw";
 import { cachedFetch } from "./cache.js";
 import { MODELS } from "./models.js";
+import { runtimes } from "./devices.js";
 
 export const PROMPTS = { judge: judgeMd, listwise: listwiseMd, kit: kitMd, faithful: faithfulMd };
 
@@ -229,15 +230,10 @@ export function proxyBackend({ url, model = null, wakeSec = 90, callTimeoutMs = 
 
 /**
  * The Private-mode backend for this browser: Gemma 4 E2B on WebGPU when an adapter exists
- * (and the device reports enough memory), otherwise Gemma 3 1B on the CPU.
+ * (and the device reports enough memory), otherwise Gemma 3 1B on the CPU. The rule is
+ * chooseRuntimes in devices.js, which the download estimate uses too.
  */
 export async function privateBackend({ prefer = "auto" } = {}) {
-  if (prefer === "gemma3-wasm") return wllamaBackend();
-  if (prefer === "gemma4-webgpu") return mediapipeBackend();
-  let gpu = false;
-  try {
-    gpu = !!(navigator.gpu && (await navigator.gpu.requestAdapter()));
-  } catch {}
-  const memOk = !navigator.deviceMemory || navigator.deviceMemory >= 4;
-  return gpu && memOk ? mediapipeBackend() : wllamaBackend();
+  const { judge } = await runtimes({ prefer });
+  return judge === "gemma4-webgpu" ? mediapipeBackend() : wllamaBackend();
 }

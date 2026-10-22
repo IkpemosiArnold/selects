@@ -10,6 +10,7 @@
 import { Engine } from "./engine.js";
 import { geminiKeyBackend, privateBackend, proxyBackend } from "./llm.js";
 import { MODELS, SMART_MODELS } from "./models.js";
+import { runtimes } from "./devices.js";
 import { COPY } from "./copy.js";
 import { enableNotifications, KEEP_OPEN, registerApp } from "./device.js";
 
@@ -116,13 +117,16 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
 
     /** What Private mode will download on this browser, before anything is fetched. */
     async downloads() {
-      const caps = await capabilities();
-      const judge = caps.webgpu ? MODELS.gemma4 : MODELS.gemma3;
+      // the same choice the engine makes when it runs (devices.js), so the sizes shown are the sizes fetched
+      const [caps, rt] = await Promise.all([capabilities(), runtimes({ prefer: state.prefer })]);
+      const judgeId = rt.judge === "gemma4-webgpu" ? "gemma4" : "gemma3";
+      const judge = MODELS[judgeId];
       const w = MODELS.whisper;
       return {
+        runtimes: rt,
         items: [
-          { id: "whisper", label: w.label, bytes: caps.webgpu ? w.bytes.webgpu : w.bytes.wasm, licence: w.licence, source: w.source, cache: w.cache },
-          { id: caps.webgpu ? "gemma4" : "gemma3", label: judge.label, bytes: judge.bytes, licence: judge.licence, source: judge.source, cache: judge.cache },
+          { id: "whisper", label: w.label, bytes: w.bytes[rt.asr], device: rt.asr, licence: w.licence, source: w.source, cache: w.cache },
+          { id: judgeId, label: judge.label, bytes: judge.bytes, licence: judge.licence, source: judge.source, cache: judge.cache },
           { id: "ng5", label: MODELS.ng5.label, bytes: MODELS.ng5.bytes, licence: MODELS.ng5.licence, source: MODELS.ng5.source, cache: MODELS.ng5.cache },
         ],
         caps,
