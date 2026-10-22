@@ -23,6 +23,7 @@ import { MODELS } from "./models.js";
 import { PROMPTS } from "./prompts.js";
 import { clipGainDb, renderInWorker } from "./render.js";
 import { keepAwake, notifyDone, titleProgress } from "./device.js";
+import { downloadAdvice } from "./devices.js";
 import { contentKey, createJobStore, dropVideo, indexedDbBackend, keepVideo, keptVideo, memoryBackend, resumePoint } from "./store.js";
 
 export const STAGES = ["probe", "language", "transcribe", "candidates", "judge", "render"];
@@ -109,8 +110,24 @@ export class Engine {
 
   start(id) {
     const r = this.rec(id);
-    r.running = this.run(id);
+    r.active = true;
+    r.running = this.run(id).finally(() => (r.active = false));
     return r.running;
+  }
+
+  /**
+   * The person's answer when Smart mode is not answering and the private model is not saved
+   * (job.error.code "smart_unavailable"): "retry" Smart mode, use the "preliminary" ranking
+   * (the first-stage score, no model), or "download" the private model. Runs the job again;
+   * everything already done (the transcript, the shortlist) is reused.
+   */
+  async chooseJudge(id, choice) {
+    const r = this.rec(id);
+    if (!["retry", "preliminary", "download"].includes(choice)) throw Object.assign(new Error("Choose retry, preliminary or download."), { status: 400 });
+    if (r.active) throw Object.assign(new Error("This job is still running."), { status: 409, hint: "Wait for it to stop, then choose." });
+    r.judgeChoice = choice === "retry" ? null : choice;
+    this.start(id);
+    return structuredClone(r.job);
   }
 
   /** Resolves when the job's run, its saves and its posting kits have settled (tests, and callers that need to wait). */
@@ -238,6 +255,7 @@ export class Engine {
     const saved = (await this.store.load(r.key).catch(() => null)) || { stages: {} };
     const has = (s) => saved.stages?.[s] === "done";
     const sigs = saved.sigs || {};
+    job.error = null;
     if (saved.job) await this.restoreExtras(r);
     // a person's decisions, kept apart from the judgment (older saves kept them only on the candidates)
     r.decisions = (await this.store.part(r.key, "decisions").catch(() => null)) || captureDecisions(saved.job?.candidates || []);
@@ -414,7 +432,7 @@ export class Engine {
     } catch (e) {
       job.stage = "error";
       if (current && job.stages[current]) Object.assign(job.stages[current], { status: "error", endedAt: now() });
-      job.error = { stage: current, message: e?.message || String(e), hint: e?.hint || "Reload the page and try again. Nothing was uploaded.", ...(e?.needsFile ? { needsFile: true } : {}) };
+      job.error = { stage: current, message: e?.message || String(e), hint: e?.hint || "Reload the page and try again. Nothing was uploaded.", ...(e?.needsFile ? { needsFile: true } : {}), ...(e?.code ? { code: e.code } : {}), ...(e?.choices ? { choices: e.choices } : {}) };
       console.error(e);
       this.emit(id, "error", job.error);
     } finally {
@@ -542,29 +560,46 @@ export class Engine {
       onProgress: (p) => progress("judge", { progress: 0, note: p.cached ? "loading the judge model from this browser's cache" : `getting the judge model: ${Math.round(p.loaded / 1e6)} of ${Math.round(p.total / 1e6)} MB`, download: { loaded: p.loaded, total: p.total } }),
       onWaking: (s) => progress("judge", { progress: 0, note: `waking the Smart mode server (${s} s; a free server sleeps when idle and can take up to a minute)` }),
     };
-    // Smart mode can fall back to the device: for the whole run if the proxy never wakes,
-    // or clip by clip when Google's free tier is slow
+    // the person's answer to "Smart mode is not answering" (chooseJudge), used once
+    const choice = r.judgeChoice ?? null;
+    r.judgeChoice = null;
+    job.judge = {};
+    if (choice === "preliminary") return this.prescoreStage(r, short, progress);
+    // Smart mode can fall back to the private model, for the whole run if the proxy never
+    // wakes or clip by clip when Google's free tier is slow, but only when that model is
+    // already in this browser or the person chose to download it: never a surprise 2 GB
+    let fb;
+    const fallbackBackend = async () => (fb ??= this.getFallback ? await this.getFallback().catch(() => null) : null);
+    const fallbackReady = async () => {
+      const b = await fallbackBackend();
+      return !!b && (choice === "download" || !!b.loaded || (await b.isCached?.().catch(() => false)) === true);
+    };
     let device = null;
     const fallback = this.getFallback
       ? () => (device ??= (async () => {
-          const b = await this.getFallback();
+          const b = await fallbackBackend();
           await b.load?.(loadOpts);
           return b;
         })())
       : null;
-    job.judge = {};
     try {
       await llm.load?.(loadOpts);
     } catch (e) {
-      if (llm.where !== "google" || !fallback) throw e;
+      if (llm.where !== "google") throw e;
       job.judge.smartError = e.message;
-      progress("judge", { progress: 0, note: "Smart mode is not answering, so the clips are judged on this device" });
+      if (!fallback || !(await fallbackReady())) throw this.smartUnavailable(e, await fallbackBackend());
+      const saved = choice !== "download";
+      progress("judge", { progress: 0, note: saved ? "Smart mode is not answering, so the clips are judged on this device with the model already saved in this browser" : "Smart mode is not answering, so the private model is downloading, as you chose" });
       llm = await fallback();
+      job.judge.note = saved
+        ? "Smart mode was not answering, so these clips were judged on this device with the private model already saved in this browser."
+        : "Smart mode was not answering, so these clips were judged on this device with the private model you chose to download.";
     }
+    const clipFallback = llm.where === "google" && fallback && (await fallbackReady()) ? fallback : null;
     job.settings.model = llm.model;
     Object.assign(job.judge, { backend: llm.id, model: llm.model, where: llm.where, loadSec: llm.loadSec ?? llm.wakeSec ?? null });
     const jr = await judgeShortlist(short, llm, {
-      fallback,
+      fallback: clipFallback,
       concurrency: llm.where === "google" ? 2 : 1,
       batch: llm.where === "google" && !!job.settings.smartBatch,
       madeFor: job.settings.madeFor,
@@ -573,7 +608,9 @@ export class Engine {
     });
     let judged = jr.judged;
     Object.assign(job.judge, { fallbacks: jr.fallbacks, calls: jr.calls, secPerCandidate: jr.secPerCandidate });
-    if (jr.fallbacks) job.judge.note = `Google's free Gemma was slow, so ${jr.fallbacks} of ${short.length} clips were judged on your device.`;
+    if (jr.fallbacks) job.judge.note = `Google's free Gemma was slow, so ${jr.fallbacks} of ${short.length} clips were judged on your device with the model already saved in this browser.`;
+    const kept = judged.filter((c) => c && !c.scores).length;
+    if (kept && llm.where === "google" && !clipFallback) job.judge.note = `Smart mode could not judge ${kept} of ${short.length} clips, so they keep their first-stage score. Nothing was downloaded.`;
     if (job.settings.listwise !== false && judged.filter((c) => c.scores).length >= 3) {
       progress("judge", { progress: 0.8, note: "comparing the best clips side by side" });
       try {
@@ -603,6 +640,48 @@ export class Engine {
     job.verdict = bar.verdict;
     job.curve = curve;
     return { ranked, llm };
+  }
+
+  /**
+   * The stop when Smart mode is not answering and the private model is not in this browser:
+   * nothing is downloaded until the person chooses (chooseJudge). The download choice carries
+   * its size, an estimate on this connection, and a warning on mobile data.
+   */
+  smartUnavailable(e, device) {
+    const choices = [
+      { id: "retry", label: "Try Smart mode again" },
+      { id: "preliminary", label: "Use the preliminary ranking now", detail: "The clips ranked by the first-stage score (sentence shape, pauses, laughter, loudness), with no model. You can ask for a model's judgment later." },
+    ];
+    if (device) {
+      const a = downloadAdvice(device.bytes || 0);
+      choices.push({ id: "download", label: "Download the private model", detail: `${device.label || device.model}, downloaded once and kept in this browser. Nothing is uploaded.`, model: device.model, bytes: a.bytes, estSec: a.estSec, mbps: a.mbps, metered: a.metered, warning: a.warning });
+    }
+    return Object.assign(new Error("Smart mode is not answering."), {
+      code: "smart_unavailable",
+      hint: `${e?.hint || e?.message || "The Smart mode server did not answer."} The private model is not saved in this browser yet, so nothing was downloaded.`,
+      choices,
+    });
+  }
+
+  /** The preliminary ranking: the shortlist ranked by its first-stage score, with the rule-only faithful check. No model. */
+  async prescoreStage(r, short, progress) {
+    const job = r.job;
+    progress("judge", { progress: 0.5, note: "ranking by the first-stage score" });
+    const judged = short.map((c) => ({ ...c, scores: null, judgeTotal: null, total: c.pre ?? 0, judgedOn: "prescore", reason: "Ranked by the first-stage score (sentence shape, pauses, laughter, loudness), not by a model." }));
+    r.judged = judged;
+    let { ranked, curve } = rankAndCurve(judged, { k: job.settings.k, duration: job.source.duration });
+    if ((job.settings.faithful ?? "model") !== "off" && ranked.length) {
+      const maxLen = job.settings.maxLen ?? 60;
+      const fr = await faithfulRound(ranked, null, { words: r.words, maxLen: Math.max(maxLen * 1.5, maxLen + 15), rulesOnly: true });
+      ranked = orderByFaithful(fr.candidates);
+      const count = (v) => ranked.filter((c) => c.faithful?.verdict === v).length;
+      job.faithful = { mode: "rules", checked: ranked.length, faithful: count("faithful"), check: count("check"), misleading: count("misleading"), ...fr.stats };
+    }
+    const bar = applyQualityBar(ranked);
+    ranked = bar.candidates;
+    Object.assign(job, { verdict: bar.verdict, curve, listwise: null });
+    job.judge = { backend: "prescore", model: null, where: "device", secPerCandidate: null, calls: [], fallbacks: 0, note: "These clips are ranked by the first-stage score only, because Smart mode was not answering. Open the video again later for a model's judgment." };
+    return { ranked, llm: { id: "prescore", model: null } };
   }
 
   /**

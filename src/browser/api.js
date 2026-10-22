@@ -155,6 +155,8 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
     patchCandidate: (id, cid, body) => wrap(() => engine.patchCandidate(id, cid, body)),
     patchJob: (id, settings) => wrap(() => engine.patchJob(id, settings)),
     getKit: (id, cid) => wrap(() => engine.getKit(id, cid)),
+    /** When Smart mode is not answering (job.error.code "smart_unavailable"): "retry", "preliminary" or "download". */
+    chooseJudge: (id, choice) => wrap(() => engine.chooseJudge(id, choice)),
     /** Write a rendered clip's title and caption again; progress comes as render events (kitStatus). */
     retryKit: (id, cid) => wrap(async () => {
       engine.retryKit(id, cid);

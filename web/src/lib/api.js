@@ -129,10 +129,12 @@ export const inBrowser = !!api.browser;
  * engine picks the job up from its last saved step, after taking the video again when
  * the step needs it (attachFile checks it is the same file).
  */
-export async function retryJob(id, { file = null, body } = {}) {
+export async function retryJob(id, { file = null, body, judge = null } = {}) {
   if (!inBrowser) return api.resume(id, body);
   if (file) await api.attachFile(id, file);
-  api.engine.run(id).catch(() => {});
+  // Smart mode was not answering: the person's choice (retry, preliminary, download)
+  if (judge) return api.chooseJudge(id, judge);
+  api.engine.start(id).catch(() => {});
   return { queued: true };
 }
 

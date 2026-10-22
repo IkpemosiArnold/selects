@@ -43,3 +43,25 @@ export function resetDeviceFacts() {
 export async function runtimes({ prefer = "auto", asrDevice = "auto" } = {}) {
   return chooseRuntimes({ ...(await deviceFacts()), prefer, asrDevice });
 }
+
+/**
+ * What a download would cost on this connection, from the Network Information API where the
+ * browser has it (Chrome on Android and desktop; not Safari or Firefox).
+ * Returns { bytes, estSec, mbps, metered, warning }: estSec is null when the speed is unknown
+ * (Chrome reports at most 10 Mbps, so on a fast line it is an upper bound), metered is true on
+ * mobile data or with Data Saver on.
+ */
+export function downloadAdvice(bytes, connection = globalThis.navigator?.connection) {
+  const mbps = Number(connection?.downlink) > 0 ? Number(connection.downlink) : null;
+  const estSec = mbps ? Math.round((bytes * 8) / (mbps * 1e6)) : null;
+  const cellular = connection?.type === "cellular";
+  const saveData = !!connection?.saveData;
+  const metered = cellular || saveData;
+  const size = bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.round(bytes / 1e6)} MB`;
+  const warning = cellular
+    ? `This looks like mobile data. The download is ${size}; use Wi-Fi if your data plan is limited.`
+    : saveData
+      ? `Data Saver is on. The download is ${size}; use Wi-Fi if your data plan is limited.`
+      : null;
+  return { bytes, estSec, mbps, metered, warning };
+}

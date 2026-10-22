@@ -199,3 +199,74 @@ test("render: a kit that fails says so, keeps a plain kit, and can be tried agai
   assert.equal(now.render.kitStatus, "done");
   assert.match(engine.getKit(job.id, c.id).title, /^About:/);
 });
+
+// ---------------------------------------------------------------- Smart mode down
+
+/** Pretend the browser reports this connection (Network Information API). */
+function fakeConnection(c) {
+  const had = Object.getOwnPropertyDescriptor(globalThis.navigator, "connection");
+  Object.defineProperty(globalThis.navigator, "connection", { value: c, configurable: true });
+  return () => (had ? Object.defineProperty(globalThis.navigator, "connection", had) : delete globalThis.navigator.connection);
+}
+
+test("smart mode down, private model not saved: nothing downloads; the person chooses", async () => {
+  const restore = fakeConnection({ downlink: 10, effectiveType: "4g", type: "cellular", saveData: false });
+  try {
+    const s = await seeded(Engine);
+    const smart = fakeBackend({ id: "gemini-proxy", model: "smart-down", where: "google", failLoad: Object.assign(new Error("The Smart mode server did not wake up."), { hint: "Try again in a minute." }) });
+    const device = fakeBackend({ id: "gemma4-webgpu", model: "device-not-saved", cached: false });
+    device.bytes = 2003697664;
+    const { engine, job } = await runOnce(Engine, s, smart, {}, { getFallback: async () => device });
+    assert.equal(device.loads, 0, "no surprise download");
+    assert.equal(job.stage, "error");
+    assert.equal(job.error.code, "smart_unavailable");
+    assert.deepEqual(job.error.choices.map((c) => c.id), ["retry", "preliminary", "download"]);
+    const dl = job.error.choices.find((c) => c.id === "download");
+    assert.equal(dl.bytes, device.bytes, "the size of what would download");
+    assert.equal(dl.estSec, Math.round((device.bytes * 8) / 10e6), "an estimate at the speed the browser reports");
+    assert.equal(dl.metered, true, "mobile data is flagged");
+    assert.match(dl.warning, /mobile data/i);
+
+    // use the preliminary ranking now: no model at all
+    await engine.chooseJudge(job.id, "preliminary");
+    await engine.idle(job.id);
+    let now = engine.getJob(job.id);
+    assert.equal(now.stage, "ready", now.error?.message);
+    assert.equal(now.judge.backend, "prescore");
+    assert.ok(now.candidates.length > 0);
+    assert.ok(now.candidates.every((c) => c.judgedOn === "prescore"));
+    assert.equal(device.loads, 0);
+    assert.match(now.stages.transcribe.note, /saved on this device/);
+
+    // or download the private model, now that the person said so
+    await engine.chooseJudge(job.id, "download");
+    await engine.idle(job.id);
+    now = engine.getJob(job.id);
+    assert.equal(now.stage, "ready", now.error?.message);
+    assert.equal(device.loads, 1);
+    assert.equal(now.judge.backend, "gemma4-webgpu");
+    assert.ok(device.count("judge") > 0);
+  } finally {
+    restore();
+  }
+});
+
+test("smart mode down, private model already saved: it falls back and says so plainly", async () => {
+  const s = await seeded(Engine);
+  const smart = fakeBackend({ id: "gemini-proxy", model: "smart-down-2", where: "google", failLoad: new Error("The Smart mode server did not wake up.") });
+  const device = fakeBackend({ id: "gemma3-wasm", model: "device-saved", cached: true });
+  const { job } = await runOnce(Engine, s, smart, {}, { getFallback: async () => device });
+  assert.equal(job.stage, "ready", job.error?.message);
+  assert.equal(job.judge.backend, "gemma3-wasm");
+  assert.match(job.judge.note, /already saved in this browser/);
+});
+
+test("smart mode slow on one clip, private model not saved: that clip keeps its first-stage score, nothing downloads", async () => {
+  const s = await seeded(Engine);
+  const smart = fakeBackend({ id: "gemini-proxy", model: "smart-flaky", where: "google", fail: ["judge"] });
+  const device = fakeBackend({ id: "gemma4-webgpu", model: "device-not-saved-2", cached: false });
+  const { job } = await runOnce(Engine, s, smart, {}, { getFallback: async () => device });
+  assert.equal(job.stage, "ready", job.error?.message);
+  assert.equal(device.loads, 0, "no surprise download");
+  assert.ok(job.candidates.some((c) => /Smart mode could not judge this clip/.test(c.reason)));
+});

@@ -152,6 +152,8 @@ export default function Processing({ job, words, onResume }) {
     .map((key) => ({ key, ...(st[key]?.status === "running" ? st[key].download || {} : {}) }))
     .find((d) => d.total && d.loaded < d.total);
   const needsFile = isErr && !!job.error?.needsFile;
+  const choices = isErr ? job.error?.choices || null : null; // Smart mode is not answering
+  const [choosing, setChoosing] = useState(null);
   const fileRef = useRef(null);
 
   let headline, sub;
@@ -275,7 +277,39 @@ export default function Processing({ job, words, onResume }) {
                 {fileErr && <p className="field-error" role="alert">{fileErr}</p>}
               </>
             )}
-            {isErr && !unreliable && !needsFile && (
+            {choices && (
+              <div className="proc-choices" role="group" aria-label="What to do now">
+                {choices.map((c) => (
+                  <div key={c.id} className="proc-choice">
+                    <button
+                      className={"btn btn-big" + (c.id === "retry" ? " btn-primary" : "")}
+                      disabled={!!choosing}
+                      onClick={async () => {
+                        setChoosing(c.id);
+                        try {
+                          await onResume({ judge: c.id });
+                        } catch (err) {
+                          setFileErr(err.message);
+                        } finally {
+                          setChoosing(null);
+                        }
+                      }}
+                    >
+                      {choosing === c.id ? "Starting" : c.id === "download" ? `${c.label} (${mb(c.bytes)})` : c.label}
+                    </button>
+                    {c.detail && <p className="field-hint">{c.detail}</p>}
+                    {c.id === "download" && (
+                      <p className="field-hint">
+                        {c.estSec != null ? `${cap(aboutMinutes(c.estSec))} at the speed this browser reports.` : "How long it takes depends on your connection."}
+                      </p>
+                    )}
+                    {c.warning && <p className="field-error" role="note">{c.warning}</p>}
+                  </div>
+                ))}
+                {fileErr && <p className="field-error" role="alert">{fileErr}</p>}
+              </div>
+            )}
+            {isErr && !unreliable && !needsFile && !choices && (
               <button
                 className="btn btn-primary btn-big proc-resume"
                 disabled={resuming}

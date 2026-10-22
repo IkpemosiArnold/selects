@@ -1,5 +1,8 @@
 // The judge's runtimes. Each backend has the same shape:
-//   { id, label, model, where: "device" | "google", load({ onProgress }), run(task) -> { data?, text, stats } }
+//   { id, label, model, sigModel, where: "device" | "google", bytes, loaded, isCached(),
+//     load({ onProgress }), run(task) -> { data?, text, stats } }
+// sigModel is the configured model (the judgment signature's, signatures.mjs); loaded and
+// isCached() let the engine use a private model as a fallback only when that needs no download.
 // where a task is { kind: "judge" | "listwise" | "kit", candidate | top } (src/core/tasks.mjs).
 //
 // Private mode (default, nothing leaves the device):
@@ -11,7 +14,7 @@
 import { geminiGenerate } from "../core/gemini.mjs";
 import { buildTask, slimTask, withSchemaHint } from "../core/tasks.mjs";
 import { PROMPTS } from "./prompts.js";
-import { cachedFetch } from "./cache.js";
+import { cachedFetch, isCached } from "./cache.js";
 import { MODELS } from "./models.js";
 import { runtimes } from "./devices.js";
 
@@ -28,8 +31,22 @@ export function wllamaBackend({ threads } = {}) {
     id: "gemma3-wasm",
     label: "Gemma 3 1B on this device (CPU)",
     model: "gemma-3-1b-it-Q4_0",
+    sigModel: "gemma-3-1b-it-Q4_0",
     where: "device",
     bytes: MODELS.gemma3.bytes,
+    get loaded() {
+      return !!w;
+    },
+    /** True when wllama's cache (OPFS) already holds the whole model file. */
+    async isCached() {
+      try {
+        const { CacheManager } = await import("@wllama/wllama");
+        const cm = new CacheManager();
+        return (await cm.getSize(await cm.getNameFromURL(MODELS.gemma3.url))) >= MODELS.gemma3.bytes;
+      } catch {
+        return false;
+      }
+    },
     async load({ onProgress } = {}) {
       if (w) return;
       const [{ Wllama, LoggerWithoutDebug }, { default: wasmUrl }] = await Promise.all([import("@wllama/wllama"), import("@wllama/wllama/esm/wasm/wllama.wasm?url")]);
@@ -85,8 +102,13 @@ export function mediapipeBackend({ wasmBase = "https://cdn.jsdelivr.net/npm/@med
     id: "gemma4-webgpu",
     label: "Gemma 4 E2B on this device (WebGPU)",
     model: "gemma-4-E2B-it",
+    sigModel: "gemma-4-E2B-it",
     where: "device",
     bytes: MODELS.gemma4.bytes,
+    get loaded() {
+      return !!llm;
+    },
+    isCached: () => isCached(MODELS.gemma4.url),
     async load({ onProgress } = {}) {
       if (llm) return;
       const { FilesetResolver, LlmInference } = await import("@mediapipe/tasks-genai");
@@ -158,8 +180,11 @@ export function geminiKeyBackend({ key, model = "gemma-4-26b-a4b-it", timeoutMs 
     id: "gemini-key",
     label: `Gemma (${model}) through the Gemini API, your key`,
     model,
+    sigModel: model,
     where: "google",
     bytes: 0,
+    loaded: true,
+    isCached: async () => true,
     async load() {},
     async run(task) {
       const { messages, schema, maxTokens } = buildTask(slimTask(task), PROMPTS);
@@ -181,8 +206,11 @@ export function proxyBackend({ url, model = null, wakeSec = 90, callTimeoutMs = 
     id: "gemini-proxy",
     label: "Gemma through the Gemini API, via the Selects proxy",
     model: model || "gemma (proxy default)",
+    // the model the page asked for; the proxy's own default can change without a new judgment
+    sigModel: model || "proxy-default",
     where: "google",
     bytes: 0,
+    isCached: async () => true,
     async load({ onWaking } = {}) {
       const t0 = now();
       for (;;) {

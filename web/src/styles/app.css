@@ -527,3 +527,8 @@ button.resume-row { width: 100%; text-align: left; font: inherit; color: inherit
 @media (max-width: 560px) {
   .engine-key { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Smart mode is not answering: the three choices, stacked */
+.proc-choices { display: grid; gap: 12px; margin-top: 16px; }
+.proc-choice { display: grid; gap: 4px; }
+.proc-choice .btn { justify-self: start; max-width: 100%; white-space: normal; text-align: left; }

@@ -261,6 +261,7 @@ function JobView({ jobId, view }) {
     );
   }
   const processing = BEFORE_READY.includes(job.stage) ||
+    (job.stage === "error" && !!job.error?.choices) || // Smart mode is not answering: the choices are on that screen
     (job.stage === "error" &&
       (captionMode
         ? ["probe", "language", "transcribe"].includes(job.error?.stage) || job.stages?.transcribe?.status !== "done"

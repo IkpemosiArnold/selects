@@ -122,7 +122,9 @@ export async function judgeShortlist(short, llm, { onProgress, onResult, onFallb
         }
       } else {
         // one bad answer should not sink the run: the clip keeps its pre-score and says so
-        out[i] = { ...c, scores: null, judgeTotal: null, total: c.pre ?? 0, reason: "The model's answer could not be read, so this clip keeps its first-stage score." };
+        // (Smart mode without a saved private model: nothing is downloaded for one clip)
+        const why = llm.where === "google" ? "Smart mode could not judge this clip, so it keeps its first-stage score." : "The model's answer could not be read, so this clip keeps its first-stage score.";
+        out[i] = { ...c, scores: null, judgeTotal: null, total: c.pre ?? 0, reason: why };
       }
     }
     onResult?.(out[i]);
