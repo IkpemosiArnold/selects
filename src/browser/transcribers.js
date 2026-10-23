@@ -17,6 +17,7 @@
 // transcript got) and .busy (the shared free quota is used up), so the engine can carry on
 // from there on the device or with the person's own key.
 import { cleanWords, wordsFromVerbose } from "../core/asr-words.mjs";
+import { providerRequest } from "../core/provider-request.mjs";
 import { encodeSpeech, speechCodec } from "./encode.js";
 import { inOrder, planChunks, progressivePieces, speechRegions } from "./speech-chunks.js";
 
@@ -48,25 +49,29 @@ export function deviceTranscriber({ device = "auto", model } = {}) {
 }
 
 /** Send one encoded piece to the Selects proxy. Resolves { words, duration, model }. */
+// every call below goes through providerRequest: one deadline covering the body, a size cap, the caller's abort
+const SEND_DEADLINE_MS = 120000; // a 2-minute piece over a slow uplink, plus the transcription
+const ANSWER_CAP = 2 << 20;
+
 export function proxySender(url) {
   const base = url.replace(/\/+$/, "");
   return {
     id: "proxy",
     async wake() {
-      const r = await fetch(`${base}/healthz`, { credentials: "omit", cache: "no-store" });
-      const j = await r.json().catch(() => ({}));
+      const r = await providerRequest(`${base}/healthz`, { credentials: "omit", cache: "no-store" }, { deadlineMs: 20000, maxBytes: 64 << 10, read: "json" });
+      const j = r.json || {};
       if (!r.ok || j.light === false) throw Object.assign(new Error("Light mode is not set up on the Selects server."), { status: 503, busy: true });
       return j;
     },
     async send(piece, { signal } = {}) {
       let r;
       try {
-        r = await fetch(`${base}/transcribe`, { method: "POST", headers: { "content-type": piece.mime }, body: piece.blob, credentials: "omit", signal });
+        r = await providerRequest(`${base}/transcribe`, { method: "POST", headers: { "content-type": piece.mime }, body: piece.blob, credentials: "omit" }, { deadlineMs: SEND_DEADLINE_MS, maxBytes: ANSWER_CAP, read: "json", signal });
       } catch (e) {
-        if (signal?.aborted) throw e;
-        throw Object.assign(new Error("Could not reach the Selects server."), { status: 0, transient: true });
+        if (e?.name === "AbortError") throw e;
+        throw Object.assign(new Error(e?.timeout ? "The Selects server did not answer in time." : "Could not reach the Selects server."), { status: 0, transient: true });
       }
-      const j = await r.json().catch(() => ({}));
+      const j = r.json || {};
       if (!r.ok) throw Object.assign(new Error(j.error || `Server ${r.status}`), { status: r.status, hint: j.hint, scope: j.scope, retrySec: j.retrySec ?? null, transient: r.status === 0 || r.status >= 500, busy: r.status === 429 || r.status === 503 });
       return j;
     },
@@ -77,9 +82,10 @@ export function proxySender(url) {
  * Send one encoded piece straight to Groq with the person's own free key (kept in this tab,
  * sent only to Groq, which allows calls from web pages). Same answer shape as the proxy.
  */
-export function groqKeySender(key, { model = "whisper-large-v3", base = "https://api.groq.com/openai/v1" } = {}) {
+export function groqKeySender(key, { model = "whisper-large-v3", base = "https://api.groq.com/openai/v1", credential = null } = {}) {
   return {
     id: "groq-key",
+    credential, // a fingerprint of the key (api.js), never the key itself
     async wake() {},
     async send(piece, { signal } = {}) {
       const form = new FormData();
@@ -92,12 +98,12 @@ export function groqKeySender(key, { model = "whisper-large-v3", base = "https:/
       form.append("temperature", "0");
       let r;
       try {
-        r = await fetch(`${base}/audio/transcriptions`, { method: "POST", headers: { authorization: `Bearer ${key}` }, body: form, credentials: "omit", signal });
+        r = await providerRequest(`${base}/audio/transcriptions`, { method: "POST", headers: { authorization: `Bearer ${key}` }, body: form, credentials: "omit" }, { deadlineMs: SEND_DEADLINE_MS, maxBytes: ANSWER_CAP, read: "json", signal });
       } catch (e) {
-        if (signal?.aborted) throw e;
-        throw Object.assign(new Error("Could not reach Groq."), { status: 0, transient: true });
+        if (e?.name === "AbortError") throw e;
+        throw Object.assign(new Error(e?.timeout ? "Groq did not answer in time." : "Could not reach Groq."), { status: 0, transient: true });
       }
-      const j = await r.json().catch(() => ({}));
+      const j = r.json || {};
       if (r.status === 401) throw Object.assign(new Error("Groq did not accept this key."), { status: 401, hint: "Check the key on console.groq.com, or use the free shared transcriber.", badKey: true });
       if (!r.ok) throw Object.assign(new Error(j.error?.message || `Groq ${r.status}`), { status: r.status, busy: r.status === 429, transient: r.status >= 500, retrySec: Number(r.headers.get("retry-after")) || null, hint: r.status === 429 ? "Your free Groq quota is used up for now." : null });
       const words = wordsFromVerbose(j);
@@ -118,6 +124,7 @@ export function remoteTranscriber({ sender, model = "whisper-large-v3", concurre
   let wakeP = null;
   return {
     id: `remote:${sender.id}`,
+    sender, // which route and, for an own key, which key (by fingerprint) this client uses
     model,
     where: "remote",
     label: sender.id === "groq-key" ? "whisper on Groq, with your key" : "the free Selects transcriber",

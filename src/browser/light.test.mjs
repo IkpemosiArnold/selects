@@ -54,7 +54,7 @@ test("probe: times a 1 MB range request; a timeout is a slow answer, an error is
   const ok = await measureDownlink("https://x/model", { now, fetchImpl: async (u, o) => {
     assert.equal(o.headers.range, "bytes=0-1048575");
     t = 4000; // 1 MiB in 4 s
-    return { ok: true, arrayBuffer: async () => new ArrayBuffer(1 << 20) };
+    return new Response(new Uint8Array(1 << 20), { status: 206 });
   } });
   assert.equal(ok, 2.1);
   assert.equal(await measureDownlink("https://x/model", { fetchImpl: async () => { throw new Error("offline"); } }), null);
@@ -364,4 +364,35 @@ test("cache check: the device's speech model files, finished in the resumable st
   assert.equal(await speechModelCached(MODELS.whisperTiny, "wasm", { openStore: async () => store([tiny[0]]), openLegacy: none }), false, "half a model is not cached");
   const legacy = async () => ({ match: async (u) => (tiny.includes(u) ? new Response("x") : undefined) });
   assert.equal(await speechModelCached(MODELS.whisperTiny, "wasm", { openStore: async () => null, openLegacy: legacy }), true, "a copy from before resumable downloads counts");
+});
+
+/** A response whose body is `total` bytes in 64 KB chunks, counting what the reader pulled. */
+function countingResponse(total, status) {
+  const counter = { pulled: 0, cancelled: false };
+  let sent = 0;
+  const body = new ReadableStream({
+    pull(c) {
+      if (sent >= total) return c.close();
+      const n = Math.min(65536, total - sent);
+      sent += n;
+      counter.pulled += n;
+      c.enqueue(new Uint8Array(n));
+    },
+    cancel() {
+      counter.cancelled = true;
+    },
+  }, { highWaterMark: 0 });
+  return { res: new Response(body, { status }), counter };
+}
+
+test("probe: never reads more than 1 MB, and needs a partial (206) answer", async () => {
+  const whole = countingResponse(4 << 20, 200); // a server that ignores Range and sends everything
+  const r1 = await measureDownlink("https://x/model", { fetchImpl: async () => whole.res });
+  assert.equal(r1, null, "a 200 is not a 1 MB probe");
+  assert.ok(whole.counter.pulled <= 128 * 1024, `read ${whole.counter.pulled} bytes of a 200`);
+  const over = countingResponse(4 << 20, 206); // a 206 that sends more than it was asked for
+  const r2 = await measureDownlink("https://x/model", { fetchImpl: async () => over.res });
+  assert.ok(r2 > 0);
+  assert.ok(over.counter.pulled <= (1 << 20) + 65536, `read ${over.counter.pulled} bytes`);
+  assert.equal(over.counter.cancelled, true, "the rest is cancelled at the cap");
 });

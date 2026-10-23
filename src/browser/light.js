@@ -10,6 +10,8 @@
 // The reasons say why in plain words, from what the browser reports (Data Saver, 2G or 3G,
 // the speed) or from a timed 1 MB probe where it reports nothing (Safari), and on iPhones.
 
+import { providerRequest } from "../core/provider-request.mjs";
+
 export const SLOW_MBPS = 1.5;
 export const SLOW_DOWNLOAD_SEC = 60;
 
@@ -43,22 +45,19 @@ export function suggestMode({ connection = null, probeMbps = null, ios = false, 
  * Time a 1 MB download (an HTTP Range request) to estimate the speed where the browser does
  * not report one (Safari, Firefox). Resolves Mbps, or null when it cannot tell. Used once,
  * only when the speech model is not cached, so the page can say how long Private would take.
+ * It never reads more than `bytes`: only a 206 (partial) answer is read, through a reader that
+ * is cancelled at the cap (provider-request.mjs); a 200 (the whole file) is cancelled unread.
  */
-export async function measureDownlink(url, { bytes = 1 << 20, fetchImpl = globalThis.fetch, now = () => performance.now(), timeoutMs = 20000 } = {}) {
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), timeoutMs);
+export async function measureDownlink(url, { bytes = 1 << 20, fetchImpl = (...a) => globalThis.fetch(...a), now = () => performance.now(), timeoutMs = 20000 } = {}) {
   const t0 = now();
   try {
-    const r = await fetchImpl(url, { headers: { range: `bytes=0-${bytes - 1}` }, cache: "no-store", credentials: "omit", signal: ctl.signal });
-    if (!r.ok) return null;
-    const got = (await r.arrayBuffer()).byteLength;
+    const r = await providerRequest(url, { headers: { range: `bytes=0-${bytes - 1}` }, cache: "no-store", credentials: "omit" }, { deadlineMs: timeoutMs, maxBytes: bytes, overCap: "truncate", read: (res) => (res.status === 206 ? "bytes" : "none"), fetchImpl });
+    if (r.status !== 206) return null;
     const sec = (now() - t0) / 1000;
-    return got >= bytes / 4 && sec > 0 ? +((got * 8) / sec / 1e6).toFixed(2) : null;
-  } catch {
+    return r.bytes >= bytes / 4 && sec > 0 ? +((r.bytes * 8) / sec / 1e6).toFixed(2) : null;
+  } catch (e) {
     // a timeout is an answer too: under bytes*8/timeout Mbps
-    return ctl.signal.aborted ? +((bytes * 8) / (timeoutMs / 1000) / 1e6).toFixed(2) : null;
-  } finally {
-    clearTimeout(timer);
+    return e?.timeout ? +((bytes * 8) / (timeoutMs / 1000) / 1e6).toFixed(2) : null;
   }
 }
 

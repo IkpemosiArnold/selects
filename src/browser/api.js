@@ -22,6 +22,24 @@ import { isIos, measureDownlink, speechModelCached, suggestMode, wakeProxy } fro
 const KEY_STORE = "selects.geminiKey"; // sessionStorage only: gone when the tab closes
 const GROQ_STORE = "selects.groqKey"; // Light mode's own-key option, also sessionStorage only
 
+/**
+ * A fingerprint of a credential, so client caches can tell one key from another without
+ * keeping or logging the key itself (53-bit cyrb53; not a security measure, an identity).
+ */
+export function credentialId(secret) {
+  if (!secret) return null;
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < secret.length; i++) {
+    const c = secret.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return `k${(4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36)}`;
+}
+
 const wrap = async (fn) => {
   try {
     return await fn();
@@ -93,9 +111,10 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
   async function getTranscriber() {
     if (state.mode !== "light") return null;
     const groq = state.smart.groqKey || savedGroq();
-    const k = JSON.stringify([groq ? "key" : "proxy", state.smart.proxyUrl || null]);
+    // keyed by which key (its fingerprint), not only whether there is one: a new key gets a new client
+    const k = JSON.stringify([groq ? credentialId(groq) : "proxy", state.smart.proxyUrl || null]);
     if (transcriber && transcriberKey === k) return transcriber;
-    if (groq) transcriber = remoteTranscriber({ sender: groqKeySender(groq) });
+    if (groq) transcriber = remoteTranscriber({ sender: groqKeySender(groq, { credential: credentialId(groq) }) });
     else if (state.smart.proxyUrl) transcriber = remoteTranscriber({ sender: proxySender(state.smart.proxyUrl) });
     else return null;
     transcriberKey = k;
@@ -104,7 +123,8 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
 
   async function getJudge() {
     const s = state;
-    const k = JSON.stringify([s.mode, s.prefer, s.smart.proxyUrl || null, s.smart.model || null, !!(s.smart.key || savedKey())]);
+    // keyed by which Gemini key (its fingerprint): forgetting or replacing it builds a new backend
+    const k = JSON.stringify([s.mode, s.prefer, s.smart.proxyUrl || null, s.smart.model || null, credentialId(s.smart.key || savedKey())]);
     if (backend && backendKey === k) return backend;
     // Light mode judges as Smart mode does (the text of the shortlist, never audio or video)
     if (s.mode === "smart" || s.mode === "light") {
@@ -138,7 +158,10 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
         } catch {}
       }
       if (opts.groqKey === null) {
+        // forget it everywhere: in memory, in the tab's storage, and the client built with it
         delete state.smart.groqKey;
+        transcriber = null;
+        transcriberKey = null;
         try {
           sessionStorage.removeItem(GROQ_STORE);
         } catch {}
@@ -149,6 +172,11 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
         } catch {}
       }
       if (opts.key === null) {
+        delete state.smart.key;
+        if (backend?.id === "gemini-key") {
+          backend = null;
+          backendKey = null;
+        }
         try {
           sessionStorage.removeItem(KEY_STORE);
         } catch {}
