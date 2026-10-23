@@ -2,6 +2,8 @@
 // it will download and what actually runs (the judge backend in llm.js, whisper's device and
 // size in asr.js). chooseRuntimes is pure, so the rule is tested in Node.
 
+import { MODELS } from "./models.js";
+
 /** The judge on WebGPU (Gemma 4 E2B, 2 GB) needs at least this much device memory, when the browser says. */
 export const MIN_GPU_MEMORY_GB = 4;
 /** At or below this much memory (navigator.deviceMemory), whisper defaults to the smaller model. */
@@ -15,9 +17,31 @@ export const SMALL_SPEECH_MEMORY_GB = 4;
  * never start that download by itself. There, Private mode ranks by the first-stage score
  * and the rule-based cut checks.
  */
-export function inTabJudgeFits({ ios = false, deviceMemoryGb = null } = {}) {
-  return !(ios || (deviceMemoryGb != null && deviceMemoryGb <= SMALL_SPEECH_MEMORY_GB));
+export function inTabJudgeFits(facts = {}) {
+  return inTabJudgeWhyNot(facts) === null;
 }
+
+/**
+ * Why the in-tab judge is not the default here: "phone", "memory", "one-thread" (Gemma 3 on
+ * the processor without threads: Safari, which has never been cross-origin isolated, or any
+ * page that is not; a 2-minute video then sat in judging for over 40 minutes), or null.
+ */
+export function inTabJudgeWhyNot({ ios = false, deviceMemoryGb = null, judge = null, multiThread = true } = {}) {
+  if (ios) return "phone";
+  if (deviceMemoryGb != null && deviceMemoryGb <= SMALL_SPEECH_MEMORY_GB) return "memory";
+  if (judge === "gemma3-wasm" && !multiThread) return "one-thread";
+  return null;
+}
+
+/** The one line a Private run shows when it ranked without the in-tab judge. */
+export const JUDGE_NOTES = {
+  phone: "Ranked by the first-stage score and the cut checks, without Gemma: it is too big for a phone's browser. Smart or Light mode adds Gemma's judgment.",
+  memory: "Ranked by the first-stage score and the cut checks, without Gemma: this device has too little memory for it. Smart or Light mode adds Gemma's judgment.",
+  "one-thread": "Ranked by the first-stage score and the cut checks, without Gemma: in this browser it runs on one processor thread and can take an hour. Smart or Light mode adds Gemma's judgment, or judge on this device.",
+};
+
+/** WebKit (Safari, and every browser on iOS): whisper and wllama run on one thread there. */
+export const isWebKitUa = (ua = "") => /AppleWebKit/.test(ua) && !/Chrome\/|Chromium\/|Edg\/|Android/.test(ua);
 
 /** iPhone, iPad (which reports itself as a Mac with a touch screen) or iPod. */
 export function isAppleMobile(ua = "", maxTouchPoints = 0) {
@@ -30,7 +54,7 @@ export function isAppleMobile(ua = "", maxTouchPoints = 0) {
  *   speech: "auto" | "base" | "tiny" (whisper's size)
  * @returns {{ judge: "gemma4-webgpu" | "gemma3-wasm", asr: "webgpu" | "wasm", speech: "base" | "tiny" }}
  */
-export function chooseRuntimes({ webgpu = false, vendor = "", deviceMemoryGb = null, ios = false, prefer = "auto", asrDevice = "auto", speech = "auto" } = {}) {
+export function chooseRuntimes({ webgpu = false, vendor = "", deviceMemoryGb = null, ios = false, multiThread = true, prefer = "auto", asrDevice = "auto", speech = "auto" } = {}) {
   const memOk = !deviceMemoryGb || deviceMemoryGb >= MIN_GPU_MEMORY_GB;
   // An iPhone or iPad tab is closed by iOS long before the device's memory is used up, and
   // Safari does not say how much memory there is, so the 2 GB WebGPU judge is not the default there
@@ -43,7 +67,8 @@ export function chooseRuntimes({ webgpu = false, vendor = "", deviceMemoryGb = n
   // phones and small-memory devices get the smaller whisper unless the person picks the bigger one
   const small = ios || (deviceMemoryGb != null && deviceMemoryGb <= SMALL_SPEECH_MEMORY_GB);
   const size = speech === "base" || speech === "tiny" ? speech : small ? "tiny" : "base";
-  return { judge, asr, speech: size, inTabJudge: inTabJudgeFits({ ios, deviceMemoryGb }) };
+  const whyNot = inTabJudgeWhyNot({ ios, deviceMemoryGb, judge, multiThread });
+  return { judge, asr, speech: size, inTabJudge: whyNot === null, inTabJudgeWhyNot: whyNot };
 }
 
 let facts = null;
@@ -56,7 +81,9 @@ export function deviceFacts() {
     try {
       adapter = nav.gpu ? await nav.gpu.requestAdapter() : null;
     } catch {}
-    return { webgpu: !!adapter, vendor: adapter?.info?.vendor || "", architecture: adapter?.info?.architecture || "", deviceMemoryGb: nav.deviceMemory || null, ios: isAppleMobile(nav.userAgent || "", nav.maxTouchPoints || 0) };
+    // threads need cross-origin isolation, and WebKit stays on one thread even then (asr.worker.js)
+    const multiThread = !!globalThis.crossOriginIsolated && !isWebKitUa(nav.userAgent || "");
+    return { webgpu: !!adapter, vendor: adapter?.info?.vendor || "", architecture: adapter?.info?.architecture || "", deviceMemoryGb: nav.deviceMemory || null, ios: isAppleMobile(nav.userAgent || "", nav.maxTouchPoints || 0), multiThread };
   })();
   return facts;
 }
@@ -66,9 +93,11 @@ export function resetDeviceFacts() {
   facts = null;
 }
 
-/** True when this device can run the in-tab judge (inTabJudgeFits). */
-export async function canJudgeInTab() {
-  return inTabJudgeFits(await deviceFacts());
+/** Whether this device runs the in-tab judge by default: { fits, why, note } (inTabJudgeWhyNot). */
+export async function canJudgeInTab({ prefer = "auto" } = {}) {
+  const rt = await runtimes({ prefer });
+  const bytes = MODELS[rt.judge === "gemma4-webgpu" ? "gemma4" : "gemma3"].bytes;
+  return { fits: rt.inTabJudge, why: rt.inTabJudgeWhyNot, note: rt.inTabJudgeWhyNot ? JUDGE_NOTES[rt.inTabJudgeWhyNot] : null, bytes };
 }
 
 /** The runtimes for this browser, with the person's preferences. */

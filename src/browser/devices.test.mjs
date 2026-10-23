@@ -7,7 +7,7 @@ await import("./test-env.mjs");
 const { createBrowserApi } = await import("./api.js");
 const { privateBackend } = await import("./llm.js");
 const { resolveAsrDevice, resolveSpeech } = await import("./asr.js");
-const { chooseRuntimes, inTabJudgeFits, isAppleMobile, resetDeviceFacts } = await import("./devices.js");
+const { chooseRuntimes, inTabJudgeFits, inTabJudgeWhyNot, isAppleMobile, JUDGE_NOTES, resetDeviceFacts } = await import("./devices.js");
 const { MODELS } = await import("./models.js");
 
 /** Pretend to be a browser with this GPU and this much memory. */
@@ -17,8 +17,12 @@ function fakeDevice({ gpu = null, memoryGb = null, ua = null }) {
   Object.defineProperty(nav, "gpu", { value: gpu ? { requestAdapter: async () => ({ info: { vendor: gpu, architecture: "x" } }) } : undefined, configurable: true });
   Object.defineProperty(nav, "deviceMemory", { value: memoryGb ?? undefined, configurable: true });
   if (ua) Object.defineProperty(nav, "userAgent", { value: ua, configurable: true });
+  const hadIsolated = Object.getOwnPropertyDescriptor(globalThis, "crossOriginIsolated");
+  Object.defineProperty(globalThis, "crossOriginIsolated", { value: true, configurable: true });
   resetDeviceFacts?.();
   return () => {
+    if (hadIsolated) Object.defineProperty(globalThis, "crossOriginIsolated", hadIsolated);
+    else delete globalThis.crossOriginIsolated;
     for (const [k, d] of Object.entries(had)) {
       if (d) Object.defineProperty(nav, k, d);
       else delete nav[k];
@@ -62,7 +66,7 @@ for (const c of cases) {
       assert.equal(speech.size, c.speech, "the speech model's size");
       assert.equal(whisperItem.bytes, speech.model.bytes[asr], "the speech model's size shown is the one that loads, on its device");
       assert.equal(whisperItem.bytes, MODELS[c.speech === "tiny" ? "whisperTiny" : "whisper"].bytes[asr]);
-      assert.deepEqual(chooseRuntimes({ webgpu: !!c.gpu, vendor: c.gpu || "", deviceMemoryGb: c.memoryGb, ios: !!c.ios }), { judge: c.judge, asr: c.asr, speech: c.speech, inTabJudge: inTab });
+      assert.deepEqual(chooseRuntimes({ webgpu: !!c.gpu, vendor: c.gpu || "", deviceMemoryGb: c.memoryGb, ios: !!c.ios }), { judge: c.judge, asr: c.asr, speech: c.speech, inTabJudge: inTab, inTabJudgeWhyNot: inTab ? null : c.ios ? "phone" : "memory" });
     } finally {
       restore();
     }
@@ -76,6 +80,16 @@ test("the in-tab judge: never on iPhones and iPads, nor on 4 GB or less; compute
   assert.equal(inTabJudgeFits({ deviceMemoryGb: 8 }), true);
   assert.equal(inTabJudgeFits({}), true, "memory not reported (Safari, Firefox on a computer)");
   assert.equal(chooseRuntimes({ ios: true }).inTabJudge, false);
+});
+
+test("the in-tab judge on one processor thread is not the default either (Safari, or a page without isolation)", () => {
+  assert.equal(inTabJudgeWhyNot({ judge: "gemma3-wasm", multiThread: false }), "one-thread");
+  assert.equal(inTabJudgeWhyNot({ judge: "gemma3-wasm", multiThread: true }), null);
+  assert.equal(inTabJudgeWhyNot({ judge: "gemma4-webgpu", multiThread: false }), null, "Gemma 4 runs on the GPU");
+  const rt = chooseRuntimes({ webgpu: false, multiThread: false, deviceMemoryGb: 8 });
+  assert.deepEqual([rt.judge, rt.inTabJudge, rt.inTabJudgeWhyNot], ["gemma3-wasm", false, "one-thread"]);
+  assert.match(JUDGE_NOTES["one-thread"], /judge on this device/);
+  for (const n of Object.values(JUDGE_NOTES)) assert.doesNotMatch(n, /\u2014/);
 });
 
 test("the person's choice of speech model wins over the device rule", () => {

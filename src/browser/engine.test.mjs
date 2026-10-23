@@ -324,3 +324,24 @@ test("render: a clip that cannot be saved on the device is still ready to downlo
   assert.match(now.render.saveError, /not saved on this device/i);
   assert.match(now.render.saveError, /full/i, "a full storage says so in plain words");
 });
+
+test("one-thread computer: ranked without the judge, the note is frozen in the job, and an opt-in judges on the device", async () => {
+  const s = await seeded(Engine);
+  const device = fakeBackend({ id: "gemma3-wasm", model: "gemma-3-1b", cached: false });
+  const note = "Ranked by the first-stage score and the cut checks, without Gemma: in this browser it runs on one processor thread and can take an hour.";
+  const { engine, job } = await runOnce(Engine, s, device, {}, { inTabJudge: async () => ({ fits: false, why: "one-thread", note, bytes: 721918496 }) });
+  assert.equal(job.stage, "ready", job.error?.message);
+  assert.equal(device.loads, 0);
+  assert.equal(job.judge.backend, "prescore");
+  assert.equal(job.judge.note, note);
+  assert.equal(job.profile.inTabJudgeWhyNot, "one-thread");
+  assert.equal(job.profile.judgeBytes, 721918496);
+  // the person opts in: the model loads and judges, this once
+  await engine.chooseJudge(job.id, "download");
+  await engine.idle(job.id);
+  const now = engine.getJob(job.id);
+  assert.equal(now.stage, "ready", now.error?.message);
+  assert.equal(device.loads, 1);
+  assert.equal(now.judge.backend, "gemma3-wasm", "judged by the model (its answers may come from the answer cache)");
+  assert.ok(now.candidates.every((c) => c.judgedOn !== "prescore"));
+});

@@ -276,8 +276,10 @@ export class Engine {
   async frozenProfile(r) {
     if (!r.frozen) {
       const p = r.job.profile || {};
-      const inTabJudge = p.inTabJudge ?? (await this.inTabJudge().catch(() => true));
-      r.job.profile = { ...p, inTabJudge };
+      // inTabJudge() answers true/false (tests) or { fits, why, note } (devices.js, canJudgeInTab)
+      const fit = p.inTabJudge != null ? p.inTabJudge : await this.inTabJudge({ prefer: p.prefer }).catch(() => true);
+      const inTabJudge = typeof fit === "object" ? fit.fits : fit;
+      r.job.profile = { ...p, inTabJudge, ...(typeof fit === "object" && !fit.fits ? { inTabJudgeWhyNot: fit.why, judgeNote: fit.note, judgeBytes: fit.bytes } : {}) };
       r.frozen = Object.freeze({ ...r.job.profile });
     }
     return r.frozen;
@@ -612,7 +614,10 @@ export class Engine {
     const P = await this.frozenProfile(r);
     let llm = asked || (await this.getJudge(P));
     const loadOpts = {
-      onProgress: (p) => progress("judge", { progress: 0, note: p.cached ? "loading the judge model from this browser's cache" : `getting the judge model: ${Math.round(p.loaded / 1e6)} of ${Math.round(p.total / 1e6)} MB`, download: { loaded: p.loaded, total: p.total } }),
+      onProgress: (p) =>
+        p.secPerCall // measured on this device right after loading (llm.js); about two calls per clip plus one
+          ? progress("judge", { progress: 0, etaSec: Math.round(p.secPerCall * (short.length * 2 + 1)), note: `measured on this device: about ${Math.max(1, Math.round((p.secPerCall * (short.length * 2 + 1)) / 60))} minutes to judge ${short.length} clips` })
+          : progress("judge", { progress: 0, note: p.cached ? "loading the judge model from this browser's cache" : `getting the judge model: ${Math.round(p.loaded / 1e6)} of ${Math.round(p.total / 1e6)} MB`, download: { loaded: p.loaded, total: p.total } }),
       onWaking: (s) => progress("judge", { progress: 0, note: `waking the Smart mode server (${s} s; a free server sleeps when idle and can take up to a minute)` }),
     };
     // the person's answer to "Smart mode is not answering" (chooseJudge), used once
@@ -622,7 +627,7 @@ export class Engine {
     if (choice === "preliminary") return this.prescoreStage(r, short, progress);
     // phones and small-memory devices never load (or download) the in-tab judge on their own
     const tabFits = P.inTabJudge !== false;
-    if (llm.where !== "google" && !tabFits && choice !== "download") return this.prescoreStage(r, short, progress, PHONE_JUDGE_NOTE);
+    if (llm.where !== "google" && !tabFits && choice !== "download") return this.prescoreStage(r, short, progress, P.judgeNote || PHONE_JUDGE_NOTE);
     // Smart mode can fall back to the private model, for the whole run if the proxy never
     // wakes or clip by clip when Google's free tier is slow, but only when that model is
     // already in this browser or the person chose to download it: never a surprise 2 GB
