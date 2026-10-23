@@ -26,6 +26,16 @@ const secs = (t0) => +((performance.now() - t0) / 1000).toFixed(2);
 
 // ------------------------------------------------------------- Gemma 3 1B, WebAssembly
 
+/** WebAssembly 64-bit memory, which wllama's default build needs (as wllama checks it). */
+function memory64() {
+  try {
+    new WebAssembly.Memory({ address: "i64", initial: 1n });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** True when wllama's own cache (OPFS) already holds the whole Gemma 3 file. */
 async function inWllamaCache() {
   try {
@@ -57,6 +67,12 @@ export function wllamaBackend({ threads } = {}) {
       if (w) return;
       const [{ Wllama, LoggerWithoutDebug }, { default: wasmUrl }] = await Promise.all([import("@wllama/wllama"), import("@wllama/wllama/esm/wasm/wllama.wasm?url")]);
       w = new Wllama({ default: wasmUrl }, { logger: LoggerWithoutDebug, allowOffline: true });
+      // Safari (no JSPI or memory64) needs wllama's compat build, which wllama would fetch from
+      // cdn.jsdelivr.net; it is built into this site instead (the worker code as text, per its README)
+      if (!WebAssembly.Suspending || !memory64()) {
+        const [{ default: compatWasm }, { default: compatWorker }] = await Promise.all([import("@wllama/wllama-compat/wasm/wllama.wasm?url"), import("@wllama/wllama-compat/wasm/wllama.js?raw")]);
+        w.setCompat({ wasm: compatWasm, worker: { code: compatWorker } });
+      }
       const t0 = now();
       const params = {
         n_ctx: 2048,
