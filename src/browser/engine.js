@@ -55,15 +55,19 @@ const newId = () => {
 const LONG_SEC = 20 * 60;
 
 export class Engine {
-  constructor({ getJudge, getFallback, getTranscriber, store, render = renderInWorker, inTabJudge = canJudgeInTab } = {}) {
+  constructor({ getJudge, getFallback, getTranscriber, getProfile, store, render = renderInWorker, inTabJudge = canJudgeInTab } = {}) {
     this.store = store || createJobStore(typeof indexedDB !== "undefined" ? indexedDbBackend() : memoryBackend());
-    // getJudge(): Promise<backend> from llm.js; the adapter swaps it for Private or Smart mode.
-    // getFallback(): Promise<backend>, the on-device judge Smart mode falls back to.
+    // getProfile(): the adapter's choices now (privacy mode, judge route, key fingerprints),
+    // frozen onto each job when it starts (frozenProfile) and passed to every call below, so a
+    // mode switch or a key change affects only jobs started after it.
+    this.getProfile = getProfile;
+    // getJudge(profile): Promise<backend> from llm.js, for that job's mode.
+    // getFallback(profile): Promise<backend>, the on-device judge Smart mode falls back to.
     this.getJudge = getJudge;
     this.getFallback = getFallback;
     // inTabJudge(): Promise<boolean>, false on phones and small-memory devices (devices.js)
     this.inTabJudge = inTabJudge;
-    // getTranscriber(): Promise<transcriber|null> (transcribers.js); a remote one is Light mode,
+    // getTranscriber(profile): Promise<transcriber|null> (transcribers.js); a remote one is Light mode,
     // null keeps whisper on this device
     this.getTranscriber = getTranscriber;
     this.renderClip = render; // renderInWorker; tests pass a fake
@@ -112,6 +116,8 @@ export class Engine {
       job.settings = { ...job.settings, ...clean };
       job.resumed = { from: resumePoint(saved).from, savedAt: saved.savedAt };
     }
+    // the choices it runs with, frozen now: choosing the video again starts it with the current ones
+    job.profile = this.getProfile ? { ...this.getProfile() } : null;
     job.key = key;
     this.jobs.set(job.id, this.blankRec(job, file, key));
     this.start(job.id);
@@ -200,6 +206,8 @@ export class Engine {
     const job = structuredClone(saved.job);
     job.key = key;
     job.resumed = { from: resumePoint(saved).from, savedAt: saved.savedAt, withFile: !!f };
+    // a saved job keeps the choices it started with (older saves had none: take today's)
+    job.profile ??= this.getProfile ? { ...this.getProfile() } : null;
     this.jobs.set(job.id, this.blankRec(job, f, key));
     this.start(job.id);
     return structuredClone(job);
@@ -259,6 +267,20 @@ export class Engine {
     } catch (e) {
       r.job.saveError = e.message; // full storage: the job still runs, it just will not resume
     }
+  }
+
+  /**
+   * The job's frozen choices: its profile (from the adapter when it started) plus the device
+   * rule's in-tab judge decision, made once. Every stage reads this, never the page's mode.
+   */
+  async frozenProfile(r) {
+    if (!r.frozen) {
+      const p = r.job.profile || {};
+      const inTabJudge = p.inTabJudge ?? (await this.inTabJudge().catch(() => true));
+      r.job.profile = { ...p, inTabJudge };
+      r.frozen = Object.freeze({ ...r.job.profile });
+    }
+    return r.frozen;
   }
 
   async run(id) {
@@ -337,7 +359,8 @@ export class Engine {
       const speech = await resolveSpeech({ device: job.settings.asrDevice || "auto", speech: job.settings.asrModel || "auto" });
       const deviceSig = transcriptSignature({ source: r.key, model: speech.model.id, language: "en", device: job.settings.asrDevice || "auto", dtype: speech.model.dtype });
       // Light mode: a remote transcriber (it also takes a transcript already made on this device)
-      const remote = this.getTranscriber ? await this.getTranscriber() : null;
+      const P = await this.frozenProfile(r);
+      const remote = this.getTranscriber ? await this.getTranscriber(P) : null;
       // one signature for Light mode's whisper, whichever route sent the audio (the shared proxy or the person's own key)
       const tSig = remote ? transcriptSignature({ source: r.key, model: `light:${remote.model}`, language: "en" }) : deviceSig;
       if (has("transcribe") && (sigs.transcribe == null || sigs.transcribe === tSig || (remote && sigs.transcribe === deviceSig))) {
@@ -435,7 +458,7 @@ export class Engine {
       // this judge (backend and model) with these prompts and settings. A person's decisions
       // are kept apart and put back on whatever the judge produced.
       current = "judge"; // a judge that cannot be set up (Smart mode without a key) stops this stage
-      const asked = await this.getJudge();
+      const asked = await this.getJudge(await this.frozenProfile(r));
       const want = judgmentSignature({ selection: selSig, judge: judgeIdentity(asked), prompts: PROMPTS, settings: job.settings });
       const savedJudgment = has("judge") && sigs.judge === want ? await this.store.part(r.key, "judgment") : null;
       let ranked;
@@ -586,7 +609,8 @@ export class Engine {
   /** Judge the shortlist. Returns { ranked, llm }: the candidates as the judge ranked them (no human decisions) and the backend that judged. */
   async judgeStage(r, short, progress, asked) {
     const job = r.job;
-    let llm = asked || (await this.getJudge());
+    const P = await this.frozenProfile(r);
+    let llm = asked || (await this.getJudge(P));
     const loadOpts = {
       onProgress: (p) => progress("judge", { progress: 0, note: p.cached ? "loading the judge model from this browser's cache" : `getting the judge model: ${Math.round(p.loaded / 1e6)} of ${Math.round(p.total / 1e6)} MB`, download: { loaded: p.loaded, total: p.total } }),
       onWaking: (s) => progress("judge", { progress: 0, note: `waking the Smart mode server (${s} s; a free server sleeps when idle and can take up to a minute)` }),
@@ -597,13 +621,13 @@ export class Engine {
     job.judge = {};
     if (choice === "preliminary") return this.prescoreStage(r, short, progress);
     // phones and small-memory devices never load (or download) the in-tab judge on their own
-    const tabFits = await this.inTabJudge().catch(() => true);
+    const tabFits = P.inTabJudge !== false;
     if (llm.where !== "google" && !tabFits && choice !== "download") return this.prescoreStage(r, short, progress, PHONE_JUDGE_NOTE);
     // Smart mode can fall back to the private model, for the whole run if the proxy never
     // wakes or clip by clip when Google's free tier is slow, but only when that model is
     // already in this browser or the person chose to download it: never a surprise 2 GB
     let fb;
-    const fallbackBackend = async () => (fb ??= this.getFallback ? await this.getFallback().catch(() => null) : null);
+    const fallbackBackend = async () => (fb ??= this.getFallback ? await this.getFallback(P).catch(() => null) : null);
     const fallbackReady = async () => {
       if (!tabFits && choice !== "download") return false;
       const b = await fallbackBackend();
@@ -969,14 +993,15 @@ export class Engine {
    * used when it is loaded or already saved in this browser, and otherwise the kit is the
    * plain one (the clip's opening line), and says why.
    */
-  async kitModel() {
+  async kitModel(r) {
+    const P = await this.frozenProfile(r);
     let llm;
     try {
-      llm = await this.getJudge();
+      llm = await this.getJudge(P);
     } catch (e) {
       return { llm: null, note: "No model is set up, so the title is the clip's opening line." };
     }
-    if (llm.where !== "google" && !llm.loaded && !(await this.inTabJudge().catch(() => true))) {
+    if (llm.where !== "google" && !llm.loaded && P.inTabJudge === false) {
       return { llm: null, note: "Gemma is too big for a phone's browser, so the title is the clip's opening line." };
     }
     if (llm.where !== "google" && !llm.loaded && !(await llm.isCached?.().catch(() => false))) {
@@ -1002,7 +1027,7 @@ export class Engine {
     try {
       if (mode === "plain") k = plainKit(source);
       else {
-        const m = await this.kitModel();
+        const m = await this.kitModel(r);
         note = m.note;
         k = m.llm ? await makeKit(source, m.llm, { madeFor: job.settings.madeFor, strict: true }) : plainKit(source);
         if (m.llm) madeBy = `${m.llm.id}:${m.llm.model}`;

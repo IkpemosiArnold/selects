@@ -79,18 +79,16 @@ export async function capabilities() {
 // the deployed proxy's URL, set at build time (render.yaml: VITE_SELECTS_PROXY_URL)
 const BUILT_PROXY = import.meta.env?.VITE_SELECTS_PROXY_URL || null;
 
-export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto" } = {}) {
+export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto", deps = {} } = {}) {
+  // the judge backends (llm.js); tests pass stand-ins
+  const make = { geminiKeyBackend, privateBackend, proxyBackend, ...deps };
   let state = { mode, smart: { proxyUrl: BUILT_PROXY, ...smart }, prefer };
-  let backend = null;
-  let backendKey = null;
   // wake the free proxy while the person picks a file (it sleeps when idle); never awaited here
   const woke = state.smart.proxyUrl && typeof window !== "undefined" ? wakeProxy(state.smart.proxyUrl) : Promise.resolve({ ok: false, light: false });
   // whether the free shared transcriber is switched on (the proxy has a key): null until it answers
   let shared = null;
   woke.then((w) => (shared = !!w.light));
   let probe = null;
-  let transcriber = null;
-  let transcriberKey = null;
 
   const savedKey = () => {
     try {
@@ -107,40 +105,77 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
     }
   };
 
-  /** Light mode's transcriber (the person's own Groq key first, else the proxy), or null for whisper on this device. */
-  async function getTranscriber() {
-    if (state.mode !== "light") return null;
-    const groq = state.smart.groqKey || savedGroq();
-    // keyed by which key (its fingerprint), not only whether there is one: a new key gets a new client
-    const k = JSON.stringify([groq ? credentialId(groq) : "proxy", state.smart.proxyUrl || null]);
-    if (transcriber && transcriberKey === k) return transcriber;
-    if (groq) transcriber = remoteTranscriber({ sender: groqKeySender(groq, { credential: credentialId(groq) }) });
-    else if (state.smart.proxyUrl) transcriber = remoteTranscriber({ sender: proxySender(state.smart.proxyUrl) });
-    else return null;
-    transcriberKey = k;
-    return transcriber;
+  const currentKey = () => state.smart.key || savedKey();
+  const currentGroq = () => state.smart.groqKey || savedGroq();
+
+  /**
+   * The choices a job runs with, frozen when it starts (engine.js keeps it on the job): the
+   * privacy mode, the judge's route and model, and which keys (by fingerprint, never the key).
+   * Switching mode, or adding, replacing or forgetting a key, affects only jobs started after.
+   */
+  function profile() {
+    return Object.freeze({
+      mode: state.mode,
+      prefer: state.prefer,
+      proxyUrl: state.smart.proxyUrl || null,
+      model: state.smart.model || null,
+      geminiKeyId: credentialId(currentKey()),
+      groqKeyId: credentialId(currentGroq()),
+    });
   }
 
-  async function getJudge() {
-    const s = state;
-    // keyed by which Gemini key (its fingerprint): forgetting or replacing it builds a new backend
-    const k = JSON.stringify([s.mode, s.prefer, s.smart.proxyUrl || null, s.smart.model || null, credentialId(s.smart.key || savedKey())]);
-    if (backend && backendKey === k) return backend;
+  /** The key a job started with, if it is still the one in this tab; a removed or replaced key is never swapped for another. */
+  const keyFor = (wantedId, current, what) => {
+    if (!wantedId) return null;
+    if (credentialId(current) === wantedId) return current;
+    throw Object.assign(new Error(`The ${what} this job started with was removed or replaced.`), { hint: `Start the video again to use the ${what} you have now, or switch to Private mode.` });
+  };
+
+  // clients, one per profile and credential (a Map, so jobs on different profiles never swap each other's)
+  const transcribers = new Map();
+  const backends = new Map();
+
+  /** Light mode's transcriber for a job's profile (its own Groq key, else the proxy), or null for whisper on this device. */
+  async function getTranscriber(p = profile()) {
+    if (p.mode !== "light") return null;
+    const groq = keyFor(p.groqKeyId, currentGroq(), "Groq key");
+    const k = JSON.stringify([p.groqKeyId || "proxy", p.proxyUrl]);
+    if (transcribers.has(k)) return transcribers.get(k).client;
+    let t;
+    if (groq) t = remoteTranscriber({ sender: groqKeySender(groq, { credential: p.groqKeyId }) });
+    else if (p.proxyUrl) t = remoteTranscriber({ sender: proxySender(p.proxyUrl) });
+    else return null;
+    transcribers.set(k, { client: t, keyId: p.groqKeyId });
+    return t;
+  }
+
+  /** The judge for a job's profile: Private on the device; Smart and Light through Google, with the job's own key or the proxy. */
+  async function getJudge(p = profile()) {
+    const k = JSON.stringify([p.mode === "private" ? "private" : "google", p.prefer, p.proxyUrl, p.model, p.geminiKeyId]);
+    if (backends.has(k)) return backends.get(k).client;
+    let b;
     // Light mode judges as Smart mode does (the text of the shortlist, never audio or video)
-    if (s.mode === "smart" || s.mode === "light") {
-      const key = s.smart.key || savedKey();
-      if (key) backend = geminiKeyBackend({ key, model: s.smart.model || SMART_MODELS[0] });
-      else if (s.smart.proxyUrl) backend = proxyBackend({ url: s.smart.proxyUrl, model: s.smart.model || null });
+    if (p.mode === "smart" || p.mode === "light") {
+      const key = keyFor(p.geminiKeyId, currentKey(), "Gemini key");
+      if (key) b = make.geminiKeyBackend({ key, model: p.model || SMART_MODELS[0] });
+      else if (p.proxyUrl) b = make.proxyBackend({ url: p.proxyUrl, model: p.model || null });
       else throw Object.assign(new Error("Smart mode needs a Gemini API key or a proxy address."), { hint: "Paste a free key from Google AI Studio, or switch to Private mode." });
     } else {
-      await backend?.unload?.();
-      backend = await privateBackend({ prefer: s.prefer });
+      b = await make.privateBackend({ prefer: p.prefer });
     }
-    backendKey = k;
-    return backend;
+    backends.set(k, { client: b, keyId: p.geminiKeyId });
+    return b;
   }
 
-  const engine = new Engine({ getJudge, getFallback: () => privateBackend({ prefer: state.prefer }), getTranscriber });
+  /** Drop every client built with a key that is no longer the one in this tab, so no old key stays in memory. */
+  const dropClients = () => {
+    const gemini = credentialId(currentKey());
+    const groq = credentialId(currentGroq());
+    for (const [k, v] of backends) if (v.keyId && v.keyId !== gemini) backends.delete(k);
+    for (const [k, v] of transcribers) if (v.keyId && v.keyId !== groq) transcribers.delete(k);
+  };
+
+  const engine = new Engine({ getProfile: profile, getJudge, getFallback: (p = profile()) => make.privateBackend({ prefer: p.prefer }), getTranscriber, ...(deps.engine || {}) });
 
   return {
     mock: false,
@@ -156,12 +191,12 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
         try {
           sessionStorage.setItem(GROQ_STORE, opts.groqKey);
         } catch {}
+        dropClients();
       }
       if (opts.groqKey === null) {
         // forget it everywhere: in memory, in the tab's storage, and the client built with it
         delete state.smart.groqKey;
-        transcriber = null;
-        transcriberKey = null;
+        dropClients();
         try {
           sessionStorage.removeItem(GROQ_STORE);
         } catch {}
@@ -170,13 +205,11 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
         try {
           sessionStorage.setItem(KEY_STORE, opts.key);
         } catch {}
+        dropClients();
       }
       if (opts.key === null) {
         delete state.smart.key;
-        if (backend?.id === "gemini-key") {
-          backend = null;
-          backendKey = null;
-        }
+        dropClients();
         try {
           sessionStorage.removeItem(KEY_STORE);
         } catch {}
