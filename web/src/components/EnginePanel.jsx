@@ -159,7 +159,13 @@ export default function EnginePanel({ engine }) {
         downloads && (
           <div className="engine-private">
             {!judge && downloads.runtimes?.inTabJudge === false && (
-              <p className="engine-dl">On this device, Private mode ranks clips without Gemma, which is too big for a phone's browser. Smart mode adds Gemma's judgment.</p>
+              <p className="engine-dl">
+                {downloads.runtimes?.inTabJudgeWhyNot === "one-thread"
+                  ? "In this browser Gemma would run on one processor thread and can take an hour, so Private mode ranks clips without it. You can still judge on this device from the review."
+                  : downloads.runtimes?.inTabJudgeWhyNot === "memory"
+                  ? "This device has too little memory for Gemma, so Private mode ranks clips without it. Smart or Light mode adds Gemma's judgment."
+                  : "On this phone, Private mode ranks clips without Gemma, which is too big for a phone's browser. Smart or Light mode adds Gemma's judgment."}
+              </p>
             )}
             {judge && (
               <p className="engine-dl">
