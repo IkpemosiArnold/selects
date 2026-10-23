@@ -171,3 +171,29 @@ test("audio checks and the provider choice from the environment", () => {
   assert.equal(asrFromEnv({ GROQ_API_KEY: "k", CF_ACCOUNT_ID: "a", CF_API_TOKEN: "t" }).id, "groq+cloudflare");
   assert.equal(asrFromEnv({ CF_ACCOUNT_ID: "a", CF_API_TOKEN: "t" }).id, "cloudflare");
 });
+
+/** MPEG-2 Layer III frames at 16 kHz, 32 kbps (144 bytes, 36 ms each) for `sec` seconds. */
+function mp3(sec) {
+  const frame = Buffer.alloc(144);
+  frame.set([0xff, 0xf3, 0x48, 0xc4]); // sync, MPEG-2, Layer III, no CRC; 32 kbps (index 4), 16 kHz (index 2); mono
+  return Buffer.concat(Array.from({ length: Math.ceil(sec / 0.036) }, () => frame));
+}
+
+test("audio: an MP3 longer than the limit is refused; one of unknown length is refused", () => {
+  assert.equal(checkAudio(mp3(240)).ok, false, "4 minutes of MP3 must not pass a 3-minute gate");
+  const ok = checkAudio(mp3(60));
+  assert.equal(ok.ok, true);
+  assert.ok(Math.abs(ok.audio.sec - 60) < 0.1, `read ${ok.audio.sec} s`);
+  const webmNoDuration = Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.alloc(200, 0x20)]);
+  assert.equal(checkAudio(webmNoDuration).ok, false, "length unknown: refused");
+});
+
+test("providers: a JSON body that stalls after the headers times out and fails over", async () => {
+  const stalled = async () => new Response(new ReadableStream({ start() {} }), { status: 200, headers: { "content-type": "application/json" } });
+  const groq = openAiCompatibleAsr({ name: "groq", base: "https://groq.example", key: "k", model: "whisper-large-v3", timeoutMs: 150, fetchImpl: stalled });
+  const t0 = Date.now();
+  await assert.rejects(groq.transcribe({ buf: Buffer.from("OggS"), mime: "audio/ogg", ext: "ogg" }), (e) => e.status === 0 && e.transient === true);
+  assert.ok(Date.now() - t0 < 2000, "the deadline covers the body");
+  const backup = { id: "cloudflare", model: "cf", transcribe: async () => ({ words: [{ w: "Hi.", s: 0, e: 0.3 }], duration: 1, model: "cf" }) };
+  assert.equal((await chainAsr([groq, backup]).transcribe({ buf: Buffer.from("OggS"), mime: "audio/ogg", ext: "ogg" })).model, "cf");
+});

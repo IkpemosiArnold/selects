@@ -7,6 +7,7 @@
 // a request that is refused for a feature is retried once without it, and the answer is
 // read with the same tolerant parser the in-browser models use.
 
+import { providerRequest } from "./provider-request.mjs";
 import { schemaHint } from "./tasks.mjs";
 
 export const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
@@ -70,6 +71,9 @@ export const RETRY_BACKOFF_MS = 2000;
 /** A call that has not answered in this long is abandoned (the free tier has taken almost 5 minutes). */
 export const CALL_TIMEOUT_MS = 25000;
 
+/** A judge answer is a few KB; anything over this is not one. */
+const ANSWER_CAP = 1 << 20;
+
 const transient = (status, body) => status >= 500 || status === 408 || (status === 404 && !String(body || "").trim());
 
 /**
@@ -85,27 +89,20 @@ export async function geminiGenerate({ key, model, messages, schema, maxTokens, 
   let lastErr = null;
   for (let tries = 0; tries < 6; tries++) {
     attempts++;
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), timeoutMs);
-    const onAbort = () => ctl.abort();
-    signal?.addEventListener("abort", onAbort, { once: true });
     let res;
     let body = "";
     try {
-      res = await fetchImpl(`${base}/models/${encodeURIComponent(model)}:generateContent`, {
+      // one deadline for the whole answer, body included, and a cap on its size (provider-request.mjs)
+      res = await providerRequest(`${base}/models/${encodeURIComponent(model)}:generateContent`, {
         method: "POST",
         headers: { "content-type": "application/json", "x-goog-api-key": key },
         body: JSON.stringify(geminiBody(messages, { schema, maxTokens, temperature, features: feats })),
-        signal: ctl.signal,
-      });
-      body = await res.text();
+      }, { deadlineMs: timeoutMs, maxBytes: ANSWER_CAP, read: "text", signal, fetchImpl });
+      body = res.text || "";
     } catch (e) {
       res = null;
-      if (signal?.aborted) throw Object.assign(new Error("Stopped before it finished."), { name: "AbortError" });
-      lastErr = Object.assign(new Error(ctl.signal.aborted ? `Gemma did not answer within ${Math.round(timeoutMs / 1000)} s.` : `Could not reach the Gemini API: ${e.message}`), { status: 0, transient: true, hint: "Google's free Gemma is slow or busy right now." });
-    } finally {
-      clearTimeout(timer);
-      signal?.removeEventListener("abort", onAbort);
+      if (e?.name === "AbortError" || signal?.aborted) throw Object.assign(new Error("Stopped before it finished."), { name: "AbortError" });
+      lastErr = Object.assign(new Error(e?.timeout ? `Gemma did not answer within ${Math.round(timeoutMs / 1000)} s.` : e?.tooLarge ? "Gemma's answer was too large." : `Could not reach the Gemini API: ${e.message}`), { status: 0, transient: !e?.tooLarge, hint: "Google's free Gemma is slow or busy right now." });
     }
     if (res) {
       let json = null;
