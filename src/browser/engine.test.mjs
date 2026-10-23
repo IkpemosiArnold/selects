@@ -285,7 +285,7 @@ test("phone, Private mode: no in-tab judge, nothing downloads, ranked by the fir
     assert.ok(job.candidates.every((c) => c.judgedOn === "prescore"));
     assert.equal(job.faithful?.mode, "rules", "the cut checks still ran");
     assert.match(job.judge.note, /phone/);
-    assert.doesNotMatch(job.judge.note, /—/);
+    assert.doesNotMatch(job.judge.note, /\u2014/);
   }
 });
 

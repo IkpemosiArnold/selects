@@ -27,6 +27,10 @@ function setOrtBuild(dev) {
   if (!env.backends?.onnx?.wasm) return;
   const plain = webkit && dev !== "webgpu";
   env.backends.onnx.wasm.wasmPaths = plain ? { mjs: ortPlainMjs, wasm: ortPlainWasm } : { mjs: ortAsyncifyMjs, wasm: ortAsyncifyWasm };
+  // WebKit stays on one thread, as it always ran before the page was cross-origin isolated
+  // there: with threads, whisper base.en crashed the WebKit tab (Playwright's Safari 18.4
+  // engine, 23 Oct 2026), while one thread ran it to the end
+  if (webkit) env.backends.onnx.wasm.numThreads = 1;
 }
 setOrtBuild("wasm");
 
