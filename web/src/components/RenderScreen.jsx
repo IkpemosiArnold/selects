@@ -165,6 +165,10 @@ function Row({ job, c, kit }) {
         {done && r.stale && <p className="take-stale">You changed the captions or the blur after this render. Render it again to use the changes.</p>}
         {done && clip && <ShareSave url={clip} name={clipFileName(c.rank, title || c.hook)} title={title || ""} text={fullCaption} />}
         {r.status === "error" && <p className="take-error">{r.message || r.error || "This clip did not render."}</p>}
+        {done && c.render?.saved === false && (
+          // ready to download, but not kept on the device (engine.js render): say so, plainly
+          <p className="take-stale" role="alert">{c.render.saveError || "Ready to download, but not saved on this device. Download it now."}</p>
+        )}
         {done && <KitStatus job={job} c={c} />}
         {done && (
           <dl className="take-kit">

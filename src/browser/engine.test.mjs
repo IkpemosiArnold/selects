@@ -307,3 +307,20 @@ test("computer, Private mode: the in-tab judge runs as before", async () => {
   assert.equal(device.loads, 1);
   assert.ok(device.count("judge") > 0);
 });
+
+test("render: a clip that cannot be saved on the device is still ready to download, and says it was not saved", async () => {
+  const s = await seeded(Engine);
+  s.store.saveClip = async () => {
+    throw Object.assign(new Error("The quota has been exceeded."), { name: "QuotaExceededError" });
+  };
+  const { engine, job } = await runOnce(Engine, s, fakeBackend({ model: "save-fails" }));
+  const c = job.candidates[0];
+  await engine.render(job.id, { ids: [c.id] });
+  await engine.idle(job.id);
+  const now = engine.getJob(job.id).candidates.find((x) => x.id === c.id);
+  assert.equal(now.render.status, "done", "ready to download");
+  assert.ok(engine.clipUrl(job.id, c.id), "the MP4 can still be played and downloaded now");
+  assert.equal(now.render.saved, false, "not saved for later");
+  assert.match(now.render.saveError, /not saved on this device/i);
+  assert.match(now.render.saveError, /full/i, "a full storage says so in plain words");
+});

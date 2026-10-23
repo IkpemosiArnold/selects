@@ -934,10 +934,22 @@ export class Engine {
         const url = URL.createObjectURL(new Blob([result.mp4], { type: "video/mp4" }));
         const srtUrl = URL.createObjectURL(new Blob([result.srt], { type: "application/x-subrip" }));
         r.clips[`${c.id}:${preset}`] = { url, srtUrl, bytes: result.mp4.byteLength, start: c.start, end: c.end };
-        await this.store.saveClip(r.key, c.id, preset, { mp4: new Blob([result.mp4], { type: "video/mp4" }), srt: result.srt, start: c.start, end: c.end }).catch(() => {});
+        // "ready to download" (the MP4 is in this tab) and "saved for later" (kept on the device)
+        // are separate: a failed save is said in plain words, never hidden
+        let saved = true;
+        let saveError = null;
+        try {
+          await this.store.saveClip(r.key, c.id, preset, { mp4: new Blob([result.mp4], { type: "video/mp4" }), srt: result.srt, start: c.start, end: c.end });
+        } catch (e) {
+          saved = false;
+          const full = e?.name === "QuotaExceededError" || /quota|full|space/i.test(String(e?.message || ""));
+          saveError = full
+            ? "Ready to download, but not saved on this device: the browser's storage is full. Download it now; it will be gone when this tab closes."
+            : "Ready to download, but not saved on this device, so it will be gone when this tab closes. Download it now.";
+        }
         // the clip is ready now; the kit follows on its own
         const kitStatus = field === "render" ? "pending" : null;
-        c[field] = { status: "done", progress: 1, path: url, srt: srtUrl, kit: null, ...(kitStatus ? { kitStatus } : {}), reframe: result.reframe, frames: result.frames, bytes: result.mp4.byteLength, wallSec: result.wallSec, audioCodec: result.audioCodec };
+        c[field] = { status: "done", progress: 1, path: url, srt: srtUrl, kit: null, saved, ...(saveError ? { saveError } : {}), ...(kitStatus ? { kitStatus } : {}), reframe: result.reframe, frames: result.frames, bytes: result.mp4.byteLength, wallSec: result.wallSec, audioCodec: result.audioCodec };
         job.timings[field] = job.timings[field].filter((t) => t.id !== c.id).concat({ id: c.id, sec: result.wallSec, clipSec: +(c.end - c.start).toFixed(1) });
         this.emit(id, "render", { id: c.id, preset, ...c[field] });
         if (field === "render") {
