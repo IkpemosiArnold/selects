@@ -124,6 +124,10 @@ export default function Processing({ job, words, onResume }) {
   const [fileErr, setFileErr] = useState(null);
   const dur = job.source?.duration || 0;
   const st = job.stages || {};
+  // the stage shown comes from the stage that is running: a refetch that lands after the judge
+  // has started can carry an older job.stage ("candidates"), and the screen then said "This
+  // takes a few seconds" for the whole of a long judge run
+  const stage = st.judge?.status === "running" && job.stage !== "error" ? "judging" : job.stage;
   const reached = words.length ? words[words.length - 1].e : 0;
   const tr = st.transcribe || {};
   const jd = st.judge || {};
@@ -186,7 +190,7 @@ export default function Processing({ job, words, onResume }) {
   } else if (job.stage === "transcribing") {
     headline = "Transcribing what's said.";
     sub = eta != null ? `${cap(aboutMinutes(eta))} left. ${speedText} ${leave}` : `Timing the speed on this ${api.browser ? "device" : "laptop"}. ${leave}`;
-  } else if (job.stage === "candidates") {
+  } else if (stage === "candidates") {
     headline = "Finding moments that start and end on a full sentence.";
     sub = "This takes a few seconds.";
   } else {
@@ -203,7 +207,7 @@ export default function Processing({ job, words, onResume }) {
     }
   }
 
-  const pct = job.stage === "transcribing" || isErr ? (dur ? reached / dur : 0) : job.stage === "judging" ? jd.progress || 0 : null;
+  const pct = job.stage === "transcribing" || isErr ? (dur ? reached / dur : 0) : stage === "judging" ? jd.progress || 0 : null;
   const ticks = useMemo(() => {
     const step = dur > 5400 ? 900 : dur > 1800 ? 300 : dur > 600 ? 120 : 60;
     const out = [];
@@ -213,7 +217,7 @@ export default function Processing({ job, words, onResume }) {
 
   const steps = STEPS.filter((s) => st[s.key] && st[s.key].status !== "skipped" && !(captionMode && (s.key === "candidates" || s.key === "judge")));
   const stepNow = steps.find((s) => st[s.key]?.status === "running" || st[s.key]?.status === "error");
-  const left = job.stage === "transcribing" ? eta : job.stage === "judging" ? jd.etaSec : null;
+  const left = job.stage === "transcribing" ? eta : stage === "judging" ? jd.etaSec : null;
 
   return (
     <div className="proc">
@@ -381,13 +385,13 @@ export default function Processing({ job, words, onResume }) {
 
       <div className="timeline proc-timeline">
         <div
-          className={"tl-track proc-track" + (job.stage === "judging" ? " is-judging" : "")}
+          className={"tl-track proc-track" + (stage === "judging" ? " is-judging" : "")}
           role="progressbar"
-          aria-label={job.stage === "judging" ? "Moments judged" : "Transcribed so far"}
+          aria-label={stage === "judging" ? "Moments judged" : "Transcribed so far"}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round((pct || 0) * 100)}
-          aria-valuetext={job.stage === "judging" ? `${Math.round((pct || 0) * 100)}%` : `${tc(reached)} of ${tc(dur)}`}
+          aria-valuetext={stage === "judging" ? `${Math.round((pct || 0) * 100)}%` : `${tc(reached)} of ${tc(dur)}`}
         >
           <span className="proc-fill" style={{ transform: `scaleX(${pct ?? (BEFORE.includes(job.stage) ? 0 : 1)})` }} />
         </div>
