@@ -14,8 +14,7 @@
 import { geminiGenerate } from "../core/gemini.mjs";
 import { buildTask, slimTask, withSchemaHint } from "../core/tasks.mjs";
 import { PROMPTS } from "./prompts.js";
-import { cachedFetch, isCached, keepStored } from "./cache.js";
-import { opfsStore, resumableDownload } from "./download.js";
+import { cachedFetch, downloadModelFile, isCached } from "./cache.js";
 import { MODELS } from "./models.js";
 import { runtimes } from "./devices.js";
 
@@ -25,6 +24,8 @@ const now = () => performance.now();
 const secs = (t0) => +((performance.now() - t0) / 1000).toFixed(2);
 
 // ------------------------------------------------------------- Gemma 3 1B, WebAssembly
+
+const isWebKit = () => /AppleWebKit/.test(globalThis.navigator?.userAgent || "") && !/Chrome\/|Chromium\/|Edg\/|Android/.test(globalThis.navigator?.userAgent || "");
 
 /** WebAssembly 64-bit memory, which wllama's default build needs (as wllama checks it). */
 function memory64() {
@@ -79,13 +80,13 @@ export function wllamaBackend({ threads } = {}) {
         n_batch: 512,
         n_gpu_layers: 0, // the CPU path: WebGPU browsers use Gemma 4 through MediaPipe instead
         ...(threads ? { n_threads: threads } : {}),
+        // WebKit on one thread, as for whisper (asr.worker.js): threads crashed the WebKit tab
+        ...(!threads && isWebKit() ? { n_threads: 1 } : {}),
       };
       // a copy wllama saved before resumable downloads existed is used as it is; otherwise the
       // 722 MB file comes down in resumable pieces (download.js) and is handed to wllama whole
-      const s = (await inWllamaCache()) ? null : await opfsStore();
-      if (s) {
-        const blob = await resumableDownload(MODELS.gemma3.url, { store: s, onProgress: ({ loaded, total }) => onProgress?.({ loaded, total: total || MODELS.gemma3.bytes }) });
-        keepStored();
+      const blob = (await inWllamaCache()) ? null : await downloadModelFile(MODELS.gemma3.url, { onProgress: ({ loaded, total, cached }) => onProgress?.({ loaded, total: total || MODELS.gemma3.bytes, cached }) });
+      if (blob) {
         await w.loadModel([blob], params);
       } else {
         await w.loadModelFromUrl(MODELS.gemma3.url, { ...params, progressCallback: ({ loaded, total }) => onProgress?.({ loaded, total: total || MODELS.gemma3.bytes }) });
