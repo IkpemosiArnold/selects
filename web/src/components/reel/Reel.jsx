@@ -4,7 +4,7 @@
 // onto the approved pile; Skip (S or left arrow) slides it quietly away. The
 // next clip is already playing underneath, so nobody waits for the motion.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { api, inBrowser } from "../../lib/api.js";
+import { api, inBrowser, retryJob } from "../../lib/api.js";
 import { plural, tc } from "../../lib/time.js";
 import { nudgeEdge, toSentences } from "../../lib/sentences.js";
 import { usePlayer } from "../../lib/player.js";
@@ -585,8 +585,23 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
       ? api.copy.accentNote
       : null;
 
+  // Private mode ranked without the in-tab judge (devices.js, inTabJudgeWhyNot): one line, and
+  // on a computer where it would run on one thread, an opt-in to judge here anyway
+  const judgeNote = job.judge?.backend === "prescore" && job.profile?.judgeNote ? job.profile.judgeNote : null;
+  const canJudgeHere = inBrowser && job.profile?.inTabJudgeWhyNot === "one-thread";
+  const [judgingHere, setJudgingHere] = useState(false);
+  const judgeHere = async () => {
+    setJudgingHere(true);
+    try {
+      await retryJob(job.id, { judge: "download" });
+    } catch {
+      setJudgingHere(false);
+    }
+  };
+  const notes = verdictNote || judgeNote;
+
   return (
-    <div className={"reel is-" + mode + (cur ? "" : " is-done") + (phone ? " is-phone" : "") + (verdictNote && cur ? " has-verdict" : "")}>
+    <div className={"reel is-" + mode + (cur ? "" : " is-done") + (phone ? " is-phone" : "") + (notes && cur ? " has-verdict" : "")}>
       <Masthead job={job}>
         <div className="pile" ref={pileRef} aria-live="polite">
           {/* the pile shows once a take has landed on it; an empty outline read as a broken image */}
@@ -610,7 +625,24 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
       <main className="reel-stage">
         <h1 className="sr-only">Review clips from {job.source?.name}</h1>
         <p className="sr-only" role="status" aria-live="polite">{said}</p>
-        {verdictNote && cur && mode === "review" && <p className="verdict-note">{verdictNote}</p>}
+        {notes && cur && mode === "review" && (
+          <div className="verdict-note">
+            {verdictNote && <p>{verdictNote}</p>}
+            {judgeNote && (
+              <p>
+                {judgeNote}
+                {canJudgeHere && (
+                  <>
+                    {" "}
+                    <button type="button" className="linkish inline" disabled={judgingHere} onClick={judgeHere}>
+                      {judgingHere ? "Starting" : `Judge on this device: downloads ${Math.round((job.profile?.judgeBytes || 0) / 1e6)} MB once, then shows the time it will take, measured here`}
+                    </button>
+                  </>
+                )}
+              </p>
+            )}
+          </div>
+        )}
         {cur ? (
           <>
             {!phoneReview && <div className="reel-left">
