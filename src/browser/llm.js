@@ -25,6 +25,9 @@ const secs = (t0) => +((performance.now() - t0) / 1000).toFixed(2);
 
 // ------------------------------------------------------------- Gemma 3 1B, WebAssembly
 
+/** About 120 tokens of plain text for the load-time benchmark. */
+const BENCH_PROMPT = "Read this short passage and answer in one word, yes or no: is it about strength training? " + "Older adults can gain strength at any age, and regular training with heavier weights helps them keep their independence for longer. ".repeat(3);
+
 const isWebKit = () => /AppleWebKit/.test(globalThis.navigator?.userAgent || "") && !/Chrome\/|Chromium\/|Edg\/|Android/.test(globalThis.navigator?.userAgent || "");
 
 /** WebAssembly 64-bit memory, which wllama's default build needs (as wllama checks it). */
@@ -94,6 +97,18 @@ export function wllamaBackend({ threads } = {}) {
       this.loadSec = secs(t0);
       this.threads = threads || null;
       this.multiThread = typeof w.isMultithread === "function" ? w.isMultithread() : self.crossOriginIsolated;
+      // a short benchmark on this device, so the time the page states is measured, not guessed:
+      // one small chat call, scaled to a judge call (about 500 prompt tokens and 60 out,
+      // notes/timings.md); prompt tokens are cheaper than generated ones, so this errs long
+      try {
+        const b0 = now();
+        const res = await w.createChatCompletion({ messages: [{ role: "user", content: BENCH_PROMPT }], max_tokens: 16, temperature: 0 });
+        const tokens = (res.usage?.prompt_tokens || 120) + (res.usage?.completion_tokens || 16);
+        this.secPerCall = +(((now() - b0) / 1000) * (560 / tokens)).toFixed(1);
+        onProgress?.({ secPerCall: this.secPerCall });
+      } catch {
+        this.secPerCall = null;
+      }
     },
     async run(task) {
       const { messages, schema, maxTokens } = buildTask(task, PROMPTS);
