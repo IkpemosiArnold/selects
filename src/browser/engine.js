@@ -15,6 +15,7 @@ import { judgeIdentity, judgmentSignature, kitSignature, selectionSignature, tra
 import { kitSourceFromCaptions, plainKit } from "../core/kit-core.mjs";
 import { applyDecisions, captureDecisions } from "../core/decisions.mjs";
 import { loadAsr, resolveSpeech, transcribePcm } from "./asr.js";
+import { canJudgeInTab } from "./devices.js";
 import { cachedFetch } from "./cache.js";
 import { faithfulRound, judgeShortlist, listwiseRound, makeKit, rankAndCurve } from "./judge.js";
 import { audioDecodeUnsupported, decodeAudio16k, loudnessFromPcm, makeThumbs, probeFile } from "./media.js";
@@ -27,6 +28,8 @@ import { downloadAdvice } from "./devices.js";
 import { contentKey, createJobStore, dropVideo, indexedDbBackend, keepVideo, keptVideo, memoryBackend, resumePoint } from "./store.js";
 
 export const STAGES = ["probe", "language", "transcribe", "candidates", "judge", "render"];
+/** What Private mode says on a phone, where the in-tab judge does not run (devices.js, inTabJudgeFits). */
+export const PHONE_JUDGE_NOTE = "Ranked by the first-stage score and the cut checks, without Gemma: it is too big for a phone's browser. Smart mode adds Gemma's judgment.";
 const STAGE_LABEL = { probe: "probing", language: "transcribing", transcribe: "transcribing", candidates: "candidates", judge: "judging", render: "rendering" };
 
 /** Desktop defaults (src/core/config.mjs) with the browser's own: judge and kit run on whichever backend is chosen. */
@@ -51,12 +54,14 @@ const newId = () => {
 const LONG_SEC = 20 * 60;
 
 export class Engine {
-  constructor({ getJudge, getFallback, store, render = renderInWorker } = {}) {
+  constructor({ getJudge, getFallback, store, render = renderInWorker, inTabJudge = canJudgeInTab } = {}) {
     this.store = store || createJobStore(typeof indexedDB !== "undefined" ? indexedDbBackend() : memoryBackend());
     // getJudge(): Promise<backend> from llm.js; the adapter swaps it for Private or Smart mode.
     // getFallback(): Promise<backend>, the on-device judge Smart mode falls back to.
     this.getJudge = getJudge;
     this.getFallback = getFallback;
+    // inTabJudge(): Promise<boolean>, false on phones and small-memory devices (devices.js)
+    this.inTabJudge = inTabJudge;
     this.renderClip = render; // renderInWorker; tests pass a fake
     this.jobs = new Map(); // id -> { job, file, words, events, pcm, pcmSegs, captions, thumbs, clips, kits }
     // long videos keep their 16 kHz audio in 10-minute segments in OPFS, not in memory
@@ -572,12 +577,16 @@ export class Engine {
     r.judgeChoice = null;
     job.judge = {};
     if (choice === "preliminary") return this.prescoreStage(r, short, progress);
+    // phones and small-memory devices never load (or download) the in-tab judge on their own
+    const tabFits = await this.inTabJudge().catch(() => true);
+    if (llm.where !== "google" && !tabFits && choice !== "download") return this.prescoreStage(r, short, progress, PHONE_JUDGE_NOTE);
     // Smart mode can fall back to the private model, for the whole run if the proxy never
     // wakes or clip by clip when Google's free tier is slow, but only when that model is
     // already in this browser or the person chose to download it: never a surprise 2 GB
     let fb;
     const fallbackBackend = async () => (fb ??= this.getFallback ? await this.getFallback().catch(() => null) : null);
     const fallbackReady = async () => {
+      if (!tabFits && choice !== "download") return false;
       const b = await fallbackBackend();
       return !!b && (choice === "download" || !!b.loaded || (await b.isCached?.().catch(() => false)) === true);
     };
@@ -594,7 +603,7 @@ export class Engine {
     } catch (e) {
       if (llm.where !== "google") throw e;
       job.judge.smartError = e.message;
-      if (!fallback || !(await fallbackReady())) throw this.smartUnavailable(e, await fallbackBackend());
+      if (!fallback || !(await fallbackReady())) throw this.smartUnavailable(e, tabFits ? await fallbackBackend() : null);
       const saved = choice !== "download";
       progress("judge", { progress: 0, note: saved ? "Smart mode is not answering, so the clips are judged on this device with the model already saved in this browser" : "Smart mode is not answering, so the private model is downloading, as you chose" });
       llm = await fallback();
@@ -671,7 +680,7 @@ export class Engine {
   }
 
   /** The preliminary ranking: the shortlist ranked by its first-stage score, with the rule-only faithful check. No model. */
-  async prescoreStage(r, short, progress) {
+  async prescoreStage(r, short, progress, note = "These clips are ranked by the first-stage score only, because Smart mode was not answering. Open the video again later for a model's judgment.") {
     const job = r.job;
     progress("judge", { progress: 0.5, note: "ranking by the first-stage score" });
     const judged = short.map((c) => ({ ...c, scores: null, judgeTotal: null, total: c.pre ?? 0, judgedOn: "prescore", reason: "Ranked by the first-stage score (sentence shape, pauses, laughter, loudness), not by a model." }));
@@ -687,7 +696,7 @@ export class Engine {
     const bar = applyQualityBar(ranked);
     ranked = bar.candidates;
     Object.assign(job, { verdict: bar.verdict, curve, listwise: null });
-    job.judge = { backend: "prescore", model: null, where: "device", secPerCandidate: null, calls: [], fallbacks: 0, note: "These clips are ranked by the first-stage score only, because Smart mode was not answering. Open the video again later for a model's judgment." };
+    job.judge = { backend: "prescore", model: null, where: "device", secPerCandidate: null, calls: [], fallbacks: 0, note };
     return { ranked, llm: { id: "prescore", model: null } };
   }
 
@@ -947,6 +956,9 @@ export class Engine {
       llm = await this.getJudge();
     } catch (e) {
       return { llm: null, note: "No model is set up, so the title is the clip's opening line." };
+    }
+    if (llm.where !== "google" && !llm.loaded && !(await this.inTabJudge().catch(() => true))) {
+      return { llm: null, note: "Gemma is too big for a phone's browser, so the title is the clip's opening line." };
     }
     if (llm.where !== "google" && !llm.loaded && !(await llm.isCached?.().catch(() => false))) {
       return { llm: null, note: "Gemma is not saved in this browser yet, so the title is the clip's opening line." };

@@ -79,7 +79,7 @@ export async function seeded(Engine, { settings = {}, words = WORDS } = {}) {
 
 /** An engine on that store with this judge, its job created and run to the end. */
 export async function runOnce(Engine, { store, file }, backend, settings = {}, extra = {}) {
-  const engine = new Engine({ store, getJudge: async () => backend, render: extra.render || fakeRender(), ...extra });
+  const engine = new Engine({ store, getJudge: async () => backend, render: extra.render || fakeRender(), inTabJudge: async () => true, ...extra });
   const job = await engine.createJob(file, settings);
   await engine.idle(job.id);
   return { engine, job: engine.getJob(job.id) };

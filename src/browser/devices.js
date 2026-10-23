@@ -7,6 +7,18 @@ export const MIN_GPU_MEMORY_GB = 4;
 /** At or below this much memory (navigator.deviceMemory), whisper defaults to the smaller model. */
 export const SMALL_SPEECH_MEMORY_GB = 4;
 
+/**
+ * Whether the in-tab LLM judge (Gemma 3 1B, 722 MB; Gemma 4 E2B, 2 GB) belongs on this device.
+ * Not on iPhones and iPads: iOS closes a tab's process at a soft limit of about 1.5 GB
+ * (WebKit bug 277848, 9 Aug 2024), and a 722 MB model on top of whisper crashed the tab in
+ * WebKit; nor on devices reporting 4 GB of memory or less. A phone on mobile data must also
+ * never start that download by itself. There, Private mode ranks by the first-stage score
+ * and the rule-based cut checks.
+ */
+export function inTabJudgeFits({ ios = false, deviceMemoryGb = null } = {}) {
+  return !(ios || (deviceMemoryGb != null && deviceMemoryGb <= SMALL_SPEECH_MEMORY_GB));
+}
+
 /** iPhone, iPad (which reports itself as a Mac with a touch screen) or iPod. */
 export function isAppleMobile(ua = "", maxTouchPoints = 0) {
   return /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && maxTouchPoints > 1);
@@ -31,7 +43,7 @@ export function chooseRuntimes({ webgpu = false, vendor = "", deviceMemoryGb = n
   // phones and small-memory devices get the smaller whisper unless the person picks the bigger one
   const small = ios || (deviceMemoryGb != null && deviceMemoryGb <= SMALL_SPEECH_MEMORY_GB);
   const size = speech === "base" || speech === "tiny" ? speech : small ? "tiny" : "base";
-  return { judge, asr, speech: size };
+  return { judge, asr, speech: size, inTabJudge: inTabJudgeFits({ ios, deviceMemoryGb }) };
 }
 
 let facts = null;
@@ -52,6 +64,11 @@ export function deviceFacts() {
 /** Forget the cached facts (tests). */
 export function resetDeviceFacts() {
   facts = null;
+}
+
+/** True when this device can run the in-tab judge (inTabJudgeFits). */
+export async function canJudgeInTab() {
+  return inTabJudgeFits(await deviceFacts());
 }
 
 /** The runtimes for this browser, with the person's preferences. */

@@ -127,7 +127,8 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
         runtimes: rt,
         items: [
           { id: "whisper", label: w.label, bytes: w.bytes[rt.asr], device: rt.asr, size: rt.speech, licence: w.licence, source: w.source, cache: w.cache },
-          { id: judgeId, label: judge.label, bytes: judge.bytes, licence: judge.licence, source: judge.source, cache: judge.cache },
+          // phones and small-memory devices never download the in-tab judge (devices.js, inTabJudgeFits)
+          ...(rt.inTabJudge ? [{ id: judgeId, label: judge.label, bytes: judge.bytes, licence: judge.licence, source: judge.source, cache: judge.cache }] : []),
           { id: "ng5", label: MODELS.ng5.label, bytes: MODELS.ng5.bytes, licence: MODELS.ng5.licence, source: MODELS.ng5.source, cache: MODELS.ng5.cache },
         ],
         caps,

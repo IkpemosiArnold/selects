@@ -7,7 +7,7 @@ await import("./test-env.mjs");
 const { createBrowserApi } = await import("./api.js");
 const { privateBackend } = await import("./llm.js");
 const { resolveAsrDevice, resolveSpeech } = await import("./asr.js");
-const { chooseRuntimes, isAppleMobile, resetDeviceFacts } = await import("./devices.js");
+const { chooseRuntimes, inTabJudgeFits, isAppleMobile, resetDeviceFacts } = await import("./devices.js");
 const { MODELS } = await import("./models.js");
 
 /** Pretend to be a browser with this GPU and this much memory. */
@@ -49,20 +49,34 @@ for (const c of cases) {
       const whisperItem = d.items.find((i) => i.id === "whisper");
       const backend = await privateBackend();
       assert.equal(backend.id, c.judge, "the judge that runs");
-      assert.equal(judgeItem.id, c.judge === "gemma4-webgpu" ? "gemma4" : "gemma3", "the judge the page says it will download");
-      assert.equal(judgeItem.bytes, backend.bytes, "the size shown is the size fetched");
+      const inTab = c.speech !== "tiny"; // the same devices get the small whisper and no in-tab judge
+      if (inTab) {
+        assert.equal(judgeItem.id, c.judge === "gemma4-webgpu" ? "gemma4" : "gemma3", "the judge the page says it will download");
+        assert.equal(judgeItem.bytes, backend.bytes, "the size shown is the size fetched");
+      } else {
+        assert.equal(judgeItem, undefined, "a phone is never told it will download the judge");
+      }
       const asr = await resolveAsrDevice("auto");
       assert.equal(asr, c.asr, "the speech model's device");
       const speech = await resolveSpeech();
       assert.equal(speech.size, c.speech, "the speech model's size");
       assert.equal(whisperItem.bytes, speech.model.bytes[asr], "the speech model's size shown is the one that loads, on its device");
       assert.equal(whisperItem.bytes, MODELS[c.speech === "tiny" ? "whisperTiny" : "whisper"].bytes[asr]);
-      assert.deepEqual(chooseRuntimes({ webgpu: !!c.gpu, vendor: c.gpu || "", deviceMemoryGb: c.memoryGb, ios: !!c.ios }), { judge: c.judge, asr: c.asr, speech: c.speech });
+      assert.deepEqual(chooseRuntimes({ webgpu: !!c.gpu, vendor: c.gpu || "", deviceMemoryGb: c.memoryGb, ios: !!c.ios }), { judge: c.judge, asr: c.asr, speech: c.speech, inTabJudge: inTab });
     } finally {
       restore();
     }
   });
 }
+
+test("the in-tab judge: never on iPhones and iPads, nor on 4 GB or less; computers keep it", () => {
+  assert.equal(inTabJudgeFits({ ios: true }), false);
+  assert.equal(inTabJudgeFits({ deviceMemoryGb: 4 }), false);
+  assert.equal(inTabJudgeFits({ deviceMemoryGb: 2 }), false);
+  assert.equal(inTabJudgeFits({ deviceMemoryGb: 8 }), true);
+  assert.equal(inTabJudgeFits({}), true, "memory not reported (Safari, Firefox on a computer)");
+  assert.equal(chooseRuntimes({ ios: true }).inTabJudge, false);
+});
 
 test("the person's choice of speech model wins over the device rule", () => {
   assert.equal(chooseRuntimes({ ios: true, speech: "base" }).speech, "base");

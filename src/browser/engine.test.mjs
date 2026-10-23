@@ -270,3 +270,40 @@ test("smart mode slow on one clip, private model not saved: that clip keeps its 
   assert.equal(device.loads, 0, "no surprise download");
   assert.ok(job.candidates.some((c) => /Smart mode could not judge this clip/.test(c.reason)));
 });
+
+test("phone, Private mode: no in-tab judge, nothing downloads, ranked by the first-stage score and the cut checks", async () => {
+  for (const cached of [false, true]) {
+    const s = await seeded(Engine);
+    const device = fakeBackend({ id: "gemma3-wasm", model: "gemma-3-1b", cached });
+    device.bytes = 721918496;
+    const { job } = await runOnce(Engine, s, device, {}, { inTabJudge: async () => false });
+    assert.equal(job.stage, "ready", job.error?.message);
+    assert.equal(device.loads, 0, `the judge is never loaded in a phone's tab (saved: ${cached})`);
+    assert.equal(device.calls.length, 0);
+    assert.equal(job.judge.backend, "prescore");
+    assert.ok(job.candidates.length > 0);
+    assert.ok(job.candidates.every((c) => c.judgedOn === "prescore"));
+    assert.equal(job.faithful?.mode, "rules", "the cut checks still ran");
+    assert.match(job.judge.note, /phone/);
+    assert.doesNotMatch(job.judge.note, /—/);
+  }
+});
+
+test("phone, Smart mode down: no offer to download the private model, and no fallback to it", async () => {
+  const s = await seeded(Engine);
+  const smart = fakeBackend({ id: "gemini-proxy", model: "smart-down", where: "google", failLoad: new Error("The Smart mode server did not wake up.") });
+  const device = fakeBackend({ id: "gemma3-wasm", model: "gemma-3-1b", cached: true });
+  const { job } = await runOnce(Engine, s, smart, {}, { getFallback: async () => device, inTabJudge: async () => false });
+  assert.equal(device.loads, 0);
+  assert.equal(job.error?.code, "smart_unavailable");
+  assert.deepEqual(job.error.choices.map((c) => c.id), ["retry", "preliminary"]);
+});
+
+test("computer, Private mode: the in-tab judge runs as before", async () => {
+  const s = await seeded(Engine);
+  const device = fakeBackend({ id: "gemma3-wasm", model: "gemma-3-1b", cached: false });
+  const { job } = await runOnce(Engine, s, device, {}, { inTabJudge: async () => true });
+  assert.equal(job.stage, "ready", job.error?.message);
+  assert.equal(device.loads, 1);
+  assert.ok(device.count("judge") > 0);
+});

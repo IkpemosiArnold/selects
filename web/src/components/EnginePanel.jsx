@@ -103,6 +103,9 @@ export default function EnginePanel({ engine }) {
       ) : (
         downloads && (
           <div className="engine-private">
+            {!judge && downloads.runtimes?.inTabJudge === false && (
+              <p className="engine-dl">On this device, Private mode ranks clips without Gemma, which is too big for a phone's browser. Smart mode adds Gemma's judgment.</p>
+            )}
             {judge && (
               <p className="engine-dl">
                 <b>{plainLabel(judge.label)}, {gb(judge.bytes)}</b>, downloads once{whisper ? `, with the speech model (${plainLabel(whisper.label)}, ${gb(whisper.bytes)}${whisper.size === "tiny" ? ", the smaller one for phones" : ""})` : ""}.
