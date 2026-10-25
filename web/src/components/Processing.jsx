@@ -22,7 +22,7 @@ function plainHint(h) {
 }
 
 const STEPS = [
-  { key: "probe", label: "Open the video" },
+  { key: "probe", label: "Open the file" },
   { key: "language", label: "Check the language" },
   { key: "transcribe", label: "Transcribe what's said" },
   { key: "candidates", label: "Find moments that stand alone" },
@@ -174,7 +174,7 @@ export default function Processing({ job, words, onResume }) {
     headline = "Waiting for the video ahead of this one.";
     sub = "It starts by itself. You can close the laptop lid, and progress is saved after each step.";
   } else if (job.stage === "probing") {
-    headline = "Opening the video.";
+    headline = "Opening the file.";
     sub = `${job.source?.name}`;
   } else if (checkingLanguage) {
     headline = "Checking which language is spoken.";
