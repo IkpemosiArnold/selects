@@ -110,17 +110,18 @@ async function audiogramFrames({ atrack, asrc, vsrc, ctx, W, H, start, end, dur,
   const a = audiogramSettings({ audiogram });
   const bgCanvas = new OffscreenCanvas(W, H);
   const bctx = bgCanvas.getContext("2d");
-  if (a.bg === "cover" && audiogram?.cover) {
+  const coverBlob = audiogram?.cover instanceof Blob ? audiogram.cover : null;
+  if (a.bg === "cover" && coverBlob) {
     let img;
     try {
-      img = await createImageBitmap(audiogram.cover);
+      img = await createImageBitmap(coverBlob);
     } catch {
       throw Object.assign(new Error("This browser could not read the background image."), { hint: "Choose a JPEG or PNG image, or one of the drawn backgrounds." });
     }
     paintCover(bctx, img, W, H, { focus: audiogram.focus, makeCanvas: (w, h) => new OffscreenCanvas(w, h) });
     img.close?.();
   } else paintPreset(bctx, a.bg === "cover" ? null : a.bg, W, H);
-  const bg = a.bg === "cover" && !audiogram?.cover ? "sunny" : a.bg;
+  const bg = a.bg === "cover" && !coverBlob ? "sunny" : a.bg;
 
   const audioDone = (async () => {
     if (!asrc) return;
