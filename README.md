@@ -164,6 +164,8 @@ selects podcast.mp3 --cover cover.jpg
 selects caption episode.m4a           # the whole recording as one 9:16 audiogram
 ```
 
+![Frames from six rendered audiogram clips, one per background: a smiling sun, a sleepy moon on a starry sky, an orange cat on teal, a friendly robot on blue, a cactus at a desert dusk and a frog by a pond. Each has a strip of bars across the middle, yellow for what has been said and pale for what is coming, and a white caption with the spoken word in yellow below it](notes/screens/audiogram/rendered-frames.png)
+
 Selects takes MP3, M4A (AAC), AAC, WAV, FLAC, Ogg (Opus or Vorbis), Opus and WebM audio. Transcription, judging, caption review and approval work exactly as they do for a video. Each approved clip is rendered at 1080x1920 with:
 
 - **a background**: one of six characters drawn in code (`sunny`, `moon`, `cat`, `robot`, `cactus`, `frog`; `sunny` is the default), or your own image. A portrait image is cropped to 9:16 around a point a little above the middle; a square or landscape image (podcast cover art) is shown whole over a blurred copy of itself. The image stays on your computer or phone.
