@@ -15,6 +15,8 @@ import { uprightSize } from "./probe.mjs";
 import { clipCaptionStyle } from "./madefor.mjs";
 import { readJson, run } from "./util.mjs";
 import { isDiskFull } from "./estimate.mjs";
+import { isAudioOnly } from "./audiogram.mjs";
+import { encodeAudiogram } from "./audiogram-render.mjs";
 
 // presets, caption layout and the reframe decision have no Node imports (layout.mjs), so the
 // browser build draws the same captions; they are re-exported here for older callers
@@ -147,7 +149,7 @@ export function videoGraph({ src, W, H, reframe, blur = [], fps = 30, vmap = "0:
  * would keep, otherwise "fit" (the whole frame over a blurred copy of itself).
  */
 export async function chooseReframe(source, start, dur, { samples = 16 } = {}) {
-  if (!source.hasVideo && source.hasVideo !== undefined) return { mode: "fit", centreShare: 0 };
+  if (isAudioOnly(source)) return { mode: "audiogram", centreShare: null, why: "audio only" };
   const { w: dispW, h: dispH } = uprightSize(source);
   const byShape = reframeByShape(dispW, dispH);
   if (byShape) return byShape;
@@ -282,11 +284,18 @@ export async function render(job, candidate, { preset = "shorts", onProgress, jo
     const capOpts = { width: P.width, caption: st === "subtitle" ? captionOptions(P.width, P.height, "subtitle") : { ...P.caption, style: "bold" } };
     const track = withCaptions ? buildCaptionTrack(clipped, dur, tmp, capOpts) : null;
 
+    const capY = Math.round(P.height * capOpts.caption.bottomLimit - capOpts.caption.boxHeight);
+    if (isAudioOnly(src)) {
+      // no picture: an audiogram (a background, a meter and a mouth driven by the clip's audio)
+      const ag = await encodeAudiogram({ src, start, dur, W: P.width, H: P.height, P, settings: job.settings, dir, tmp, capList: track?.list, capY, out: partAbs, onProgress, signal });
+      fs.renameSync(partAbs, outAbs);
+      onProgress?.({ progress: 1 });
+      return { path: outRel, srt: srtRel, absPath: outAbs, absSrt: path.join(dir, srtRel), reframe: { mode: "audiogram" }, audiogram: { bg: ag.bg }, captions: track ? clipped.length : 0, captionStyle: st, blurBoxes: 0, decode: "audio", wallSec: +((Date.now() - t0) / 1000).toFixed(1) };
+    }
     const rf = reframe === "auto" ? await chooseReframe(src, start, dur) : { mode: reframe };
     const spec = blur ?? candidate.blur ?? job.settings?.blur ?? null;
     const boxes = blurBoxes(spec, { tracks: tracks || loadTracks(dir), offset: start, duration: dur });
     const graph = (gpu) => videoGraph({ src, W: P.width, H: P.height, reframe: rf.mode, blur: boxes, fps: P.fps, vmap: src.videoStream != null ? `0:${src.videoStream}` : "0:v:0", duration: dur, gpu });
-    const capY = Math.round(P.height * capOpts.caption.bottomLimit - capOpts.caption.boxHeight);
     const decode = await encode({ src, start, dur, graph, capList: track?.list, capY, P, out: partAbs, onProgress, signal });
     fs.renameSync(partAbs, outAbs);
     onProgress?.({ progress: 1 });
@@ -312,8 +321,10 @@ export async function renderFull(job, { onProgress, jobDir, signal, style, blur,
   const dir = jobDir || path.join(jobsDir(), job.id);
   const src = job.source;
   const t0 = Date.now();
+  const audioOnly = isAudioOnly(src);
   const { w: uw, h: uh } = uprightSize(src);
-  const { w: W, h: H } = workingSize(uw, uh, P);
+  // an audio-only source has no shape of its own: the whole recording becomes a 9:16 audiogram
+  const { w: W, h: H } = audioOnly ? { w: PRESETS.shorts.width, h: PRESETS.shorts.height } : workingSize(uw, uh, P);
   const dur = src.duration;
   const st = style && style !== "auto" ? style : H > W ? "bold" : "subtitle";
   const outDir = path.join(dir, "output");
@@ -330,6 +341,13 @@ export async function renderFull(job, { onProgress, jobDir, signal, style, blur,
     fs.writeFileSync(path.join(outDir, "captions.vtt"), toVtt(cues));
     const capOpts = { width: W, caption: captionOptions(W, H, st) };
     const track = captions ? buildCaptionTrack(cues, dur, tmp, capOpts) : null;
+    if (audioOnly) {
+      const capY = Math.round(H * capOpts.caption.bottomLimit - capOpts.caption.boxHeight);
+      const ag = await encodeAudiogram({ src, start: 0, dur, W, H, P, settings: job.settings, dir, tmp, capList: track?.list, capY, out: partAbs, onProgress, signal });
+      fs.renameSync(partAbs, path.join(dir, outRel));
+      onProgress?.({ progress: 1 });
+      return { path: outRel, srt: "output/captions.srt", vtt: "output/captions.vtt", width: W, height: H, style: st, cues: cues.length, blurBoxes: 0, decode: "audio", audiogram: { bg: ag.bg }, wallSec: +((Date.now() - t0) / 1000).toFixed(1) };
+    }
     const spec = blur ?? job.settings?.blur ?? null;
     const boxes = blurBoxes(spec, { tracks: tracks || loadTracks(dir), offset: 0, duration: dur });
     const graph = (gpu) => videoGraph({ src, W, H, reframe: "none", blur: boxes, fps: P.fps, vmap: src.videoStream != null ? `0:${src.videoStream}` : "0:v:0", duration: dur, gpu });

@@ -14,12 +14,13 @@ import { snapTrim, toSentences } from "../core/sentences.mjs";
 import { judgeIdentity, judgmentSignature, kitSignature, selectionSignature, transcriptHash, transcriptSignature } from "../core/signatures.mjs";
 import { kitSourceFromCaptions, plainKit } from "../core/kit-core.mjs";
 import { applyDecisions, captureDecisions } from "../core/decisions.mjs";
+import { AUDIOGRAM_PRESETS, audioEnvelope, audiogramSettings, isAudioOnly } from "../core/audiogram.mjs";
 import { loadAsr, resolveSpeech, transcribePcm } from "./asr.js";
 import { canJudgeInTab } from "./devices.js";
 import { publishPicks, transcribeLight } from "./light-run.js";
 import { cachedFetch } from "./cache.js";
 import { faithfulRound, judgeShortlist, listwiseRound, makeKit, rankAndCurve } from "./judge.js";
-import { audioDecodeUnsupported, decodeAudio16k, loudnessFromPcm, makeThumbs, probeFile } from "./media.js";
+import { audioDecodeTrial, audioDecodeUnsupported, decodeAudio16k, loudnessFromPcm, makeThumbs, probeFile } from "./media.js";
 import { decodeAudioSegments, longVideoNote, pcmStore } from "./pcm.js";
 import { MODELS } from "./models.js";
 import { PROMPTS } from "./prompts.js";
@@ -107,7 +108,7 @@ export class Engine {
    * instead. Returns the Job.
    */
   async createJob(file, settings = {}) {
-    if (!(file instanceof Blob)) throw Object.assign(new Error("Choose a video file."), { status: 400, hint: "Drop a video on the page or pick one. It stays on this device." });
+    if (!(file instanceof Blob)) throw Object.assign(new Error("Choose a video or audio file."), { status: 400, hint: "Drop a file on the page or pick one. It stays on this device." });
     const key = await contentKey(file);
     const saved = await this.store.load(key).catch(() => null);
     const clean = Object.fromEntries(Object.entries(settings || {}).filter(([, v]) => v !== undefined && v !== null));
@@ -337,12 +338,18 @@ export class Engine {
         // say so at the first step, before any download, when this browser cannot read sound at all
         const noDecoder = audioDecodeUnsupported();
         if (noDecoder) throw noDecoder;
-        finish("probe", `${Math.round(job.source.duration)} s, ${job.source.uprightWidth || "?"}x${job.source.uprightHeight || "?"}`);
+        // a recording with no picture: try its sound for real now, so a format this browser
+        // cannot read (Safari with FLAC or Opus) is said before any download or work
+        if (isAudioOnly(job.source)) {
+          const unreadable = await audioDecodeTrial(r.file);
+          if (unreadable) throw unreadable;
+        }
+        finish("probe", isAudioOnly(job.source) ? `${Math.round(job.source.duration)} s of audio` : `${Math.round(job.source.duration)} s, ${job.source.uprightWidth || "?"}x${job.source.uprightHeight || "?"}`);
         await this.save(r, "probe");
       }
       // the honest limit: phones over about 30 minutes, any tab over an hour
       job.warning = longVideoNote(job.source.duration) ?? (job.source.duration > 20 * 60 ? "This video is longer than 20 minutes, so transcribing it in the tab takes a while. The desktop app is faster." : null);
-      if (r.file) {
+      if (r.file && !isAudioOnly(job.source)) {
         try {
           const t = await makeThumbs(r.file, job.source.duration);
           r.thumbs = t.urls;
@@ -351,6 +358,9 @@ export class Engine {
           job.thumbs = { count: 0, interval: 0, pattern: "blob" };
         }
         // keep a copy for resuming without the file, when it fits (not awaited: it is only a copy)
+        keepVideo(r.key, r.file).then((ok) => (job.videoKept = ok));
+      } else if (r.file) {
+        job.thumbs = { count: 0, interval: 0, pattern: "blob" }; // no picture: the review shows the audiogram
         keepVideo(r.key, r.file).then((ok) => (job.videoKept = ok));
       }
       this.emit(id, "job", structuredClone(job));
@@ -565,9 +575,10 @@ export class Engine {
 
   async restoreExtras(r) {
     try {
-      const [caps, kits] = await Promise.all([this.store.part(r.key, "captions"), this.store.part(r.key, "kits")]);
+      const [caps, kits, cover] = await Promise.all([this.store.part(r.key, "captions"), this.store.part(r.key, "kits"), this.store.part(r.key, "cover")]);
       if (caps?.cues) r.captions = caps;
       if (kits) r.kits = kits;
+      if (cover instanceof Blob) r.cover = cover;
       for (const { cid, preset } of await this.store.clips(r.key)) {
         const c = await this.store.clip(r.key, cid, preset);
         if (!c?.mp4) continue;
@@ -847,16 +858,88 @@ export class Engine {
 
   patchJob(id, settings = {}) {
     const r = this.rec(id);
-    const allowed = ["credit", "license", "sourceUrl", "captions", "k", "kit"];
+    const allowed = ["credit", "license", "sourceUrl", "captions", "k", "kit", "audiogram"];
     const bad = Object.keys(settings).filter((k) => !allowed.includes(k));
     if (bad.length) throw Object.assign(new Error(`These settings cannot be changed here: ${bad.join(", ")}.`), { status: 400 });
+    if (settings.audiogram !== undefined) settings = { ...settings, audiogram: this.cleanAudiogram(r, settings.audiogram) };
     Object.assign(r.job.settings, settings, settings.license ? { license: normaliseLicense(settings.license) ?? settings.license } : {});
+    if (settings.audiogram !== undefined) this.markStale(r);
     for (const [cid, k] of Object.entries(r.kits)) r.kits[cid] = this.kitWithCredit(r.job, k);
     if (settings.kit !== undefined) this.refreshKits(r); // plain or model kits
     this.emit(id, "job", structuredClone(r.job));
     this.save(r, null);
     this.store.savePart(r.key, "kits", r.kits).catch(() => {});
     return structuredClone(r.job);
+  }
+
+  // ---------------------------------------------------------------- audiograms
+
+  /** { bg: preset id } or { bg: "cover" } (needs the image from setCover). As job.mjs cleanAudiogram. */
+  cleanAudiogram(r, v) {
+    const cur = r.job.settings.audiogram || null;
+    if (v?.bg === "cover") {
+      if (!r.cover) throw Object.assign(new Error("Add a background image first."), { status: 400 });
+      return { ...cur, bg: "cover", cover: "cover" };
+    }
+    if (!AUDIOGRAM_PRESETS.some((p) => p.id === v?.bg)) throw Object.assign(new Error(`audiogram.bg must be one of ${AUDIOGRAM_PRESETS.map((p) => p.id).join(", ")} or cover.`), { status: 400 });
+    return { ...(cur?.cover ? { cover: cur.cover, coverAt: cur.coverAt } : {}), bg: v.bg };
+  }
+
+  /** Which background a render used, so a change of background marks it as out of date. */
+  bgKey(job) {
+    const a = audiogramSettings(job.settings);
+    return a.bg === "cover" ? `cover:${job.settings.audiogram?.coverAt || ""}` : a.bg;
+  }
+
+  markStale(r) {
+    if (!isAudioOnly(r.job.source)) return;
+    const now = this.bgKey(r.job);
+    for (const c of r.job.candidates || []) {
+      for (const f of ["render", "preview"]) if (c[f]?.status === "done" && c[f].bgKey) c[f].stale = c[f].bgKey !== now;
+    }
+    this.emit(r.job.id, "candidates", { ranked: true, candidates: structuredClone(r.job.candidates) });
+  }
+
+  /**
+   * The person's own background image for an audio job. It is checked (it must decode here),
+   * kept on this device with the job, and chosen. Nothing is uploaded.
+   */
+  async setCover(id, blob) {
+    const r = this.rec(id);
+    if (!(blob instanceof Blob) || !/^image\//.test(blob.type || "image/")) throw Object.assign(new Error("Choose an image."), { status: 400 });
+    if (blob.size > 25e6) throw Object.assign(new Error("The image must be under 25 MB."), { status: 413 });
+    if (typeof createImageBitmap === "function") {
+      try {
+        (await createImageBitmap(blob)).close?.();
+      } catch {
+        throw Object.assign(new Error("This browser can't read that image."), { status: 415, hint: "Try a JPEG or PNG." });
+      }
+    }
+    r.cover = blob;
+    if (r.coverUrl) URL.revokeObjectURL(r.coverUrl);
+    r.coverUrl = null;
+    r.job.settings.audiogram = { bg: "cover", cover: "cover", coverAt: now() };
+    await this.store.savePart(r.key, "cover", blob).catch(() => {});
+    this.markStale(r);
+    this.emit(id, "job", structuredClone(r.job));
+    await this.save(r, null);
+    return structuredClone(r.job);
+  }
+
+  coverUrl(id) {
+    const r = this.rec(id);
+    if (!r.cover) return null;
+    r.coverUrl ??= URL.createObjectURL(r.cover);
+    return r.coverUrl;
+  }
+
+  /** The loudness the review card's meter draws for [start, end]: the same measure the render uses, from the saved 16 kHz audio. */
+  async levels(id, start, end) {
+    const r = this.rec(id);
+    const pcm = await this.pcmRange(r, start, end);
+    if (!pcm?.length) return null;
+    const env = audioEnvelope(pcm, 16000);
+    return { fps: env.fps, start, v: env.v, mouth: env.mouth };
   }
 
   // ---------------------------------------------------------------- captions
@@ -927,7 +1010,7 @@ export class Engine {
       this.emit(id, "render", { id: c.id, preset, ...c[field] });
       try {
         const result = await this.renderClip(
-          { file: r.file, source: job.source, candidate: { id: c.id, start: c.start, end: c.end }, cues, preset, style, edited: !!caps?.edited, gainDb: clipGainDb(await this.pcmRange(r, c.start, c.end), 0, c.end - c.start, { channels: Math.min(2, job.source.audioStreams?.[0]?.channels || 2) }) },
+          { file: r.file, source: job.source, candidate: { id: c.id, start: c.start, end: c.end }, cues, preset, style, edited: !!caps?.edited, audiogram: isAudioOnly(job.source) ? { ...audiogramSettings(job.settings), ...(r.cover && job.settings.audiogram?.bg === "cover" ? { cover: r.cover } : {}) } : null, gainDb: clipGainDb(await this.pcmRange(r, c.start, c.end), 0, c.end - c.start, { channels: Math.min(2, job.source.audioStreams?.[0]?.channels || 2) }) },
           { onProgress: (p) => {
             c[field].progress = +p.progress.toFixed(3);
             job.stages.render.progress = +((i + p.progress) / targets.length).toFixed(3);
@@ -954,7 +1037,7 @@ export class Engine {
         }
         // the clip is ready now; the kit follows on its own
         const kitStatus = field === "render" ? "pending" : null;
-        c[field] = { status: "done", progress: 1, path: url, srt: srtUrl, kit: null, saved, ...(saveError ? { saveError } : {}), ...(kitStatus ? { kitStatus } : {}), reframe: result.reframe, frames: result.frames, bytes: result.mp4.byteLength, wallSec: result.wallSec, audioCodec: result.audioCodec };
+        c[field] = { status: "done", progress: 1, path: url, srt: srtUrl, kit: null, saved, ...(saveError ? { saveError } : {}), ...(kitStatus ? { kitStatus } : {}), reframe: result.reframe, frames: result.frames, bytes: result.mp4.byteLength, wallSec: result.wallSec, audioCodec: result.audioCodec, ...(isAudioOnly(job.source) ? { bgKey: this.bgKey(job), stale: false } : {}) };
         job.timings[field] = job.timings[field].filter((t) => t.id !== c.id).concat({ id: c.id, sec: result.wallSec, clipSec: +(c.end - c.start).toFixed(1) });
         this.emit(id, "render", { id: c.id, preset, ...c[field] });
         if (field === "render") {

@@ -10,6 +10,7 @@
 //   faces=unsupported      the faces endpoint answers as it does on a non-Mac server
 //   lang=yo                a new job's language check disagrees with the setting
 //   clips=50&dur=7316      the demo job has 50 clips over a 2 hour video (either alone works too)
+//   audio=1                the demo job is an audio-only recording (its clips become audiograms)
 import { buildTalk, makeJob, MEASURED, attributionFor, spreadCandidates } from "./fixture.js";
 import { frameSvg } from "./frames.js";
 import { cuesFromWords, applyCueEdits, toSrt, toVtt, accentedWords } from "./captions.js";
@@ -90,6 +91,14 @@ export function createMockApi(params) {
     demo.stage = "done";
     for (const c of demo.candidates.filter((c) => c.status === "approved")) finishRender(demo, c);
   }
+  // a recording with no picture: no filmstrip, and the review shows the audiogram
+  const audioDemo = params.get("audio") === "1";
+  if (audioDemo) {
+    demo.source = { ...demo.source, name: "voice-memo.m4a", hasVideo: false, width: 0, height: 0, uprightWidth: 0, uprightHeight: 0, fps: null };
+    demo.thumbs = null;
+    if (params.get("bg")) demo.settings = { ...demo.settings, audiogram: { bg: params.get("bg") } };
+  }
+  let mockCover = null;
   jobs.set(demo.id, demo);
   const older = makeJob({ id: "j_20261012_k7q2", name: "sunday-service-oct-12.mp4", stage: "done", createdAt: "2026-10-12T19:02:11.000Z", duration: 5412.6, judgeN: 8 });
   older.settings = { ...older.settings, credit: null, license: "own", sourceUrl: null };
@@ -615,7 +624,33 @@ export function createMockApi(params) {
       await wait(150);
       const job = jobs.get(id);
       job.settings = { ...job.settings, ...Object.fromEntries(Object.entries(settings).map(([k, v]) => [k, v === "" ? null : v])) };
+      if (settings.audiogram?.bg === "cover") job.settings.audiogram = { bg: "cover", cover: "cover", coverAt: job.settings.audiogram?.coverAt };
+      emit(id, "job", job);
       return summary(job);
+    },
+    async setCover(id, file) {
+      await wait(120);
+      const job = jobs.get(id);
+      if (mockCover) URL.revokeObjectURL(mockCover);
+      mockCover = URL.createObjectURL(file);
+      job.settings.audiogram = { bg: "cover", cover: "cover", coverAt: new Date().toISOString() };
+      emit(id, "job", job);
+      return summary(job);
+    },
+    coverUrl: () => mockCover,
+    // the mock's meter follows its words (the real engines measure the recording)
+    async levels(id, start, end) {
+      const fps = 30;
+      const n = Math.ceil((end - start) * fps);
+      const v = new Float32Array(n);
+      for (const w of words) {
+        if (w.e < start || w.s > end) continue;
+        for (let f = Math.max(0, Math.floor((w.s - start) * fps)); f < Math.min(n, Math.ceil((w.e - start) * fps)); f++) v[f] = 0.55 + 0.4 * Math.abs(Math.sin(f * 0.9 + w.s));
+      }
+      const mouth = new Float32Array(n);
+      let m = 0;
+      for (let i = 0; i < n; i++) mouth[i] = m = v[i] > m ? m + (v[i] - m) * 0.75 : m * 0.72 + v[i] * 0.28;
+      return { fps, start, v, mouth };
     },
     async asrModels() {
       await wait(60);

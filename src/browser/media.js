@@ -18,6 +18,69 @@ export function audioDecodeUnsupported(g = globalThis) {
     : Object.assign(new Error("This browser is too old to read the video's sound."), { hint: "Update the browser, or use a recent Chrome, Edge or Safari (26 or later).", code: "no_audio_decoder" });
 }
 
+const CODEC_NAMES = { mp3: "MP3", aac: "AAC", opus: "Opus", vorbis: "Vorbis", flac: "FLAC", alac: "Apple Lossless" };
+/** A codec's everyday name for messages ("FLAC", "Opus"), or null. */
+export const codecName = (codec) => (codec?.startsWith?.("pcm") ? "WAV" : CODEC_NAMES[codec] || null);
+
+/** True on Safari and every iPhone browser (all use WebKit). */
+export function isWebKit(ua = globalThis.navigator?.userAgent || "") {
+  return /AppleWebKit/.test(ua) && !/Chrome\/|Chromium\/|Edg\//.test(ua);
+}
+
+/**
+ * The plain stop for a sound this browser cannot read, said at the first step, before any
+ * model download. Measured on 25 Oct 2026: Chrome 155 read every format below; Playwright's
+ * WebKit (the Safari engine on macOS 13) read MP3, AAC (M4A and .aac) and WAV, but not FLAC,
+ * Opus (Ogg, .opus or WebM) or Vorbis, and decoding Vorbis crashed the tab. Neither reads
+ * Apple Lossless (a voice memo saved as "Lossless").
+ */
+export function unreadableAudio(codec, { ua } = {}) {
+  const name = codecName(codec);
+  const webkit = isWebKit(ua);
+  const phone = /iPhone|iPad|iPod/.test(ua ?? globalThis.navigator?.userAgent ?? "");
+  const what = name ? `${name} audio` : "the sound in this file";
+  const hint = webkit
+    ? `Convert it to M4A (AAC) or MP3 first${phone ? "" : ", or open Selects in Chrome"}. On an iPhone, Voice Memos saves M4A when Audio Quality is set to Compressed.`
+    : "Convert it to M4A (AAC) or MP3 first, or use Selects on a computer.";
+  return Object.assign(new Error(`This browser can't read ${what}.`), { hint, code: "audio_format" });
+}
+
+/**
+ * Decode the first moments of the sound for real: some browsers say they can decode a codec
+ * and then fail or never answer (Safari with FLAC and Opus). Resolves null when it works,
+ * or the Error to show. Vorbis is never tried in WebKit, where it crashed the tab.
+ */
+export async function audioDecodeTrial(file, { sec = 1.5, timeoutMs = 8000, ua } = {}) {
+  const input = openInput(file);
+  try {
+    const track = await input.getPrimaryAudioTrack();
+    if (!track) return null;
+    const codec = await track.getCodec();
+    if (!codec || !(await track.canDecode())) return unreadableAudio(codec, { ua });
+    if (codec === "vorbis" && isWebKit(ua)) return unreadableAudio(codec, { ua });
+    let timer;
+    const trial = (async () => {
+      let n = 0;
+      for await (const s of new AudioSampleSink(track).samples(0, sec)) {
+        n += s.numberOfFrames;
+        s.close();
+      }
+      if (!n) throw new Error("no samples");
+    })();
+    const limit = new Promise((_, reject) => (timer = setTimeout(() => reject(new Error("timeout")), timeoutMs)));
+    try {
+      await Promise.race([trial, limit]);
+      return null;
+    } catch {
+      return unreadableAudio(codec, { ua });
+    } finally {
+      clearTimeout(timer);
+    }
+  } finally {
+    input.dispose?.();
+  }
+}
+
 export function openInput(file) {
   return new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
 }
@@ -29,7 +92,13 @@ export function openInput(file) {
 export async function probeFile(file) {
   const input = openInput(file);
   try {
-    const duration = await input.computeDuration();
+    let duration;
+    try {
+      duration = await input.computeDuration();
+    } catch (e) {
+      // a container mediabunny does not know (CAF, AIFF, a document renamed .mp3)
+      throw Object.assign(new Error("Selects can't open this kind of file."), { hint: "Choose a video, or audio as MP3, M4A, WAV, FLAC, Ogg, Opus or WebM.", code: "unknown_format" });
+    }
     const v = await input.getPrimaryVideoTrack();
     const a = await input.getPrimaryAudioTrack();
     const src = { path: null, name: file.name, size: file.size, duration: +duration.toFixed(3), hasVideo: !!v, audioStreams: [] };

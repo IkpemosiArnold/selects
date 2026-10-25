@@ -1,6 +1,6 @@
 # Selects
 
-Selects finds the best short clips in a long video and renders them as captioned 9:16 videos, using whisper.cpp and a Gemma model on your own computer, with nothing uploaded.
+Selects finds the best short clips in a long video or audio recording and renders them as captioned 9:16 videos, using whisper.cpp and a Gemma model on your own computer, with nothing uploaded. A recording with no picture (a voice memo, a podcast) becomes an audiogram: a drawn background or your own image, a level meter that follows the sound, and the same captions.
 
 ![The Selects review screen. Clip 2 of 3 from a 6-minute talk plays at 9:16 in the middle with the captions the render will burn in. On the left, a clapperboard slate shows the clip number, in point, out point and length, with the opening line written large, Gemma's reason in blue and its four scores. On the right are the Approve and Skip keys and the sentence trims. The next clip peeks out from behind the card, and a strip along the bottom shows the interest curve and where the three clips sit](notes/screens/v2/reel-review-dark.png)
 
@@ -156,6 +156,42 @@ selects talk.mp4 --blur-region 0.6,0.05,0.35,0.12@12-30   # blur a box from 0:12
 
 `--blur-faces all` blurs every face; `--blur-faces others` keeps the main speaker (the largest face that is on screen longest) and blurs the rest. Faces are found with Apple's Vision framework by a small Swift tool, so face blur works on macOS only; build it once with `sh tools/faces/build.sh`. On other systems, use `--blur-region`, which works everywhere. A region is `x,y,w,h` as fractions of the upright frame (0,0 is the top left), optionally followed by `@start-end` in seconds, and you can repeat the flag. Typical uses: a phone number on screen, a third-party logo, or a figure under a licence that does not allow adaptations. In the browser you can draw the boxes on the preview and choose which faces to blur.
 
+## Audio files: audiograms
+
+```sh
+selects "voice memo.m4a" --bg frog
+selects podcast.mp3 --cover cover.jpg
+selects caption episode.m4a           # the whole recording as one 9:16 audiogram
+```
+
+Selects takes MP3, M4A (AAC), AAC, WAV, FLAC, Ogg (Opus or Vorbis), Opus and WebM audio. Transcription, judging, caption review and approval work exactly as they do for a video. Each approved clip is rendered at 1080x1920 with:
+
+- **a background**: one of six characters drawn in code (`sunny`, `moon`, `cat`, `robot`, `cactus`, `frog`; `sunny` is the default), or your own image. A portrait image is cropped to 9:16 around a point a little above the middle; a square or landscape image (podcast cover art) is shown whole over a blurred copy of itself. The image stays on your computer or phone.
+- **a meter and a mouth that follow the real sound**: the clip's loudness is measured every 1/30 s from its own samples. The meter is a strip of bars, one for every 0.1 s, with what has been said in marker yellow; the character's mouth opens with the voice.
+- **the same captions** as any clip, in the same place, over a dark lower part of every background (white captions there have a contrast of at least 7:1; over your own image, the lower part is darkened).
+
+The character sits clear of the top 8% of the frame, and the meter and captions stay clear of the bottom 18% and the right-hand buttons, where TikTok, Reels and Shorts draw their controls. In the review app, the clip card shows the audiogram as it will render; the picture button on the card opens the backgrounds. The drawing code is `src/core/audiogram.mjs`, shared by the desktop render (ffmpeg), the browser render (WebCodecs) and the review card, so all three match.
+
+The audio of the clip is the recording itself, cut and loudness-normalised like any clip. Face blur does not apply (there are no faces), and rendering makes no network calls.
+
+### Which audio a browser can read
+
+Selects Web reads the sound with WebCodecs. Before it starts, it decodes the first second and a half for real, because a browser can report that it supports a format and then fail. If it cannot read the file, the page says so at once, before any download, and says what to convert it to. Measured on 25 October 2026 with generated test files:
+
+| Format | Desktop app (ffmpeg) | Chrome 155 (macOS) | WebKit (Safari's engine, Playwright build on macOS 13) |
+|---|---|---|---|
+| MP3 | yes | yes | yes |
+| M4A (AAC), as Voice Memos saves it by default | yes | yes | yes |
+| AAC (.aac) | yes | yes | yes |
+| WAV | yes | yes | yes |
+| FLAC | yes | yes | no: the decoder says yes, then fails |
+| Ogg Opus, .opus | yes | yes | no: the decoder never answers |
+| WebM audio (Opus) | yes | yes | no: the decoder never answers |
+| Ogg Vorbis | yes | yes | no: decoding crashed the tab, so Selects refuses it without trying |
+| M4A with Apple Lossless (Voice Memos set to Lossless) | yes | no | no |
+
+On an iPhone every browser uses WebKit, so convert FLAC, Opus and Vorbis to M4A or MP3 first, and set Voice Memos to Compressed (Settings, Apps, Voice Memos, Audio Quality). These results are from Playwright's WebKit on a Mac, not from a real iPhone: Safari on iOS 26 may read more. Both browsers rendered a test audiogram (H.264 and AAC, 1080x1920, with captions and the meter) in under 3 seconds for 6 seconds of audio.
+
 ## Made for: Shorts, LinkedIn, X or a story
 
 Tell Selects where the clips will go with `--made-for` (or `settings.madeFor`). A preset changes only three things: the length range, the caption style, and the posting kit's tone and format. Clip selection stays the same, except for `story`.
@@ -197,7 +233,7 @@ Smart mode works with your own free key from Google AI Studio (kept in the tab f
 | Judge (WebGPU) | MediaPipe LLM Inference | Gemma 4 E2B (2.0 GB, Apache-2.0) |
 | Judge (no WebGPU) | llama.cpp compiled to WebAssembly (wllama) | Gemma 3 1B Q4_0 (722 MB) |
 | Language check | plain JavaScript | lid-lite-5 (1.1 MB) |
-| Render | each frame drawn on a canvas with the desktop's caption layout, encoded to H.264 and AAC with WebCodecs, muxed to MP4 | none |
+| Render | each frame drawn on a canvas with the desktop's caption layout, encoded to H.264 and AAC with WebCodecs, muxed to MP4; an audio file's frames are its audiogram (background, meter and mouth from the clip's samples) | none |
 
 The judge reads the same prompt files as the desktop (`src/core/prompts/`), and its answers are scored, blended with the pre-score and put through the listwise round by the same code.
 
@@ -209,6 +245,7 @@ Phones pause background tabs, so Selects Web does not promise to keep working wh
 
 - Best for videos up to about 10 to 15 minutes. Longer videos are slow in a tab and can run out of memory.
 - English speech only. For other languages, Nigerian-accented English, face blur, whole-video captions or long videos, use the desktop app.
+- Audio files work, but some formats do not decode in every browser (see "Which audio a browser can read"). Selects says so before it starts.
 - The first run downloads 0.9 GB (CPU) or 2.2 GB (WebGPU) of models once in Private mode. Light mode downloads no model: about 1.2 MB of page, 1.1 MB for the language check, and about 0.12 MB of audio a minute sent.
 - No transcript quality gate yet: the browser's whisper does not report word confidence.
 - Measured on the 2017 laptop (details in [`notes/timings.md`](notes/timings.md), "Browser build"): 2 minutes of video took 11.2 minutes to analyse on the WebGPU path (whisper at 0.31 times real time on the Intel GPU, Gemma 4 E2B at about 19 seconds a call), and a 41-second clip rendered in 57 seconds. On this machine whisper on the CPU was faster (0.75 times real time).
@@ -375,7 +412,7 @@ Real examples, and the two prompts that did not work (one called every clip misl
 
 ### Rendering
 
-Each approved clip is cut with 0.08 s of padding before the first word and 0.35 s after the last, and loudness is normalised to -14 LUFS. Selects reframes 16:9 video to 9:16 by centre crop when the motion in the clip stays in the centre band, and otherwise places the whole frame over a blurred copy of itself ("fit"). Captions show up to 4 words at a time in Atkinson Hyperlegible Next, with the current word in yellow, above the bottom 18% of the frame where TikTok, Reels and Shorts draw their buttons.
+Each approved clip is cut with 0.08 s of padding before the first word and 0.35 s after the last, and loudness is normalised to -14 LUFS. An audio file's clips are audiograms (see "Audio files: audiograms"); the rest of this section is about video. Selects reframes 16:9 video to 9:16 by centre crop when the motion in the clip stays in the centre band, and otherwise places the whole frame over a blurred copy of itself ("fit"). Captions show up to 4 words at a time in Atkinson Hyperlegible Next, with the current word in yellow, above the bottom 18% of the frame where TikTok, Reels and Shorts draw their buttons.
 
 ## Performance on a 2017 laptop
 
@@ -453,6 +490,8 @@ selects doctor [--json]        show the resolved config; check whisper, Ollama, 
 | `--srt <file>` | none | caption mode: use your corrected SRT (words keep their timings) |
 | `--blur-faces <mode>` | off | `all`, or `others` (everyone except the main speaker). macOS only |
 | `--blur-region <r>` | none | `x,y,w,h` as fractions of the frame, optionally `@start-end` in seconds. Repeat for more regions |
+| `--bg <name>` | `sunny` | an audio file's audiogram background: `sunny`, `moon`, `cat`, `robot`, `cactus` or `frog` |
+| `--cover <image>` | none | your own audiogram background (JPEG, PNG, WebP or GIF); it stays on your computer |
 | `--port <n>` | 4317 | port for `selects serve` |
 | `--help`, `-h` | | show the help |
 
@@ -547,7 +586,7 @@ Transcripts and model answers are cached in `eval/cache/`, so a second run only 
 npm test
 ```
 
-The tests use `node:test` and cover the core modules, the server and the eval code.
+The tests use `node:test` and cover the core modules, the server and the eval code. `src/core/audiogram.test.mjs` renders a generated 6-second voice-memo-like M4A end to end and checks the MP4 with ffprobe (1080x1920, H.264, AAC, the duration, real sound) and by reading frames back: a caption is burned in while words are spoken and gone in the silence, and the bars just played are tall in speech and short in silence.
 
 ## Licence
 

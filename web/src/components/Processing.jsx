@@ -3,7 +3,7 @@ import { Masthead } from "../App.jsx";
 import { tc, aboutMinutes } from "../lib/time.js";
 import { useReducedMotion } from "../lib/hooks.js";
 import { languageName } from "../lib/languages.js";
-import { api } from "../lib/api.js";
+import { api, MEDIA_ACCEPT } from "../lib/api.js";
 import { useNotifyOptIn } from "../lib/notify.js";
 import EarlyPicks from "./EarlyPicks.jsx";
 
@@ -265,12 +265,12 @@ export default function Processing({ job, words, onResume }) {
             {needsFile && (
               <>
                 <button className="btn btn-mark btn-big proc-resume" disabled={resuming} onClick={() => fileRef.current?.click()}>
-                  {resuming ? "Checking the video" : `Choose ${job.source?.name || "the video"} again`}
+                  {resuming ? "Checking the file" : `Choose ${job.source?.name || "the video"} again`}
                 </button>
                 <input
                   ref={fileRef}
                   type="file"
-                  accept="video/*"
+                  accept={MEDIA_ACCEPT}
                   hidden
                   onChange={async (e) => {
                     const f = e.target.files?.[0];

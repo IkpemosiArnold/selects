@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // selects: pull the best clips from a long video, on your own laptop.
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import readline from "node:readline/promises";
 import { parseArgs } from "node:util";
@@ -16,6 +17,7 @@ import { asrModels } from "../src/core/config.mjs";
 import { drainQueue, enqueue, queueState } from "../src/core/queue.mjs";
 import { diskFreeGb, run, slugify, tc } from "../src/core/util.mjs";
 import { aboutTime, overnightAdvice } from "../src/core/estimate.mjs";
+import { AUDIOGRAM_PRESETS } from "../src/core/audiogram.mjs";
 
 const HELP = `selects: pull the best clips from a long video. Everything runs on this laptop.
 
@@ -65,6 +67,10 @@ Speech and captions (clips and caption mode)
   --edit            (caption) write an editable SRT, wait for you to fix it, then render
   --srt <file>      (caption) use your corrected SRT; words keep their timings
 
+Audio files (MP3, M4A, AAC, WAV, FLAC, Ogg, Opus, WebM audio): clips become 9:16 audiograms
+  --bg <name>       the background: sunny (default), moon, cat, robot, cactus or frog
+  --cover <image>   your own background image (JPEG, PNG or WebP; it stays on this laptop)
+
 Privacy blur
   --blur-faces <m>  all, or others (everyone except the main speaker); macOS only
   --blur-region <r> x,y,w,h as fractions of the frame, optionally @start-end in seconds;
@@ -91,7 +97,7 @@ function fmtEta(sec) {
   return `about ${(sec / 3600).toFixed(1)} h left`;
 }
 
-const STAGE_NAMES = { probe: "Reading video", language: "Checking the language", transcribe: "Transcribing", candidates: "Finding windows", judge: "Judging", render: "Rendering" };
+const STAGE_NAMES = { probe: "Reading the file", language: "Checking the language", transcribe: "Transcribing", candidates: "Finding windows", judge: "Judging", render: "Rendering" };
 
 /** Show stage progress: one live line on a terminal, a line every 15 s otherwise. */
 function progressReporter(jobId, { videoName = null } = {}) {
@@ -372,7 +378,31 @@ function speechSettings(values) {
     reuse: values.fresh ? false : undefined,
     blur: blur ?? undefined,
     profile: values.profile,
+    audiogram: audiogramFromFlags(values),
   };
+}
+
+/** The audiogram background from --bg or --cover (used only when the file has no picture). */
+function audiogramFromFlags(values) {
+  if (values.cover) {
+    const file = path.resolve(values.cover.replace(/^~(?=$|\/)/, os.homedir()));
+    if (!fs.existsSync(file)) {
+      say(red(`No image at ${file}.`));
+      process.exit(1);
+    }
+    if (!/\.(jpe?g|png|webp|gif)$/i.test(file)) {
+      say(red("--cover takes a JPEG, PNG, WebP or GIF image."));
+      process.exit(1);
+    }
+    return { bg: "cover", cover: file };
+  }
+  if (!values.bg) return undefined;
+  const id = values.bg.toLowerCase();
+  if (!AUDIOGRAM_PRESETS.some((p) => p.id === id)) {
+    say(red(`--bg takes ${AUDIOGRAM_PRESETS.map((p) => p.id).join(", ")}, not "${values.bg}".`));
+    process.exit(1);
+  }
+  return { bg: id };
 }
 
 function blurFromFlags(values) {
@@ -667,6 +697,8 @@ async function main() {
       edit: { type: "boolean" },
       srt: { type: "string" },
       "blur-faces": { type: "string" },
+      bg: { type: "string" },
+      cover: { type: "string" },
       "blur-region": { type: "string", multiple: true },
       profile: { type: "string" },
       "save-profile": { type: "string" },

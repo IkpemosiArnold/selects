@@ -65,15 +65,18 @@ export function fakeRender({ gate = null } = {}) {
 }
 
 /** A video file, a store with its probe and transcript saved, and the content key. */
-export async function seeded(Engine, { settings = {}, words = WORDS } = {}) {
+export async function seeded(Engine, { settings = {}, words = WORDS, audio = false, pcm = null } = {}) {
   const store = createJobStore(memoryBackend());
-  const file = new File([new Uint8Array(4096).fill(7)], "talk.mp4", { lastModified: 1 });
+  // audio: a recording with no picture (a voice memo), probed as Selects Web probes one
+  const file = new File([new Uint8Array(4096).fill(audio ? 9 : 7)], audio ? "memo.m4a" : "talk.mp4", { lastModified: 1 });
   const key = await contentKey(file);
   const job = new Engine({ store }).newJob(file, settings);
-  job.source = { ...job.source, duration: DURATION, width: 1920, height: 1080, uprightWidth: 1920, uprightHeight: 1080, fps: 25, audioStreams: [{ channels: 2 }] };
+  job.source = audio
+    ? { ...job.source, duration: DURATION, hasVideo: false, audioStreams: [{ index: 0, codec: "aac", channels: 2, sampleRate: 44100, canDecode: true }] }
+    : { ...job.source, duration: DURATION, width: 1920, height: 1080, uprightWidth: 1920, uprightHeight: 1080, fps: 25, audioStreams: [{ channels: 2 }] };
   for (const s of ["probe", "transcribe"]) Object.assign(job.stages[s], { status: "done", progress: 1 });
   await store.saveStage(key, job, "probe");
-  await store.saveStage(key, job, "transcribe", { words, events: [], loudness: null });
+  await store.saveStage(key, job, "transcribe", { words, events: [], loudness: null, ...(pcm ? { pcm } : {}) });
   return { store, file, key };
 }
 

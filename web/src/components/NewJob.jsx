@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api, inBrowser } from "../lib/api.js";
+import { api, inBrowser, MEDIA_ACCEPT } from "../lib/api.js";
 import EnginePanel, { useEngine, LAPTOP_LINE } from "./EnginePanel.jsx";
 import { tc, plural } from "../lib/time.js";
 import { Masthead, MiddleTruncate, go } from "../App.jsx";
@@ -82,7 +82,7 @@ function statusLine(j) {
     default: {
       const k = { probing: "probe", transcribing: "transcribe", candidates: "candidates", judging: "judge" }[j.stage];
       const p = j.stages?.[k]?.progress;
-      const what = { probing: "Opening the video", language: "Checking the language", transcribing: "Transcribing", candidates: "Finding moments", judging: "Gemma is choosing" }[j.stage] || j.stage;
+      const what = { probing: "Opening the file", language: "Checking the language", transcribing: "Transcribing", candidates: "Finding moments", judging: "Gemma is choosing" }[j.stage] || j.stage;
       return `${what}${p ? `, ${Math.round(p * 100)}%` : ""}`;
     }
   }
@@ -209,7 +209,7 @@ export default function NewJob() {
   const submit = async (e, how = "now") => {
     e?.preventDefault?.();
     if (inBrowser ? !file : !path.trim()) {
-      setError("Choose a video first.");
+      setError("Choose a video or audio file first.");
       if (!inBrowser) pathRef.current?.focus();
       return;
     }
@@ -244,7 +244,7 @@ export default function NewJob() {
       }
       go(`#/job/${job.id}`);
     } catch (err) {
-      setError(err.message || "Selects could not start on that video.");
+      setError(err.message || "Selects could not start on that file.");
       setBusy(false);
     }
   };
@@ -353,7 +353,7 @@ export default function NewJob() {
           >
             <div className="perfs" aria-hidden="true" />
             <div className="leader-body">
-              <h1 className="leader-title">{mode === "caption" ? "Add captions to a whole video." : "Turn a long video into short, captioned clips."}</h1>
+              <h1 className="leader-title">{mode === "caption" ? "Add captions to a whole video." : "Turn a long video or recording into short, captioned clips."}</h1>
               <p className="leader-sub">
                 {mode === "caption"
                   ? "Selects writes the captions, you fix any word, and it renders the video with them. Nothing is uploaded."
@@ -387,7 +387,7 @@ export default function NewJob() {
                 ) : (
                   <div className="leader-buttons">
                     <button type="button" className="btn btn-mark btn-big" onClick={() => fileRef.current?.click()}>
-                      Choose a video
+                      Choose video or audio
                     </button>
                     <span className="leader-or">or drop one here</span>
                   </div>
@@ -395,7 +395,7 @@ export default function NewJob() {
                 <input
                   ref={fileRef}
                   type="file"
-                  accept="video/*,.mkv"
+                  accept={MEDIA_ACCEPT}
                   hidden
                   onChange={(e) => e.target.files?.[0] && takeFile(e.target.files[0])}
                 />
@@ -413,7 +413,7 @@ export default function NewJob() {
           {error && <p id="path-error" className="field-error" role="alert">{error}</p>}
 
           {!inBrowser && <div className="path-field">
-            <label className="field-label" htmlFor="path">Or type where the video is on this laptop</label>
+            <label className="field-label" htmlFor="path">Or type where the file is on this laptop</label>
             <input
               id="path"
               ref={pathRef}

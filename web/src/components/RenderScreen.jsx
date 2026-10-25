@@ -162,7 +162,7 @@ function Row({ job, c, kit }) {
           {r.status === "running" && r.etaSec ? <span className="dim">, {aboutMinutes(r.etaSec)} left</span> : null}
         </p>
         <h2 className="take-title">{title || c.hook}</h2>
-        {done && r.stale && <p className="take-stale">You changed the captions or the blur after this render. Render it again to use the changes.</p>}
+        {done && r.stale && <p className="take-stale">You changed the captions or the {job.source?.hasVideo === false ? "background" : "blur"} after this render. Render it again to use the changes.</p>}
         {done && clip && <ShareSave url={clip} name={clipFileName(c.rank, title || c.hook)} title={title || ""} text={fullCaption} />}
         {r.status === "error" && <p className="take-error">{r.message || r.error || "This clip did not render."}</p>}
         {done && c.render?.saved === false && (

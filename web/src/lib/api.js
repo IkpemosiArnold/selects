@@ -40,6 +40,10 @@ function createHttpApi() {
     createJob: (path, settings) => send("POST", "/api/jobs", { path, settings }),
     patchCandidate: (id, cid, body) => send("PATCH", `/api/jobs/${id}/candidates/${cid}`, body),
     patchJob: (id, settings) => send("PATCH", `/api/jobs/${id}`, { settings }),
+    // Audiograms: a background image kept in the job's folder, and the meter's loudness
+    setCover: (id, file) => fetch(`/api/jobs/${id}/cover`, { method: "POST", headers: { "content-type": file.type || "application/octet-stream" }, body: file }).then(j),
+    coverUrl: (id, version = "") => `/media/${id}/cover${version ? `?v=${encodeURIComponent(version)}` : ""}`,
+    levels: (id, start, end) => get(`/api/jobs/${id}/levels?start=${(+start).toFixed(2)}&end=${(+end).toFixed(2)}`),
     getKit: (id, cid) => get(`/api/jobs/${id}/candidates/${cid}/kit`),
     retryKit: (id, cid) => send("POST", `/api/jobs/${id}/candidates/${cid}/kit`, {}),
     queue: () => get("/api/queue"),
@@ -150,6 +154,9 @@ export function hasVideo(id) {
   }
 }
 
+/** What the file pickers take: any video, and audio (voice memos, podcasts). */
+export const MEDIA_ACCEPT = "video/*,audio/*,.mkv,.m4a,.mp3,.aac,.wav,.flac,.ogg,.oga,.opus,.webm";
+
 /**
  * Open the file picker for the video again. Call it straight from a tap, before any await,
  * so the browser lets the picker open. Resolves the File, or null when cancelled.
@@ -158,7 +165,7 @@ export function pickVideo() {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = "video/*";
+    input.accept = MEDIA_ACCEPT;
     input.onchange = () => resolve(input.files?.[0] || null);
     input.addEventListener("cancel", () => resolve(null));
     input.click();
@@ -169,7 +176,7 @@ export function pickVideo() {
 export async function renderClips(id, ids) {
   if (inBrowser && !hasVideo(id)) {
     const file = await pickVideo();
-    if (!file) throw Object.assign(new Error("Rendering needs the video. Choose the same file you started with."), { status: 409 });
+    if (!file) throw Object.assign(new Error("Rendering needs the file. Choose the same one you started with."), { status: 409 });
     await api.attachFile(id, file);
   }
   return api.render(id, ids);
