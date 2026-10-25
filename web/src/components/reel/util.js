@@ -1,5 +1,6 @@
 import { api } from "../../lib/api.js";
 import { toSentences } from "../../lib/sentences.js";
+import { audiogramStill, isAudioJob } from "../../lib/audiogram.js";
 
 export const RUBRIC = [
   ["hook", "Hook"],
@@ -10,6 +11,8 @@ export const RUBRIC = [
 
 /** The filmstrip still nearest t (one per few seconds, already on disk). */
 export function thumbAt(job, t) {
+  // a recording with no picture stands for itself with its audiogram background
+  if (isAudioJob(job)) return audiogramStill(job);
   const th = job?.thumbs;
   if (!th?.count) return null;
   const n = Math.min(th.count, Math.max(1, Math.floor((t || 0) / (th.interval || 1)) + 1));

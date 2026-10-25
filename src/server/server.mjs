@@ -8,10 +8,11 @@ import { fileURLToPath } from "node:url";
 import { REPO, asrModels, ollamaModels, ollamaUrl, selectsHome, whisperBin, whisperModel } from "../core/config.mjs";
 import { measuredSpeeds } from "../core/judge.mjs";
 import { editCaptions, loadCaptions, resetCaptions, toSrt, toVtt } from "../core/captions.mjs";
-import { approveTop, confirmLanguage, createJob, detectJobFaces, refreshStale, isRunning, jobDir, jobEvents, listJobs, loadJob, loadWords, resetTranscript, retryKit, saveJob, updateCandidate, updateJobSettings } from "../core/job.mjs";
+import { approveTop, confirmLanguage, createJob, detectJobFaces, jobCoverFile, refreshStale, setJobCover, isRunning, jobDir, jobEvents, listJobs, loadJob, loadWords, resetTranscript, retryKit, saveJob, updateCandidate, updateJobSettings } from "../core/job.mjs";
 import { LOW_P } from "../core/quality.mjs";
 import { loadProfiles } from "../core/profiles.mjs";
 import { hwaccelArgs } from "../core/render.mjs";
+import { clipEnvelope } from "../core/audiogram-render.mjs";
 import { drainQueue, enqueue, queueState } from "../core/queue.mjs";
 import { diskFreeGb } from "../core/util.mjs";
 
@@ -39,6 +40,15 @@ const MIME = {
   ".mov": "video/quicktime",
   ".webm": "video/webm",
   ".mkv": "video/x-matroska",
+  ".mp3": "audio/mpeg",
+  ".m4a": "audio/mp4",
+  ".aac": "audio/aac",
+  ".wav": "audio/wav",
+  ".flac": "audio/flac",
+  ".ogg": "audio/ogg",
+  ".oga": "audio/ogg",
+  ".opus": "audio/ogg",
+  ".gif": "image/gif",
   ".srt": "application/x-subrip; charset=utf-8",
   ".vtt": "text/vtt; charset=utf-8",
   ".txt": "text/plain; charset=utf-8",
@@ -122,6 +132,18 @@ async function readBody(req, limit = 1e6) {
   } catch {
     throw new HttpError(400, "The request body is not valid JSON.");
   }
+}
+
+/** The raw request body as a Buffer (an uploaded image), at most limit bytes. */
+async function readRaw(req, limit) {
+  let size = 0;
+  const chunks = [];
+  for await (const c of req) {
+    size += c.length;
+    if (size > limit) throw new HttpError(413, "The image must be under 25 MB.");
+    chunks.push(c);
+  }
+  return Buffer.concat(chunks);
 }
 
 /** Stream a file, honouring a single HTTP Range (what video elements ask for). */
@@ -512,6 +534,31 @@ async function route(req, res) {
     if (!out.length) throw new HttpError(500, "Could not read a frame at that time.");
     res.writeHead(200, { "content-type": "image/jpeg", "content-length": out.length, "cache-control": "private, max-age=3600" });
     return res.end(method === "HEAD" ? undefined : out);
+  }
+  // Audiograms (audio-only jobs): the background image, kept in the job folder, and the
+  // loudness the review card's meter draws, measured from the recording as the render does
+  if ((r = m(/^\/api\/jobs\/([^/]+)\/cover$/)) && method === "POST") {
+    const job = getJob(r[1]);
+    const bytes = await readRaw(req, 25e6);
+    try {
+      return sendJson(res, 200, setJobCover(job.id, bytes, req.headers["content-type"]));
+    } catch (e) {
+      throw new HttpError(e.status || 400, e.message, e.hint);
+    }
+  }
+  if ((r = m(/^\/media\/([^/]+)\/cover$/)) && (method === "GET" || method === "HEAD")) {
+    getJob(r[1]);
+    const f = jobCoverFile(r[1]);
+    if (!f) throw new HttpError(404, "This job has no background image.");
+    return sendFile(req, res, f);
+  }
+  if ((r = m(/^\/api\/jobs\/([^/]+)\/levels$/)) && method === "GET") {
+    const job = getJob(r[1]);
+    const start = Math.max(0, Number(url.searchParams.get("start")) || 0);
+    const end = Math.min(job.source.duration || Infinity, Number(url.searchParams.get("end")) || 0);
+    if (!(end > start) || end - start > 600) throw new HttpError(400, "Send start and end in seconds, at most 10 minutes apart.");
+    const env = await clipEnvelope(job.source, start, end - start);
+    return sendJson(res, 200, { fps: env.fps, start, v: Array.from(env.v, (x) => +x.toFixed(3)), mouth: Array.from(env.mouth, (x) => +x.toFixed(3)) });
   }
   if (p.startsWith("/api/") || p.startsWith("/media/")) throw new HttpError(404, `Nothing at ${method} ${p}.`);
   if (method === "GET" || method === "HEAD") return serveStatic(req, res, p);

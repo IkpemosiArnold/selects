@@ -287,3 +287,63 @@ test("path traversal and broken escapes are refused", async () => {
   delete j.output;
   saveJob(j);
 });
+
+function rawPost(p, buf, type) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(base);
+    const r = http.request({ hostname: u.hostname, port: u.port, path: p, method: "POST", headers: { "content-type": type, "content-length": buf.length } }, (res) => {
+      const chunks = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("end", () => {
+        const text = Buffer.concat(chunks).toString("utf8");
+        let json = null;
+        try {
+          json = JSON.parse(text);
+        } catch {}
+        resolve({ status: res.statusCode, json });
+      });
+    });
+    r.on("error", reject);
+    r.end(buf);
+  });
+}
+
+test("audiograms: the background is a preset or your image, kept in the job folder; the meter's loudness is measured", async () => {
+  const { run } = await import("../core/util.mjs");
+  const { probe } = await import("../core/probe.mjs");
+  const memo = path.join(home, "memo.m4a");
+  await run("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono:d=2", "-f", "lavfi", "-i", "sine=f=220:d=2:r=44100", "-filter_complex", "[0][1]concat=n=2:v=0:a=1", "-c:a", "aac", memo]);
+  const a = createJob(memo, { model: "mock" });
+  const j = loadJob(a.id);
+  j.source = await probe(memo);
+  saveJob(j);
+  assert.equal(j.source.hasVideo, false);
+
+  const bad = await req("PATCH", `/api/jobs/${a.id}`, { body: { settings: { audiogram: { bg: "dragon" } } } });
+  assert.equal(bad.status, 400);
+  const noImage = await req("PATCH", `/api/jobs/${a.id}`, { body: { settings: { audiogram: { bg: "cover" } } } });
+  assert.equal(noImage.status, 400);
+  const frog = await req("PATCH", `/api/jobs/${a.id}`, { body: { settings: { audiogram: { bg: "frog" } } } });
+  assert.equal(frog.status, 200);
+  assert.equal(frog.json.settings.audiogram.bg, "frog");
+
+  const notImage = await rawPost(`/api/jobs/${a.id}/cover`, Buffer.from("hello"), "text/plain");
+  assert.equal(notImage.status, 415);
+  const png = Buffer.from("89504e470d0a1a0a", "hex");
+  const up = await rawPost(`/api/jobs/${a.id}/cover`, png, "image/png");
+  assert.equal(up.status, 200);
+  assert.equal(up.json.settings.audiogram.bg, "cover");
+  assert.ok(fs.existsSync(path.join(jobDir(a.id), "cover.png")), "kept in the job's own folder");
+  const got = await req("GET", `/media/${a.id}/cover`);
+  assert.equal(got.status, 200);
+  assert.equal(got.headers["content-type"], "image/png");
+
+  const lv = await req("GET", `/api/jobs/${a.id}/levels?start=0&end=4`);
+  assert.equal(lv.status, 200, lv.text);
+  assert.equal(lv.json.fps, 30);
+  assert.equal(lv.json.v.length, 120);
+  assert.equal(Math.max(...lv.json.v.slice(0, 50)), 0, "the silent half reads 0");
+  assert.ok(lv.json.v[100] > 0.9, "the tone fills the meter");
+  const far = await req("GET", `/api/jobs/${a.id}/levels?start=0&end=900`);
+  assert.equal(far.status, 200, "the end is clamped to the recording");
+});

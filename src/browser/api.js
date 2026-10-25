@@ -284,6 +284,16 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
     keepOpenLine: KEEP_OPEN,
     patchCandidate: (id, cid, body) => wrap(() => engine.patchCandidate(id, cid, body)),
     patchJob: (id, settings) => wrap(() => engine.patchJob(id, settings)),
+    // Audiograms (a file with no picture): the person's background image, kept on this device
+    setCover: (id, file) => wrap(() => engine.setCover(id, file)),
+    coverUrl: (id) => {
+      try {
+        return engine.coverUrl(id);
+      } catch {
+        return null;
+      }
+    },
+    levels: (id, start, end) => wrap(() => engine.levels(id, start, end)),
     getKit: (id, cid) => wrap(() => engine.getKit(id, cid)),
     /** When Smart mode is not answering (job.error.code "smart_unavailable"): "retry", "preliminary" or "download". */
     chooseJudge: (id, choice) => wrap(() => engine.chooseJudge(id, choice)),

@@ -31,6 +31,7 @@ import { transcribe as realTranscribe } from "./transcribe.mjs";
 import { readJson, run, sha1, writeJsonAtomic } from "./util.mjs";
 import { judgmentSignature, selectionSignature, transcriptHash, transcriptSignature } from "./signatures.mjs";
 import { applyDecisions, captureDecisions } from "./decisions.mjs";
+import { AUDIOGRAM_PRESETS, audiogramSettings, isAudioOnly } from "./audiogram.mjs";
 
 /** The prompt files' text, for the judgment signature (a prompt change is a new judgment). */
 function promptTexts() {
@@ -283,6 +284,7 @@ export function resetTranscript(id, { language, asrModel, asrPrompt, asrPreproce
 /** Run face detection for a job (macOS) and keep the tracks in faces.json. */
 export async function detectJobFaces(id, { deps = {}, signal, force = false } = {}) {
   const job = loadJob(id);
+  if (isAudioOnly(job.source)) throw Object.assign(new Error("This recording has no picture, so there are no faces to blur."), { status: 400, hint: "Audio clips are rendered as audiograms over a background you choose." });
   const detect = deps.detectFaces || realDetectFaces;
   emit(id, "faces", { status: "running" });
   try {
@@ -305,7 +307,10 @@ export function renderFingerprint(job, c = null, cues = null) {
   const capText = job.settings.captions === false ? "off" : shown.map((x) => `${x.s}|${x.e}|${x.text}`).join("\n");
   const blur = c ? (c.blur ?? job.settings.blur ?? null) : (job.settings.blur ?? null);
   const hasBlur = !!(blur && ((blur.faces?.mode && blur.faces.mode !== "off") || blur.regions?.length));
-  return sha1(JSON.stringify({ capText, blur: hasBlur ? blur : null, style: c ? null : job.settings.captionStyle ?? "auto" })).slice(0, 12);
+  // an audiogram also depends on its background (a preset, or the image and when it was set)
+  const ag = isAudioOnly(job.source) ? audiogramSettings(job.settings) : null;
+  const bg = ag ? (ag.bg === "cover" ? `cover:${job.settings.audiogram?.coverAt ?? ag.cover}` : ag.bg) : undefined;
+  return sha1(JSON.stringify({ capText, blur: hasBlur ? blur : null, style: c ? null : job.settings.captionStyle ?? "auto", ...(bg ? { bg } : {}) })).slice(0, 12);
 }
 
 /** The job's caption cues (the reviewed captions, or cues built from the words), or []. */
@@ -461,12 +466,16 @@ async function runStages(id, { deps = {}, signal } = {}) {
       begin("probe");
       job.source = await d.probe(job.source.path);
       save();
-      try {
-        job.thumbs = await d.thumbs(job);
-      } catch {
-        job.thumbs = null; // thumbnails are nice to have, never fatal
+      if (isAudioOnly(job.source)) {
+        job.thumbs = null; // nothing to show: the review shows the audiogram's background instead
+      } else {
+        try {
+          job.thumbs = await d.thumbs(job);
+        } catch {
+          job.thumbs = null; // thumbnails are nice to have, never fatal
+        }
       }
-      finish("probe", `${Math.round(job.source.duration)} s of video`);
+      finish("probe", `${Math.round(job.source.duration)} s of ${isAudioOnly(job.source) ? "audio" : "video"}`);
     }
 
     // an honest estimate for the whole job, and room on the disk for the WAV before it is written
@@ -858,7 +867,53 @@ function writeKit(job, c, k) {
   return kitRel;
 }
 
-const SETTABLE = ["credit", "license", "sourceUrl", "blur", "captions", "captionStyle", "captionLang"];
+const SETTABLE = ["credit", "license", "sourceUrl", "blur", "captions", "captionStyle", "captionLang", "audiogram"];
+
+/**
+ * An audiogram background from a request: { bg: preset id } or { bg: "cover" } (the image
+ * saved with setJobCover). Anything else is a 400.
+ */
+export function cleanAudiogram(v, current = null) {
+  if (v == null) return null;
+  const bad = () => Object.assign(new Error(`audiogram.bg must be one of ${AUDIOGRAM_PRESETS.map((p) => p.id).join(", ")} or cover.`), { status: 400 });
+  if (typeof v !== "object") throw bad();
+  if (v.bg === "cover") {
+    if (!current?.cover) throw Object.assign(new Error("Add a background image first."), { status: 400, hint: "Send the image to POST /api/jobs/:id/cover." });
+    return { ...current, bg: "cover" };
+  }
+  if (!AUDIOGRAM_PRESETS.some((p) => p.id === v.bg)) throw bad();
+  return { ...(current?.cover ? { cover: current.cover, coverAt: current.coverAt } : {}), bg: v.bg };
+}
+
+const COVER_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" };
+
+/**
+ * Keep a background image for an audio job, in its own folder (it never leaves this machine),
+ * and choose it. bytes: a Buffer; type: its media type. Returns the job.
+ */
+export function setJobCover(id, bytes, type) {
+  const job = loadJob(id);
+  const ext = COVER_TYPES[String(type || "").split(";")[0].trim()];
+  if (!ext) throw Object.assign(new Error("Use a JPEG, PNG, WebP or GIF image."), { status: 415 });
+  if (!bytes?.length || bytes.length > 25e6) throw Object.assign(new Error("The image must be under 25 MB."), { status: 413 });
+  const dir = jobDir(id);
+  for (const f of fs.readdirSync(dir)) if (/^cover\.(jpg|png|webp|gif)$/.test(f)) fs.rmSync(path.join(dir, f), { force: true });
+  fs.writeFileSync(path.join(dir, `cover.${ext}`), bytes);
+  job.settings.audiogram = { bg: "cover", cover: `cover.${ext}`, coverAt: now() };
+  refreshStale(job);
+  saveJob(job);
+  emit(id, "job", job);
+  return job;
+}
+
+/** The job's background image file, or null. */
+export function jobCoverFile(id) {
+  const job = loadJob(id);
+  const a = job.settings.audiogram;
+  if (!a?.cover) return null;
+  const f = path.isAbsolute(a.cover) ? a.cover : path.join(jobDir(id), a.cover);
+  return fs.existsSync(f) ? f : null;
+}
 
 /**
  * Change a job's attribution settings (credit, license, sourceUrl). Kits already written
@@ -883,7 +938,7 @@ export function updateJobSettings(id, patch = {}) {
   for (const key of SETTABLE) {
     if (patch[key] === undefined) continue;
     const v = patch[key] === "" ? null : patch[key];
-    job.settings[key] = key === "license" && v ? (v === OWN_FOOTAGE ? OWN_FOOTAGE : normaliseLicense(v)) : key === "blur" ? cleanBlur(v) : key === "captions" ? v !== false : v;
+    job.settings[key] = key === "license" && v ? (v === OWN_FOOTAGE ? OWN_FOOTAGE : normaliseLicense(v)) : key === "blur" ? cleanBlur(v) : key === "captions" ? v !== false : key === "audiogram" ? cleanAudiogram(v, job.settings.audiogram) : v;
   }
   refreshStale(job);
   for (const c of job.candidates) {

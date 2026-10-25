@@ -600,3 +600,29 @@
   text-decoration: underline; text-decoration-color: rgba(232, 237, 235, 0.35); text-underline-offset: 3px; cursor: pointer; touch-action: manipulation;
 }
 @media (pointer: coarse) { .faith-keep { min-height: 44px; } }
+
+/* Audiograms: a recording with no picture, previewed over its background. The video
+   element still plays the sound; the canvas shows the picture the render will make. */
+.card-frame.is-audiogram { background: #1d2126; }
+.card-frame.is-audiogram video.card-media { opacity: 0; }
+.card-audiogram { z-index: 1; }
+.bg-picker { display: flex; }
+/* the tray opens above the play row, across the card's bottom (the platform's button zone) */
+.bg-tray {
+  position: absolute; left: 0; bottom: 52px; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 8px;
+  box-sizing: border-box; width: calc(100cqi - 28px); border-radius: 14px;
+  background: rgba(17, 20, 23, 0.78); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+.bg-swatch {
+  width: 38px; height: 38px; padding: 0; border: 2px solid transparent; border-radius: 50%; overflow: hidden; cursor: pointer;
+  display: grid; place-items: center; color: #fff; background: rgba(255, 255, 255, 0.14);
+  transition: transform 140ms var(--ease-out), border-color 140ms ease;
+}
+.bg-swatch img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 34%; display: block; }
+.bg-swatch.is-on { border-color: #f2be22; }
+.bg-swatch:active { transform: scale(0.92); }
+.bg-swatch:focus-visible, .bg-toggle:focus-visible { outline: 2px solid #f2be22; outline-offset: 2px; }
+.bg-err { position: absolute; left: 0; bottom: 104px; max-width: calc(100cqi - 28px); margin: 0; padding: 6px 10px; border-radius: 8px; color: #fff; background: rgba(168, 53, 42, 0.92); font: 600 var(--t-13)/1.3 var(--sans); }
+.reel.is-phone .bg-swatch { width: 42px; height: 42px; }
+.reel.is-phone .bg-tray { bottom: 58px; gap: 6px; padding: 6px; }
+@media (prefers-reduced-motion: reduce) { .bg-swatch { transition: none; } }

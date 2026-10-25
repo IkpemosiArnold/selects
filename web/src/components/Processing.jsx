@@ -3,7 +3,7 @@ import { Masthead } from "../App.jsx";
 import { tc, aboutMinutes } from "../lib/time.js";
 import { useReducedMotion } from "../lib/hooks.js";
 import { languageName } from "../lib/languages.js";
-import { api } from "../lib/api.js";
+import { api, MEDIA_ACCEPT } from "../lib/api.js";
 import { useNotifyOptIn } from "../lib/notify.js";
 import EarlyPicks from "./EarlyPicks.jsx";
 
@@ -22,7 +22,7 @@ function plainHint(h) {
 }
 
 const STEPS = [
-  { key: "probe", label: "Open the video" },
+  { key: "probe", label: "Open the file" },
   { key: "language", label: "Check the language" },
   { key: "transcribe", label: "Transcribe what's said" },
   { key: "candidates", label: "Find moments that stand alone" },
@@ -174,7 +174,7 @@ export default function Processing({ job, words, onResume }) {
     headline = "Waiting for the video ahead of this one.";
     sub = "It starts by itself. You can close the laptop lid, and progress is saved after each step.";
   } else if (job.stage === "probing") {
-    headline = "Opening the video.";
+    headline = "Opening the file.";
     sub = `${job.source?.name}`;
   } else if (checkingLanguage) {
     headline = "Checking which language is spoken.";
@@ -265,12 +265,12 @@ export default function Processing({ job, words, onResume }) {
             {needsFile && (
               <>
                 <button className="btn btn-mark btn-big proc-resume" disabled={resuming} onClick={() => fileRef.current?.click()}>
-                  {resuming ? "Checking the video" : `Choose ${job.source?.name || "the video"} again`}
+                  {resuming ? "Checking the file" : `Choose ${job.source?.name || "the video"} again`}
                 </button>
                 <input
                   ref={fileRef}
                   type="file"
-                  accept="video/*"
+                  accept={MEDIA_ACCEPT}
                   hidden
                   onChange={async (e) => {
                     const f = e.target.files?.[0];
