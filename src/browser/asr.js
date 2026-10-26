@@ -78,7 +78,7 @@ export function loadAsr({ device = "auto", model = MODELS.whisper, onDownload } 
  * Transcribe 16 kHz mono PCM. onChunk({ words, processed, i, n, wallSec }) after each window.
  * Resolves { words, wallSec, device }. The PCM buffer is copied, so the caller keeps it.
  */
-export async function transcribePcm(pcm, { rate = 16000, onChunk, signal } = {}) {
+export async function transcribePcm(pcm, { rate = 16000, onChunk, onWindow, signal } = {}) {
   await ready;
   const w = getWorker();
   return new Promise((resolve, reject) => {
@@ -92,6 +92,7 @@ export async function transcribePcm(pcm, { rate = 16000, onChunk, signal } = {})
     const onMsg = (ev) => {
       const m = ev.data;
       if (m.type === "chunk") onChunk?.(m);
+      else if (m.type === "window") onWindow?.(m); // a 30-second piece has started: { i, n, start, end }
       else if (m.type === "done" || m.type === "error") {
         w.removeEventListener("message", onMsg);
         signal?.removeEventListener("abort", onAbort);

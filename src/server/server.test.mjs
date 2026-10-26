@@ -82,7 +82,8 @@ test("lists and gets jobs; words; 404 for unknown", async () => {
 });
 
 test("PATCH approves and snaps a trim", async () => {
-  const c = job.candidates[0];
+  // the longest clip, so cutting 2 s off its end stays above the shortest length
+  const c = job.candidates.reduce((a, b) => (b.end - b.start > a.end - a.start ? b : a));
   const r = await req("PATCH", `/api/jobs/${job.id}/candidates/${c.id}`, { body: { status: "approved", end: c.end - 2.2 } });
   assert.equal(r.status, 200);
   assert.equal(r.json.status, "approved");

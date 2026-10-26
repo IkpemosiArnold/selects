@@ -154,6 +154,9 @@ export function hasVideo(id) {
   }
 }
 
+/** Whether a picked file is a sound recording (src/browser/copy.js, shared with the tests). */
+export { isAudioFile, fileWord } from "../../../src/browser/copy.js";
+
 /** What the file pickers take: any video, and audio (voice memos, podcasts). */
 export const MEDIA_ACCEPT = "video/*,audio/*,.mkv,.m4a,.mp3,.aac,.wav,.flac,.ogg,.oga,.opus,.webm";
 

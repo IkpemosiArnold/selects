@@ -1,5 +1,7 @@
-// Candidate windows: sentence-snapped sliding windows, a rules prefilter, and a cheap
-// pre-score used to shortlist what the (slow) judge reads.
+// Candidate windows: sentence-snapped sliding windows, windows around delivery peaks
+// (laughter, applause, raised voices) with the setup before them, a rules prefilter, and a
+// cheap pre-score used to shortlist what the (slow) judge reads.
+import { deliveryContext, deliveryFeatures, markCues, peakWindows } from "./delivery.mjs";
 
 // Openers that point back at something the viewer of a short never saw.
 const DANGLING_OPENERS = [
@@ -97,7 +99,9 @@ export function preScore(win, ctx = null) {
   add("number", NUMBER.test(win.text) ? 0.03 : 0);
   add("contrast", Math.min(0.08, ((win.text.match(CONTRAST) || []).length) * 0.02));
   add("softOpener", SOFT_OPENERS.test(first.trim()) ? -0.06 : 0);
-  add("questionEnding", /\?["')\]]*$/.test(last) ? -0.08 : 0);
+  // a question thrown to the listener ("is that too much?", "would you?") invites comments;
+  // any other question ending usually means the answer comes after the clip
+  add("questionEnding", /\?["')\]]*$/.test(last) ? (ASKS_LISTENER.test(last) ? 0.04 : -0.06) : 0);
   add("exclaim", /!["')\]]*$/.test(last) ? 0.03 : 0);
   const wps = words.length / Math.max(1, dur);
   add("pace", wps >= 2.0 && wps <= 3.6 ? 0.06 : wps < 1.4 ? -0.12 : 0);
@@ -106,8 +110,19 @@ export function preScore(win, ctx = null) {
   add("pauses", -Math.min(0.12, pauses * 0.03));
   const fillers = (win.text.match(FILLERS) || []).length / Math.max(1, words.length);
   add("filler", -Math.min(0.2, fillers * 4));
+  // delivery (delivery.mjs): laughter in the window or just after it, a laugh or applause in
+  // its second half (the payoff), raised voices, a faster pace than the recording's usual,
+  // and quick back-and-forth lines. Without sound events, laughter whisper wrote down counts.
+  const d = win.delivery;
+  if (d) {
+    if (d.laughs) add("laughter", Math.min(0.15, 0.04 * d.laughs + 0.2 * (d.laughP || 0)));
+    if (d.late) add("lateBeat", 0.04);
+    if (d.applause) add("applause", 0.03);
+    if (d.energy) add("energy", Math.min(0.06, 0.02 * d.energy));
+    if (d.rate != null) add("rate", d.rate >= 1.15 ? 0.03 : d.rate < 0.7 ? -0.03 : 0);
+    if (d.exchanges >= 2) add("exchanges", Math.min(0.04, 0.01 * d.exchanges));
+  } else if (win.laughs) add("laughter", Math.min(0.08, win.laughs * 0.04));
   // whisper's own confidence: never let the judge spend a call on words it did not really hear
-  if (win.laughs) add("laughter", Math.min(0.08, win.laughs * 0.04));
   if (win.meanP != null) add("confidence", win.meanP < 0.8 ? -Math.min(0.35, (0.8 - win.meanP) * 1.2) : 0);
   if (ctx?.db?.length) {
     const i0 = Math.floor(win.start / ctx.step);
@@ -128,25 +143,39 @@ export function preScore(win, ctx = null) {
 }
 
 const LAUGH_AFTER = 1.5;
+// sentences that set a moment up: a question, or an opener that starts a story, a topic or a turn
+const SETUP_OPENERS = /^(so,? |okay,? |wait,? |now,? |but )?(have you ever|do you|did you|would you|are you|is it|what do you|what would|how do you|why do|i remember|one time|the first time|let me tell you|you know what|here'?s the thing|can i (say|tell)|imagine|picture this|so what|what if)\b/i;
+/** A sentence that sets a moment up: a question, or an opener that starts a story, a topic or a turn. */
+export const isSetup = (text) => /\?["')\]]*$/.test(String(text).trim()) || SETUP_OPENERS.test(String(text).trim());
+// a question to the listener: "you", "anyone", "is that ...?", "would you ...?"
+const ASKS_LISTENER = /\b(you|your|anyone|anybody|everyone|is that|isn'?t that|are we|would you|do you|have you|right)\b[^.!?]*\?["')\]]*$/i;
 
 /**
  * Make sentence-snapped candidate windows.
  * For each start sentence (at least `stride` seconds after the previous start used) it takes
- * up to three end sentences, spread across the allowed length range, then drops windows
- * that open on a dangling reference or end mid-thought.
+ * up to four end sentences, spread across the allowed length range (one near its short end,
+ * where a setup-to-laugh beat usually fits), plus windows around delivery peaks
+ * (delivery.mjs peakWindows: laughter, applause or raised voices, ending just after the beat
+ * and starting on the setup before it). Then it drops windows that open on a dangling
+ * reference or end mid-thought.
+ * `events` are non-speech events (whisper's notes and the on-device sound analysis, sound.mjs);
+ * `words` (speech words) give the confidence and the "(laughter)" marks in `cueText`.
  * @returns Candidate[] (unranked, with a `pre` score; time-ordered ids c_0001...)
  */
-export function makeCandidates(sentences, { minLen = 20, maxLen = 60, stride = 6, keepRejected = false, loudness = null, words = null, events = null } = {}) {
+export function makeCandidates(sentences, { minLen = 20, maxLen = 60, stride = 6, keepRejected = false, loudness = null, words = null, events = null, peaks = true } = {}) {
   const ctx = loudnessContext(loudness);
+  const dctx = deliveryContext({ sentences, events: events || [], loudness });
   // a laugh counts for the window it lands in, or the one it follows within LAUGH_AFTER seconds
   const laughs = (events || []).filter((e) => e.type === "laughter");
   const laughsIn = (s, e) => laughs.filter((x) => x.s >= s && x.s <= e + LAUGH_AFTER).length;
   const wins = [];
   let lastStart = -Infinity;
-  const targets = [0.15, 0.5, 0.9].map((f) => minLen + f * (maxLen - minLen));
+  const targets = [0.04, 0.15, 0.5, 0.9].map((f) => minLen + f * (maxLen - minLen));
   for (let i = 0; i < sentences.length; i++) {
     const s0 = sentences[i];
-    if (s0.s < lastStart + stride) continue;
+    // a setup (a question, or a sentence that opens a story or a turn) can always start a
+    // window: the stride must not skip the line that sets the moment up
+    if (s0.s < lastStart + stride && !isSetup(s0.text)) continue;
     const ends = [];
     for (let j = i; j < sentences.length; j++) {
       const dur = sentences[j].e - s0.s;
@@ -166,6 +195,21 @@ export function makeCandidates(sentences, { minLen = 20, maxLen = 60, stride = 6
       wins.push({ start: s0.s, end: sentences[j].e, sentences: sents, text: sents.map((x) => x.text).join(" "), meanP: words ? windowMeanP(words, sents) : null, laughs: laughsIn(s0.s, sentences[j].e) });
     }
   }
+  // windows around the beats; one that matches a sentence window only marks it as a peak window
+  if (peaks && dctx.beats.length) {
+    const have = new Map(wins.map((w) => [`${w.start}|${w.end}`, w]));
+    for (const p of peakWindows(sentences, dctx.beats, { minLen, maxLen })) {
+      const k = `${p.start}|${p.end}`;
+      if (have.has(k)) {
+        have.get(k).peak ??= p.peak;
+        continue;
+      }
+      const w = { ...p, meanP: words ? windowMeanP(words, p.sentences) : null, laughs: laughsIn(p.start, p.end) };
+      have.set(k, w);
+      wins.push(w);
+    }
+    wins.sort((a, b) => a.start - b.start || a.end - b.end);
+  }
   const out = [];
   for (const w of wins) {
     const s0 = w.sentences[0];
@@ -174,6 +218,8 @@ export function makeCandidates(sentences, { minLen = 20, maxLen = 60, stride = 6
     if (isDanglingOpener(s0.text, { soft: !!s0.soft })) reject = "opens on a reference to earlier context";
     else if (isDanglingEnding(s1.text, { soft: !!s1.soft })) reject = "ends mid-thought";
     if (reject && !keepRejected) continue;
+    if (dctx.beats.length || dctx.wps) w.delivery = deliveryFeatures(w, dctx);
+    const cueText = dctx.beats.length && words ? markCues(words, dctx.beats, w.start, w.end) : null;
     out.push({
       id: null,
       rank: null,
@@ -191,6 +237,9 @@ export function makeCandidates(sentences, { minLen = 20, maxLen = 60, stride = 6
       pre: preScore(w, ctx),
       preParts: w.preParts,
       ...(w.meanP != null ? { meanP: w.meanP } : {}),
+      ...(w.delivery ? { delivery: w.delivery } : {}),
+      ...(w.peak ? { peak: w.peak } : {}),
+      ...(cueText ? { cueText } : {}),
       ...(reject ? { rejected: reject } : {}),
     });
   }
@@ -223,9 +272,12 @@ export function iou(a, b) {
  * Segments: n/3. On inputs over 30 minutes, one per 10 minutes when that is more (never
  * more than n), and no stretch may hold more than `perSegment` picks (default twice its fair share, at least 3),
  * so a 2-hour sermon or podcast gets candidates from the whole of it. Up to 30 minutes
- * the picks are exactly as before (the eval measured those).
+ * the picks are exactly as before (the eval measured those), except for windows around
+ * a laugh or applause (`c.peak`, delivery.mjs): when there are some, the best of them, up to
+ * `peakShare` of n, are taken first, each from a different beat, so a laugh the text rules
+ * cannot see still reaches the judge. (Raised-voice peaks compete on the pre-score.)
  */
-export function shortlist(cands, { n = 8, maxIou = 0.4, duration, minP = 0.45, perSegment } = {}) {
+export function shortlist(cands, { n = 8, maxIou = 0.4, duration, minP = 0.45, perSegment, peakShare = 0.3 } = {}) {
   // drop windows whisper barely heard, as long as enough others are left to choose from
   const heard = cands.filter((c) => c.meanP == null || c.meanP >= minP);
   if (heard.length >= Math.min(n, cands.length) / 2 && heard.length >= 1) cands = heard;
@@ -239,7 +291,16 @@ export function shortlist(cands, { n = 8, maxIou = 0.4, duration, minP = 0.45, p
   const bucketOf = (c) => Math.min(buckets - 1, Math.floor((c.start / dur) * buckets));
   const cap = long ? perSegment ?? Math.max(3, Math.ceil((2 * n) / buckets)) : Infinity;
   const count = new Array(buckets).fill(0);
+  const beatsUsed = new Set();
+  for (const c of byScore) {
+    if (chosen.length >= Math.floor(n * peakShare)) break;
+    if (!c.peak || c.peak.type === "energy" || beatsUsed.has(c.peak.at) || !ok(c) || count[bucketOf(c)] >= cap) continue;
+    chosen.push(c);
+    beatsUsed.add(c.peak.at);
+    count[bucketOf(c)]++;
+  }
   for (let b = 0; b < buckets && chosen.length < n; b++) {
+    if (count[b]) continue; // this stretch already has a peak window
     const best = byScore.find((c) => bucketOf(c) === b && ok(c));
     if (best) {
       chosen.push(best);

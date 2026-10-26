@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 await import("./test-env.mjs");
-const { isIos, measureDownlink, suggestMode, wakeProxy } = await import("./light.js");
+const { canRunLight, isIos, lightState, measureDownlink, suggestMode, wakeProxy } = await import("./light.js");
 const { growingPcm, progressivePieces } = await import("./speech-chunks.js");
 const { dueForPicks, preliminaryPicks } = await import("./preliminary.js");
 const { remoteTranscriber } = await import("./transcribers.js");
@@ -78,7 +78,24 @@ test("wake: one GET /healthz per proxy, never throwing", async () => {
   assert.equal(a.light, true);
   assert.equal(a, b);
   const down = await wakeProxy("https://down.example", { fetchImpl: async () => { throw new Error("offline"); } });
-  assert.deepEqual([down.ok, down.light], [false, false]);
+  assert.deepEqual([down.ok, down.light], [false, null], "a failed check (CORS on a preview, cold, offline) is unknown, never off or on");
+  assert.equal(lightState(down), null);
+  const sick = await wakeProxy("https://sick.example", { fetchImpl: async () => ({ ok: false, json: async () => ({ light: true }) }) });
+  assert.equal(lightState(sick), null, "an error answer says nothing either");
+  assert.equal(lightState(a), true);
+  assert.equal(lightState(await wakeProxy("https://off.example", { fetchImpl: async () => ({ ok: true, json: async () => ({ light: false }) }) })), false);
+});
+
+test("mode: Light is chosen by itself only when it can run (a 3G connection is not enough)", () => {
+  // the live preview: the proxy check failed (CORS), no Groq key, a 3G connection
+  const unknown = canRunLight({ own: false, proxyUrl: "https://proxy.example", shared: null });
+  assert.equal(unknown, false);
+  assert.equal(suggestMode({ connection: { effectiveType: "3g", downlink: 0.8 }, asrCached: false, lightAvailable: unknown }).mode, "private");
+  assert.equal(canRunLight({ own: false, proxyUrl: "https://proxy.example", shared: false }), false);
+  assert.equal(canRunLight({ own: false, proxyUrl: null, shared: true }), false, "no proxy, no shared transcriber");
+  assert.equal(canRunLight({ own: false, proxyUrl: "https://proxy.example", shared: true }), true);
+  assert.equal(canRunLight({ own: true, proxyUrl: null, shared: null }), true, "the person's own key always works");
+  assert.equal(suggestMode({ connection: { effectiveType: "3g" }, asrCached: false, lightAvailable: true }).mode, "light");
 });
 
 // ---------------------------------------------------------------- codecs

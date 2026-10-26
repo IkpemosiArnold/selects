@@ -217,7 +217,7 @@ Selects Web runs the whole pipeline in a browser tab: speech to text, the clip j
 |---|---|---|
 | Private | Everything in the tab: whisper, Gemma and the render | Nothing. The models are downloaded once and cached by the browser |
 | Light | Speech to text on a free hosted whisper (Groq's whisper-large-v3); the judge as in Smart mode; the render in the tab | The audio, compressed to about 0.12 MB a minute, and the text of the shortlisted passages. Never the video |
-| Smart | Whisper and the render in the tab; the judge is Gemma 4 26B on Google's Gemini API | The transcript text of the 8 shortlisted passages, sent to Google. Never the video or the audio |
+| Smart | Whisper and the render in the tab; the judge is Gemma 4 26B on Google's Gemini API | The transcript text of the shortlisted passages (about one per 75 s of recording, with "(laughter)" marks), sent to Google. Never the video or the audio |
 
 **Light mode** is for slow or costly data and for phones: "Light mode sends your audio, not your video, to be transcribed." It is the default whenever the speech model is not already in this browser and Light can run; Private stays one tap away, and stays the default once the speech model is cached. The audio is decoded in 15-second blocks and cut at quiet moments into pieces (30 seconds first, then up to 2 minutes; long silences are not sent), each compressed on the device (Opus at 16 kbps in Ogg through WebCodecs; AAC, MP3 or WAV where Opus encoding is missing) and sent while the rest is still being read. Words come back in order on the recording's clock, and after about 3 minutes of transcript the page shows **early picks**: the best 1 to 3 moments so far by the first-stage score (no model), previewed by playing that stretch of the video with its words drawn on top. Nothing is rendered until you approve a clip, and Gemma's ranking replaces the early picks when the whole video has been heard. Where the browser reports no connection speed (Safari), a timed 1 MB download estimates how long Private would take.
 
@@ -235,6 +235,7 @@ Smart mode works with your own free key from Google AI Studio (kept in the tab f
 | Judge (WebGPU) | MediaPipe LLM Inference | Gemma 4 E2B (2.0 GB, Apache-2.0) |
 | Judge (no WebGPU) | llama.cpp compiled to WebAssembly (wllama) | Gemma 3 1B Q4_0 (722 MB) |
 | Language check | plain JavaScript | lid-lite-5 (1.1 MB) |
+| Laughter and raised voices | ONNX Runtime Web in a worker, one thread | YAMNet (16 MB, Apache-2.0) |
 | Render | each frame drawn on a canvas with the desktop's caption layout, encoded to H.264 and AAC with WebCodecs, muxed to MP4; an audio file's frames are its audiogram (background, meter and mouth from the clip's samples) | none |
 
 The judge reads the same prompt files as the desktop (`src/core/prompts/`), and its answers are scored, blended with the pre-score and put through the listwise round by the same code.
@@ -304,7 +305,7 @@ A clipper that trusts a bad transcript picks bad clips: the windows, the judge, 
 
 - **Transcript quality gate.** After whisper finishes, Selects scores the transcript from whisper's own word probabilities: the mean, the share of words below 0.5, and a check for the loops whisper falls into when it loses the audio (repeated phrases, and text that compresses too well). Eight clean English recordings scored between 0.89 and 0.95. If the transcript is unreliable, Selects stops before judging and says what to try (a bigger model, or the right language); `--force` judges it anyway. If it is shaky, Selects carries on and warns you to check the captions.
 - **Language check with several models, and a question when they disagree.** Whisper's built-in language detector is known to fail on accents, so Selects does not trust it alone. It decodes samples of the video in each likely language, has two small text models read what whisper wrote, and combines the answers with a short written rule. When the answers disagree, it asks you one question instead of guessing. Details are under "Languages and accents" below.
-- **No pretending a weak video is a good one.** If no proposed clip scores 0.55 or more, Selects says "No strong clips in this video" and offers only the closest 2, each with the model's reason. The bar was set from real runs: a private phone video whose clips the model itself called weak scored 0.40 to 0.52, while a conference talk scored 0.56 to 0.68 and the best clip of each of the 6 eval videos scored 0.60 to 0.68. Clips below the bar in an otherwise strong video are marked weak.
+- **No pretending a weak video is a good one.** If no proposed clip scores 0.55 or more, Selects says "No strong clips in this video" and offers only the closest 2, each with the model's reason. The bar was set from real runs: a private phone video whose clips the model itself called weak scored 0.40 to 0.52, while a conference talk scored 0.56 to 0.68 and the best clip of each of the 6 eval videos scored 0.60 to 0.68. Clips below the bar in an otherwise strong video are marked weak. Those numbers come from the first rubric. The current one lets a clip with a real beat score high (a 5, 4, 4 clip a stranger can follow comes to about 0.86 before the blend), so the bar is easier to pass; it has not been recalibrated yet.
 - **A video is transcribed once.** The language check and the transcript are saved per source file, so a second job on the same video (caption mode after clip mode, another `--k`, a different `--made-for`) skips both and starts at the clip finding. The file is recognised by its size, its modified time and its first and last 4 MB, so a copy with the same content is recognised too; another whisper model, language, prompt or audio clean-up makes a new transcript. `--fresh` does both again.
 - **Clips only from words whisper heard.** The first stage marks down windows with low word confidence and keeps them out of the shortlist, so the judge never reads words whisper did not really hear. In the caption review, unsure words are underlined so you can fix those first.
 
@@ -346,20 +347,26 @@ sentences (end punctuation, or a pause of 1.2 s or more)
 windows of whole sentences, 20 to 60 s long
   |
   v
-STAGE 1, no model
-  drop windows that open on a back-reference or end mid-thought
-  pre-score the rest from text, pace and loudness (0 to 1)
-  shortlist the 8 best, spread across the video
+SOUND, on the device (YAMNet, 16 MB)
+  where people laugh, clap or raise their voices
   |
   v
-STAGE 2, Gemma through Ollama
-  one call per window, answer forced to a JSON schema:
-  hook, stands alone, payoff, clarity (1 to 5 each), then a reason
+STAGE 1, no model
+  windows of whole sentences, plus windows around each laugh with the setup before it
+  drop windows that open on a back-reference or end mid-thought
+  pre-score the rest from text, pace, loudness and laughter (0 to 1)
+  shortlist about one window per 75 s of recording, spread across it
+  |
+  v
+STAGE 2, Gemma through Ollama (or Gemma 4 in Smart mode)
+  one call per window, the words marked "(laughter)" where people laughed,
+  answer forced to a JSON schema:
+  moment, share, hook, stands alone (1 to 5 each), then why, then watch
   total = 0.7 x rubric + 0.3 x pre-score
   |
   v
 LISTWISE ROUND, one more call
-  the top 4 distinct windows, first and last sentence only
+  the top 4 distinct windows, with their words (or opening and ending)
   the model orders them best to worst
   total = 0.85 x total + 0.15 x position score
   |
@@ -375,30 +382,40 @@ FAITHFUL CUTS, one call per pick
 quality bar --> you approve (and take or leave each fix) --> render
 ```
 
+### Sound: what the words miss
+
+In a conversation the moments worth posting are often in the delivery: a laugh, voices rising, a quick back and forth. Whisper usually leaves laughter out of the transcript, so before choosing windows Selects listens for it on the device. [YAMNet](https://www.kaggle.com/models/google/yamnet) (Google, Apache-2.0), a 16 MB sound classifier with 521 classes, scores every 0.48 s of the recording; Selects keeps laughter (laughter, giggle, chuckle, belly laugh), applause and cheering, and shouting. It runs through ONNX Runtime: `onnxruntime-node` in the desktop app and ONNX Runtime Web in the browser, downloaded once through the same resumable downloader as the speech model and checked against its SHA-256. On the 2017 laptop it took 37 s for a 51-minute recording. The thresholds were set on three eval talks where whisper had written down the laughter, not on anyone's picks. Without the model (offline on first use, or no runtime), a signal-processing detector looks for the rhythm of laughter (voiced bursts 3.5 to 7 times a second, louder than the talk, often with no words); it is weaker and the job says which one ran. `settings.sound: false` turns the step off.
+
+Raised voices come from the loudness track (bursts of a second or more above the recording's 92nd percentile), the pace from words per second against the recording's median, and quick exchanges from very short sentences ("No way.", "Exactly."), a cheap stand-in for turn-taking because whisper does not say who is speaking.
+
 ### Stage 1: windows and the pre-score
 
-Every window starts and ends on a sentence boundary, so a clip never cuts a word in half. A window is dropped when its first sentence points back at something a viewer never saw (for example "As I said", "That's why" or a lowercase start) or when its last sentence stops mid-thought (for example "let me show you" or a trailing "and").
+Every window starts and ends on a sentence boundary, so a clip never cuts a word in half. Windows start at sentences at least 6 s apart, and always at a setup: a question, or a sentence that opens a story or a turn ("Have you ever...", "I remember...", "What if..."), so a moment's setup is never skipped. Besides windows at the short end, the middle and the long end of the length range, Selects makes windows around each laugh, applause or strong raised-voice peak: they end on the sentence the beat lands in (so the laugh is in the clip) and start a few sentences earlier (so the setup is too). A window is dropped when its first sentence points back at something a viewer never saw (for example "As I said", "That's why" or a lowercase start) or when its last sentence stops mid-thought (for example "let me show you" or a trailing "and").
 
-The pre-score rewards an opening with a hook phrase, a question or a number, a contrast word inside the window, a steady pace without long pauses, and moments louder than the talk's median. It penalises soft openers, filler words and windows that end on a question. The shortlist takes the best window from each third of the video first, then fills up to 8 by score, skipping windows that overlap a chosen one by more than 40%.
+The pre-score rewards an opening with a hook phrase, a question or a number, a contrast word inside the window, a steady pace without long pauses, moments louder than the talk's median, laughter in the window or just after it (more when it comes in the second half, the payoff), a faster pace than usual and quick exchanges. It penalises soft openers and filler words. A window that ends on a question loses a little, unless the question is put to the listener ("would you?"), which invites comments. The shortlist first takes the best windows around laughs (up to 30% of it, one per laugh), then the best window from each stretch of the recording, then fills up by score, skipping windows that overlap a chosen one by more than 40%.
+
+How many windows the judge reads scales with the length: at least 16, and one per 75 s of recording (41 for a 51-minute podcast), capped by a time budget of half the recording's length at the judge's measured speed. Smart mode (about 3 s a call) is never capped; Gemma on a CPU is, and the job says how long the judging will take.
 
 ### Stage 2: the rubric
 
-The full prompt is in [`src/core/prompts/judge.md`](src/core/prompts/judge.md). The model scores each clip as a stranger scrolling a feed would meet it:
+The full prompt is in [`src/core/prompts/judge.md`](src/core/prompts/judge.md). The model scores each clip for what makes a stranger stop scrolling, react and share:
 
 | Score | 1 | 3 | 5 | Weight |
 |---|---|---|---|---|
-| Hook (first sentence) | filler, a greeting or slide talk | a clear topic but no tension | a surprising claim, a sharp question or a real stake | 0.35 |
-| Stands alone | needs earlier context | one reference a viewer must guess | fully self-contained | 0.30 |
-| Payoff (last sentence) | stops mid-thought or promises more later | ends, but fades out | lands an answer, a punchline or an insight | 0.20 |
-| Clarity | several ideas or heavy filler | one idea with some wandering | one tight idea | 0.15 |
+| Moment (the best beat) | filler or setup with no beat | ordinary talk | a joke lands, a hot take, a surprising story, a confession or self-mocking story, an everyday situation told well, a question the speakers argue over, a quotable line, a strong feeling, lively banter | 0.45 |
+| Share | nobody would react | | a relatable truth, a label people argue about, a question everyone can answer | 0.30 |
+| Hook (the first seconds) | slow or confusing | | pulls you in at once | 0.25 |
+| Stands alone | lost even with a one-line caption | followable with a one-line caption | followable with no caption | a gate |
 
-The answer must match a JSON schema with the four scores first and the reason last. If the model runs out of output tokens (80 per call), only the reason is cut short, and Selects keeps the scores. Answers are cached by model and clip text, so a resumed job does not pay for the same call twice.
+Stands alone is a gate, not a score: at 3 or more it costs nothing, at 2 the total is multiplied by 0.92 and at 1 by 0.7. A clip of a conversation that starts mid-chat is normal for the format, so a strong moment that needs a line of context goes through with the note "Needs a one-line caption for context." The prompt tells the model to score what is there, not what is missing (a real laugh or a strong opinion is a 4 or 5 even when the talk is loose), that funny talk turns fast (a sudden change of subject can be the joke), and that "(laughter)" and "(louder)" in the words mark what the sound analysis heard. It names kinds of moments and gives no example sentences, because small models copy examples.
 
-The rubric score is blended with the pre-score (70% and 30%) because the model's scores alone tied too often. In the first full run, all three picks scored 3 for hook and 3 for stands alone, and two of them tied exactly.
+The answer must match a JSON schema with the four scores first, then **why** (15 words or fewer: why it is worth posting, naming its moment) and then **watch** (an optional trim tip or risk). The review card leads with why; watch sits behind a tap. If the model runs out of output tokens (100 per call), only the texts are cut short, and Selects keeps the scores. Answers are cached by model and the words sent, so a resumed job does not pay for the same call twice. Jobs judged with the first rubric (hook, stands alone, payoff, clarity: a strict editor's checklist that called most clips a 2 or 3 and asked for the flaw) still read and score as they did.
+
+The rubric score is blended with the pre-score (70% and 30%) because the model's scores alone tied too often.
 
 ### The listwise round
 
-After the pointwise scores, the 4 best distinct windows go to the model together, as their first and last sentences only, and the model puts them in order with a reason of 10 words or fewer. The first place adds 0.15 to a clip's total and the last adds 0. The prompt is in [`src/core/prompts/listwise.md`](src/core/prompts/listwise.md). Turn the round off with `settings.listwise: false` in the job settings.
+After the pointwise scores, the 4 best distinct windows go to the model together, each as its words with the sound marks (or, past 90 words, its opening and its ending), so it can judge the build-up, the energy and the payoff, and the model puts them in order, the one that makes people stop, laugh or react first, with a reason of 10 words or fewer. The first place adds 0.15 to a clip's total and the last adds 0. The prompt is in [`src/core/prompts/listwise.md`](src/core/prompts/listwise.md). Turn the round off with `settings.listwise: false` in the job settings.
 
 ### Faithful cuts
 
@@ -469,7 +486,7 @@ selects doctor [--json]        show the resolved config; check whisper, Ollama, 
 | `--made-for <p>` | `shorts` | where the clips go: `shorts`, `linkedin`, `x` or `story` (see "Made for" above) |
 | `--min <sec>` | 20 (from `--made-for`) | shortest clip |
 | `--max <sec>` | 60 (from `--made-for`) | longest clip |
-| `--judge-n <n>` | 8 | how many pre-scored windows the model reads (more is slower) |
+| `--judge-n <n>` | auto | how many pre-scored windows the model reads: auto is one per 75 s of recording (at least 16), capped at half the recording's length of judging on a CPU (more is slower) |
 | `--faithful <m>` | `model` | check each pick still says what the speaker meant: `model` (one call per pick), `rules` (no model) or `off` |
 | `--preview` | off | render fast 720x1280 drafts instead of final 1080x1920 clips |
 | `--plain-kit` | off | skip the model for post titles and use the clip's first line |
@@ -550,8 +567,9 @@ The talk's licence may not cover everything on screen. The test talk above is CC
 - The language check has been measured on 10 recordings, not hundreds. It got all 8 English recordings and the Yoruba set right, and asked about the Hausa set instead of getting it right. Whisper's small local models transcribe Yoruba and Hausa poorly (on the Hausa set, whisper's "Hausa" output did not read as Hausa to either text model), so a correct language label does not mean a usable transcript. Igbo has no whisper model at all. The Nigerian-accent routing has fired on one speaker; the text cue for it has not fired on any recording yet. Translated (`--captions en`) and bilingual captions are planned, not built.
 - Face blur needs macOS (Apple's Vision framework). Elsewhere, blur regions by hand. Faces are sampled 4 times a second and boxes are interpolated in between, so a face that moves fast or turns away can slip out of the box for a fraction of a second; check the result before you post.
 - Slide talks usually fall back to "fit". Centre crop is used only when the motion stays in the middle of the frame. In the test talk, the slides fill the frame and the speaker is a small inset in the corner, so all 3 clips were rendered as the full frame over a blurred background, with small slide text. Face tracking is used only for privacy blur, not for reframing.
-- Hook scores cluster. In every run so far, Gemma 3 4B gave every shortlisted window a hook score of 3, so the hook (the highest weight) separates nothing. The blend with the pre-score and the listwise round are there to break the ties.
-- The shortlist limits what the model can find. The judge reads 8 windows by default (`--judge-n`). In eval v2, a perfect pick from those 8 would have put a Most Replayed peak in the top 3 for 53% of the 19 videos, from a shortlist of 16 for 89%, and from all windows for 100%.
+- Scores cluster on small models. Under the first rubric Gemma 3 4B gave every shortlisted window a hook score of 3. The blend with the pre-score and the listwise round are there to break the ties.
+- The shortlist limits what the model can find. The judge reads about one window per 75 s of recording (`--judge-n` sets it). In eval v2, a perfect pick from 8 windows would have put a Most Replayed peak in the top 3 for 53% of the 19 videos, from a shortlist of 16 for 89%, and from all windows for 100%.
+- Laughter detection is tuned on a few recordings. YAMNet hears laughter over speech only weakly (scores of 0.1 to 0.45 where whisper heard a laugh), so quiet chuckles under someone talking are missed. There is no speaker separation: quick exchanges are guessed from short sentences.
 - Audio and text only. The model never sees the video, so it cannot tell when a moment depends on a slide or a demo.
 - Tested on macOS 13 on the machine above. Linux should work with the same prerequisites, but it has not been tested.
 
@@ -564,6 +582,7 @@ The question is whether a free open model picks the moments viewers come back to
 - **Result.** Gemma 4's AUC against replay intensity was 0.56 (95% CI 0.49 to 0.62), where 0.5 is chance. None of the four pre-registered hypotheses is supported at this n: Gemma 4 above chance, Gemma 4 above the stage 1 rules, Gemma 4 above a loudness-and-pace baseline, and the stage 1 rules above chance.
 - **Exploratory (not pre-registered).** The blend the app ranks by (0.7 Gemma score plus 0.3 pre-score) scored 0.57 (0.51 to 0.64). At the effect seen, about 52 videos would be needed for 80% power against chance.
 - **Faithful cuts.** With Gemma 4, the check flagged 10 of 95 top picks. Its precision is not measured yet.
+- **Exploratory: the social-worthiness rubric (26 Oct, not pre-registered).** On the same 19 videos and the same random sample R (rebuilt with the v2 code and checked against v2's cache), the new rubric's Gemma 4 score had AUC 0.53 (0.47 to 0.61) against 0.56 for the first rubric, and the new blend 0.53 (0.46 to 0.60) against 0.57; neither difference is significant (sign-flip p 0.53 and 0.15). Most Replayed in talks and lectures is not what the new rubric aims at, so this shows it is no better at predicting replays, not that it is worse at finding posts. Details: [`eval/results/EXPLORE-exciting.md`](eval/results/EXPLORE-exciting.md), `node eval/explore-exciting.mjs`.
 - **Not done yet.** The blind preference test (`node eval/prefer.mjs`) has no ratings.
 - **Selection parity.** The v2 run predates a fix: the eval did not keep stretches where whisper looped out of the shortlist, as the app does. Rechecking the cached transcripts found no such loops in any of the 19 videos, so the numbers are unchanged; the run was not repeated. See [`eval/results/RESULTS.md`](eval/results/RESULTS.md).
 

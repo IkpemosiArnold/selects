@@ -6,7 +6,8 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { tc } from "../../lib/time.js";
 import { setNow, springTo, current as springNow } from "../../lib/spring.js";
-import { RUBRIC } from "./util.js";
+import { rubricFor } from "./util.js";
+import Why from "./Why.jsx";
 
 function Pips({ n }) {
   return (
@@ -196,13 +197,13 @@ const Sheet = forwardRef(function Sheet({ clip, line, total, waiting, onNudge, o
         <div className="sheet-body" ref={bodyRef} inert={open ? undefined : ""}>
           {clip.reason ? (
             <div className="slate-why">
-              <h2 className="why-h">Why Gemma picked it</h2>
-              <p className="slate-reason">{clip.reason}</p>
+              <h2 className="why-h">Why post it</h2>
+              <Why clip={clip} />
               {clip.scores && (
                 <>
                   <h3 className="why-h">How Gemma scored it, out of 5</h3>
                   <dl className="rubric">
-                    {RUBRIC.map(([k, l]) => (
+                    {rubricFor(clip.scores).map(([k, l]) => (
                       <div key={k}>
                         <dt>{l}</dt>
                         <dd>

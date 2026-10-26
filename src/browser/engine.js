@@ -3,6 +3,8 @@
 // (notes/CONTRACTS.md), run entirely in this tab. Jobs live in memory for the page's life.
 import { attributionLine, captionWithCredit, mediaReminder, normaliseLicense } from "../core/attribution.mjs";
 import { selectCandidates } from "../core/select.mjs";
+import { rateTracker } from "../core/eta.mjs";
+import { soundEvents } from "./sound.js";
 import { applyCueEdits, cuesFromWords, toSrt, toVtt } from "../core/cues.mjs";
 import { nigerianCues } from "../core/langid/cues.mjs";
 import { ng5Predict } from "../core/langid/ng5.mjs";
@@ -37,7 +39,7 @@ const STAGE_LABEL = { probe: "probing", language: "transcribing", transcribe: "t
 /** Desktop defaults (src/core/config.mjs) with the browser's own: judge and kit run on whichever backend is chosen. */
 export const DEFAULT_SETTINGS = {
   // minLen and maxLen come from the "made for" preset (src/core/madefor.mjs) unless set
-  model: null, k: 5, madeFor: "shorts", faithful: "model", preset: "shorts", judgeN: 8, listwise: true,
+  model: null, k: 5, madeFor: "shorts", faithful: "model", preset: "shorts", judgeN: null, listwise: true, // judgeN null: auto, scaled with the length (select.mjs judgeCount)
   credit: null, license: null, sourceUrl: null, mode: "clips", language: "en", captions: true, kit: "model",
   asrDevice: "auto", // "auto" (WebGPU when there is an adapter), "webgpu" or "wasm"
   asrModel: "auto", // "auto" (tiny.en on phones and small-memory devices, base.en elsewhere), "base" or "tiny"
@@ -299,7 +301,6 @@ export class Engine {
     let current = null;
     const awake = typeof document !== "undefined" ? keepAwake() : null;
     const title = typeof document !== "undefined" ? titleProgress("Selects") : null;
-    const WEIGHT = { probe: [0, 0.02], transcribe: [0.02, 0.6], candidates: [0.6, 0.61], judge: [0.61, 1] };
     const begin = (s) => {
       current = s;
       job.stage = STAGE_LABEL[s];
@@ -307,12 +308,21 @@ export class Engine {
       job.updatedAt = now();
       this.emit(id, "stage", { stage: job.stage, name: s, state: { ...job.stages[s] } });
     };
+    const STEP_TITLE = { probe: "Opening", transcribe: "Transcribing", candidates: "Finding moments", judge: "Judging", render: "Rendering" };
     const progress = (s, p) => {
-      Object.assign(job.stages[s], { progress: +(p.progress ?? 0).toFixed(3), etaSec: p.etaSec ?? null, ...(p.note ? { note: p.note } : {}) });
-      const [a, b] = WEIGHT[s] || [0, 1];
-      title?.set(a + (b - a) * (p.progress ?? 0));
+      // etaAt: when the estimate was made, so the page counts it down every second between updates;
+      // etaLow/etaHigh: a range when the recent speed is unsteady; part and piece: where whisper is
+      Object.assign(job.stages[s], { progress: +(p.progress ?? 0).toFixed(3), etaSec: p.etaSec ?? null, etaAt: p.etaSec != null ? Date.now() : null, etaLow: p.etaLow ?? null, etaHigh: p.etaHigh ?? null, ...(p.note ? { note: p.note } : {}), ...(p.part !== undefined ? { part: p.part } : {}), ...(p.piece !== undefined ? { piece: p.piece } : {}) });
+      // the tab title shows the same number as the step on the page: this step's own progress
+      title?.set(p.progress ?? 0, STEP_TITLE[s]);
       this.emit(id, "progress", { name: s, ...job.stages[s], ...(p.speed != null ? { speed: +p.speed.toFixed(2) } : {}), ...(p.download ? { download: p.download } : {}) });
     };
+    // a piece of whisper started: say which, and when, without changing the estimate
+    const pieceStarted = (s, piece) => {
+      job.stages[s].piece = piece;
+      this.emit(id, "progress", { name: s, ...job.stages[s] });
+    };
+    progress.piece = pieceStarted;
     const finish = (s, note) => {
       Object.assign(job.stages[s], { status: "done", endedAt: now(), progress: 1, etaSec: 0, ...(note ? { note } : {}) });
       job.timings[s] = +((Date.parse(job.stages[s].endedAt) - Date.parse(job.stages[s].startedAt)) / 1000).toFixed(1);
@@ -348,7 +358,7 @@ export class Engine {
         await this.save(r, "probe");
       }
       // the honest limit: phones over about 30 minutes, any tab over an hour
-      job.warning = longVideoNote(job.source.duration) ?? (job.source.duration > 20 * 60 ? "This video is longer than 20 minutes, so transcribing it in the tab takes a while. The desktop app is faster." : null);
+      job.warning = longVideoNote(job.source.duration, { audio: isAudioOnly(job.source) }) ?? (job.source.duration > 20 * 60 ? `This ${isAudioOnly(job.source) ? "recording" : "video"} is longer than 20 minutes, so transcribing it in the tab takes a while. The desktop app is faster.` : null);
       if (r.file && !isAudioOnly(job.source)) {
         try {
           const t = await makeThumbs(r.file, job.source.duration);
@@ -418,7 +428,9 @@ export class Engine {
         });
         progress("transcribe", { progress: 0.06, note: `transcribing on ${asr.device === "webgpu" ? "the GPU" : "the CPU"}` });
         const t1 = performance.now();
+        const eta = rateTracker(job.source.duration);
         const res = await transcribePcm(r.pcm, {
+          onWindow: (m) => progress.piece("transcribe", { i: m.i + 1, n: m.n, start: m.start, end: m.end, at: Date.now() }),
           onChunk: (m) => {
             const split = splitNonSpeech(m.words);
             r.words.push(...split.words);
@@ -427,8 +439,8 @@ export class Engine {
             publishPicks(this, r, m.processed, r.pcm); // early picks after the first minutes
             const wall = (performance.now() - t1) / 1000;
             const speed = m.processed / Math.max(0.1, wall);
-            const left = job.source.duration - m.processed;
-            progress("transcribe", { progress: 0.06 + 0.94 * (m.processed / job.source.duration), speed, etaSec: Math.round(left / speed), note: `transcribing at ${speed.toFixed(1)}x real time` });
+            const e = eta.update(m.processed);
+            progress("transcribe", { progress: 0.06 + 0.94 * (m.processed / job.source.duration), speed: e.rate ?? speed, etaSec: e.etaSec, etaLow: e.steady ? null : e.lowSec, etaHigh: e.steady ? null : e.highSec, note: `transcribing at ${(e.rate ?? speed).toFixed(1)}x real time` });
           },
         });
         job.loudness = loudnessFromPcm(r.pcm);
@@ -443,9 +455,40 @@ export class Engine {
       // 3. candidates: reused only when the saved shortlist was selected from this transcript
       // with these settings (signatures.mjs). The browser has no transcript-quality check yet,
       // so there are no loop stretches to keep out (README, Limits).
-      const selSettings = { ...job.settings, judgeN: job.settings.judgeN ?? 8 };
+      // how many windows the judge reads: set by the person, or auto (judgeCount in select.mjs),
+      // scaled with the length and capped by a time budget at this route's speed: about 3 s a
+      // call in Smart and Light mode, about 25 s on this device (Gemma in the tab)
+      // sound events (sound.js: YAMNet in a worker, or the fallback detector): laughter and
+      // raised voices the words miss. Once per recording, saved with the job.
+      if (job.settings.sound !== false) {
+        let rec = await this.store.part(r.key, "sound").catch(() => null);
+        if (!rec?.events) {
+          begin("candidates");
+          progress("candidates", { progress: 0, note: "listening for laughter" });
+          try {
+            rec = await soundEvents(job.source.duration, (a, b) => this.pcmRange(r, a, b), {
+              words: r.words,
+              onProgress: (p) => progress("candidates", { progress: 0.9 * p, note: "listening for laughter" }),
+              onDownload: (d) => progress("candidates", { progress: 0, note: `getting the sound model: ${Math.round(d.loaded / 1e6)} of ${Math.round(d.total / 1e6)} MB`, download: d.cached ? undefined : { loaded: d.loaded, total: d.total } }),
+            });
+            await this.store.savePart(r.key, "sound", rec).catch(() => {});
+          } catch (e) {
+            if (e?.name === "AbortError") throw e;
+            rec = null;
+            job.sound = { by: null, error: String(e?.message || e).slice(0, 200) };
+          }
+        }
+        if (rec?.events) {
+          job.sound = { by: rec.by, events: rec.events.length, laughter: rec.events.filter((e) => e.type === "laughter").length, sec: rec.sec ?? null, ...(rec.why ? { why: rec.why } : {}) };
+          r.soundEvents = rec.events;
+        }
+      }
+      const events = [...(r.events || []), ...(r.soundEvents || [])].sort((a, b) => a.s - b.s);
+      const route = (await this.frozenProfile(r)).mode;
+      const judgeRate = route === "smart" || route === "light" ? 3 : 25;
+      const selSettings = { ...job.settings, judgeN: job.settings.judgeN ?? null, judgeSecPerCall: judgeRate, judgeBudgetSec: route === "smart" || route === "light" ? null : Math.max(300, 0.25 * (job.source.duration || 0)) };
       const exclude = [];
-      const selSig = selectionSignature({ transcript: transcriptHash({ words: r.words, events: r.events, loudness: job.loudness }), settings: selSettings, duration: job.source.duration, exclude });
+      const selSig = selectionSignature({ transcript: transcriptHash({ words: r.words, events, loudness: job.loudness }), settings: selSettings, duration: job.source.duration, exclude, secPerCall: judgeRate });
       let short;
       const savedShort = has("candidates") && sigs.candidates === selSig ? await this.store.part(r.key, "shortlist") : null;
       if (savedShort) {
@@ -455,7 +498,7 @@ export class Engine {
         begin("candidates");
         // the same selection path as the desktop app and the eval (src/core/select.mjs);
         // never fewer windows than k clips need (30 clips cannot come out of 8 judged windows)
-        const sel = selectCandidates({ words: r.words, events: r.events, loudness: job.loudness, settings: selSettings, duration: job.source.duration, exclude });
+        const sel = selectCandidates({ words: r.words, events, loudness: job.loudness, settings: selSettings, duration: job.source.duration, exclude, judge: { secPerCall: judgeRate, budgetSec: selSettings.judgeBudgetSec ?? undefined } });
         const all = sel.windows;
         short = sel.shortlist;
         job.windows = all.length;
@@ -541,19 +584,24 @@ export class Engine {
     const t0 = performance.now();
     let decodeSec = partial?.decodeSec || 0;
     let td = performance.now();
+    const eta = rateTracker(dur, { startDone: startAt });
+    const parts = Math.ceil(dur / 600);
     for await (const seg of decodeAudioSegments(r.file, { duration: dur, startAt, firstIndex: segs.length })) {
       decodeSec += (performance.now() - td) / 1000;
       await this.pcm.put(r.key, seg.index, seg.pcm);
+      const part = { i: seg.index + 1, n: parts, start: seg.start, end: seg.end };
+      progress("transcribe", { progress: Math.min(0.999, seg.start / dur), etaSec: eta.estimate(seg.start).etaSec, part, note: `transcribing part ${part.i} of ${parts} on ${where}` });
       await transcribePcm(seg.pcm, {
+        onWindow: (m) => progress.piece("transcribe", { i: m.i + 1, n: m.n, start: +(seg.start + m.start).toFixed(2), end: +(seg.start + m.end).toFixed(2), at: Date.now() }),
         onChunk: (m) => {
           const split = splitNonSpeech(m.words.map((w) => ({ ...w, s: +(w.s + seg.start).toFixed(3), e: +(w.e + seg.start).toFixed(3) })));
           r.words.push(...split.words);
           r.events.push(...split.events);
           if (split.words.length) this.emit(job.id, "words", split.words);
           const heard = seg.start + m.processed;
-          const wall = (performance.now() - t0) / 1000;
-          const speed = (heard - startAt) / Math.max(0.1, wall);
-          progress("transcribe", { progress: Math.min(0.999, heard / dur), speed, etaSec: speed > 0 ? Math.round((dur - heard) / speed) : null, note: `transcribing on ${where} at ${speed.toFixed(1)}x real time, part ${seg.index + 1} of about ${Math.ceil(dur / 600)}` });
+          const e = eta.update(heard);
+          const speed = e.rate ?? (heard - startAt) / Math.max(0.1, (performance.now() - t0) / 1000);
+          progress("transcribe", { progress: Math.min(0.999, heard / dur), speed, etaSec: e.etaSec, etaLow: e.steady ? null : e.lowSec, etaHigh: e.steady ? null : e.highSec, part, note: `transcribing on ${where} at ${speed.toFixed(1)}x real time, part ${part.i} of ${parts}` });
         },
       });
       db.push(...loudnessFromPcm(seg.pcm).db);

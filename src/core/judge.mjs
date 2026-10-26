@@ -3,13 +3,13 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { config, ollamaUrl, PROMPTS_DIR, selectsHome } from "./config.mjs";
-import { applyListOrder, blend, clamp, combine, JUDGE_SCHEMA as SCHEMA, judgeMessages, listMessages, listSchema, parseListAnswer, salvageJudge, splitPrompt, tidyReason } from "./judge-core.mjs";
+import { applyListOrder, blend, combine, JUDGE_MAX_TOKENS, JUDGE_SCHEMA as SCHEMA, judgeMessages, judgeText, listMessages, listSchema, parseListAnswer, readJudge, salvageJudge, splitPrompt } from "./judge-core.mjs";
 import { appendJsonLine, readJson, sha1, writeJsonAtomic } from "./util.mjs";
 import { MADE_FOR, madeForBlock } from "./madefor.mjs";
 
 // The rubric weights, the blend, the JSON schemas, answer parsing and the listwise maths
 // have no Node imports (judge-core.mjs), so the browser build scores clips the same way.
-export { WEIGHTS, BLEND, LIST_WEIGHT, blend, combine, salvageJudge, parseListAnswer, applyListOrder, splitPrompt, judgeMessages, listMessages, listSchema, tidyReason } from "./judge-core.mjs";
+export { WEIGHTS, BLEND, LIST_WEIGHT, RUBRIC_KEYS, blend, combine, readJudge, salvageJudge, parseListAnswer, applyListOrder, splitPrompt, judgeMessages, listMessages, listSchema, tidyReason } from "./judge-core.mjs";
 
 let promptCache = null;
 /** Load prompts/judge.md and split it into the system and user parts. */
@@ -93,10 +93,10 @@ export function threadOption() {
 
 /**
  * Low-level: one structured chat request to Ollama. Returns { data, stats }.
- * Options follow the measured budget: short output (num_predict 80), a 2048 context,
+ * Options follow the measured budget: short output (num_predict 100 for a judge answer), a 2048 context,
  * the model kept loaded for 30 minutes between calls, and temperature 0.2.
  */
-export async function ollamaJson({ model, messages, schema, timeoutMs = 60 * 60 * 1000, numPredict = 80, signal }) {
+export async function ollamaJson({ model, messages, schema, timeoutMs = 60 * 60 * 1000, numPredict = JUDGE_MAX_TOKENS, signal }) {
   const body = {
     model,
     messages,
@@ -131,8 +131,8 @@ export async function ollamaJson({ model, messages, schema, timeoutMs = 60 * 60 
 }
 
 /**
- * Score candidates with the rubric. Returns new candidate objects with scores, total and
- * reason. Results are cached by hash(model + prompt version + clip text), so a resumed or
+ * Score candidates with the rubric. Returns new candidate objects with scores, judgeTotal,
+ * total, why (and reason, the same text) and watch. Results are cached by hash(model + prompt version + clip text), so a resumed or
  * repeated run only pays for clips it has not seen.
  * @param {object[]} candidates
  * @param {{model:string, cacheDir?:string, onProgress?:Function, onResult?:Function, signal?:AbortSignal, request?:Function}} opts
@@ -152,7 +152,7 @@ export async function judge(candidates, { model, cacheDir, onProgress, onResult,
   for (let i = 0; i < candidates.length; i++) {
     if (signal?.aborted) throw signal.reason ?? new Error("aborted");
     const c = candidates[i];
-    const key = sha1(`${model}|${prompt.version}|${extra ? `${sha1(extra).slice(0, 8)}|` : ""}${c.text.trim()}`);
+    const key = sha1(`${model}|${prompt.version}|${extra ? `${sha1(extra).slice(0, 8)}|` : ""}${judgeText(c)}`);
     let hit = cache[key];
     if (!hit) {
       const started = Date.now();
@@ -175,15 +175,16 @@ export async function judge(candidates, { model, cacheDir, onProgress, onResult,
         }
       }
       const d = res.data ?? res;
-      const scores = { hook: clamp(d.hook), standalone: clamp(d.standalone), payoff: clamp(d.payoff), clarity: clamp(d.clarity) };
-      hit = { scores, reason: tidyReason(d.reason), sec: +((Date.now() - started) / 1000).toFixed(2), stats: res.stats ?? null };
+      const r = readJudge(d);
+      hit = { scores: r.scores, reason: r.why, why: r.why, watch: r.watch, sec: +((Date.now() - started) / 1000).toFixed(2), stats: res.stats ?? null };
       logCall(res.stats, d.truncated ? { truncated: true } : {});
       times.push(hit.sec);
       cache[key] = hit;
       if (cacheFile) writeJsonAtomic(cacheFile, cache);
     }
     const judgeTotal = combine(hit.scores);
-    const judged = { ...c, scores: hit.scores, judgeTotal, total: blend(judgeTotal, c.pre), reason: hit.reason };
+    // why leads the review card; watch (a critique or trim tip, often null) sits behind a tap
+    const judged = { ...c, scores: hit.scores, judgeTotal, total: blend(judgeTotal, c.pre), reason: hit.reason, why: hit.why ?? hit.reason, watch: hit.watch ?? null };
     out.push(judged);
     onResult?.(judged);
     const secPer = times.length ? times.reduce((a, b) => a + b, 0) / times.length : null;

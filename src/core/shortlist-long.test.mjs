@@ -39,25 +39,33 @@ function oldShortlist(cands, { n = 8, maxIou = 0.4, duration, minP = 0.45 } = {}
   return chosen.sort((a, b) => a.start - b.start);
 }
 
-test("judgeCount: max(16, 2k), one per 5 minutes, capped by the time budget but never below what k needs", () => {
+test("judgeCount: max(16, 2k), one per 75 s, capped by the time budget but never below what k needs", () => {
   assert.equal(judgeCount({ k: 5, duration: 360 }).n, 16);
+  assert.equal(judgeCount({ k: 3, duration: 900 }).n, 16, "a 15-minute talk reads 16, as before");
+  assert.equal(judgeCount({ k: 3, duration: 3060 }).n, 41, "a 51-minute podcast reads 41 windows (was 16)");
   assert.equal(judgeCount({ k: 30, duration: 3849 }).n, 60);
-  assert.equal(judgeCount({ k: 5, duration: 7316 }).n, 25, "one per 5 minutes of a 2-hour video");
+  assert.equal(judgeCount({ k: 5, duration: 7316 }).n, 98, "one per 75 s of a 2-hour video");
   // local Gemma at 70 s a call and a 20-minute budget: 17 calls, but 30 clips need 36
   const local = judgeCount({ k: 30, duration: 7316, secPerCall: 70, budgetSec: 1200 });
   assert.deepEqual([local.n, local.capped, local.floor], [36, true, 36]);
   // the default budget is half the video: 61 minutes of judging for a 2-hour video
   assert.equal(judgeCount({ k: 30, duration: 7316, secPerCall: 70 }).n, 52);
+  // on-device Gemma at 100 s a call on a 51-minute podcast: half the length buys 15 windows, and it says how long
+  const cpu = judgeCount({ k: 3, duration: 3060, secPerCall: 100 });
+  assert.deepEqual([cpu.n, cpu.capped, cpu.estSec], [15, true, 1500]);
   assert.equal(judgeCount({ k: 3, duration: 360, secPerCall: 70 }).n, 8, "a 6-minute talk on local Gemma: 10 minutes of judging");
   assert.equal(judgeCount({ k: 3, duration: 360, secPerCall: 70, budgetSec: 1200 }).n, 16);
   assert.equal(judgeCount({ k: 3, duration: 360, secPerCall: 100, budgetSec: 1200 }).n, 12);
   // Smart mode at 3 s a call: the budget does not bind
-  assert.equal(judgeCount({ k: 30, duration: 7316, secPerCall: 3 }).n, 60);
+  assert.equal(judgeCount({ k: 30, duration: 7316, secPerCall: 3 }).n, 98);
+  const smart = judgeCount({ k: 3, duration: 3060, secPerCall: 3 });
+  assert.deepEqual([smart.n, smart.capped, smart.estSec], [41, false, 123]);
   assert.equal(judgeCount({ k: 100, duration: 7316 }).n, JUDGE_MAX);
 });
 
 test("judgeCount keeps an explicit judgeN, raised only to what k clips need", () => {
-  assert.deepEqual(judgeCount({ k: 5, judgeN: 8 }), { n: 8, auto: false, capped: false, floor: 6 });
+  assert.deepEqual(judgeCount({ k: 5, judgeN: 8 }), { n: 8, auto: false, capped: false, floor: 6, estSec: null });
+  assert.equal(judgeCount({ k: 5, judgeN: "", duration: 360 }).auto, true, "an empty field is auto");
   assert.equal(judgeCount({ k: 30, judgeN: 8 }).n, 36);
   assert.equal(judgeCount({ judgeN: 8 }).n, 8, "no k (the eval): exactly as asked");
   assert.equal(judgeCount({ k: 5, judgeN: "auto", duration: 360 }).n, 16);

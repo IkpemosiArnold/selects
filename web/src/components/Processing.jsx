@@ -4,6 +4,7 @@ import { tc, aboutMinutes } from "../lib/time.js";
 import { useReducedMotion } from "../lib/hooks.js";
 import { languageName } from "../lib/languages.js";
 import { api, MEDIA_ACCEPT } from "../lib/api.js";
+import { countDown, leftText } from "../../../src/core/eta.mjs";
 import { useNotifyOptIn } from "../lib/notify.js";
 import EarlyPicks from "./EarlyPicks.jsx";
 
@@ -118,8 +119,32 @@ function Reveal({ words, active, reduce }) {
   );
 }
 
+/** Re-render every second while `on`, so counters move between progress updates. Returns Date.now(). */
+function useClock(on) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!on) return undefined;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [on]);
+  return now;
+}
+
+/**
+ * When the stage's estimate was made: the engine says (etaAt); otherwise the moment this page
+ * first saw that estimate, so it can still count down between updates.
+ */
+function useEtaAt(eta, etaAt) {
+  const seen = useRef({ eta: null, at: null });
+  if (eta !== seen.current.eta) seen.current = { eta, at: Date.now() };
+  return etaAt ?? seen.current.at;
+}
+
 export default function Processing({ job, words, onResume }) {
   const reduce = useReducedMotion();
+  // a recording with no picture is not called a video, and gets no clapperboard
+  const audio = job.source?.hasVideo === false;
+  const what = audio ? "recording" : "video";
   const [resuming, setResuming] = useState(false);
   const [fileErr, setFileErr] = useState(null);
   const dur = job.source?.duration || 0;
@@ -150,7 +175,17 @@ export default function Processing({ job, words, onResume }) {
   }
   // Light mode transcribes on the free hosted whisper, not on this device
   const remote = api.getMode?.()?.mode === "light";
-  const speedText = speed ? `${speed >= 1 ? `${speed.toFixed(1)} times faster than` : `${(1 / speed).toFixed(1)} times slower than`} the video plays${remote ? "" : `, on this ${api.browser ? "device" : "laptop"}`}.` : "";
+  const speedText = speed ? `${speed >= 1 ? `${speed.toFixed(1)} times faster than` : `${(1 / speed).toFixed(1)} times slower than`} the ${what} plays${remote ? "" : `, on this ${api.browser ? "device" : "laptop"}`}.` : "";
+  // the clock: "Left" counts down every second, and the piece whisper is on shows its elapsed time
+  const running = !isErr && (job.stage === "transcribing" || stage === "judging" || stage === "candidates");
+  const clock = useClock(running);
+  const trEtaAt = useEtaAt(eta ?? null, tr.etaAt ?? null);
+  const jdEtaAt = useEtaAt(jd.etaSec ?? null, jd.etaAt ?? null);
+  const etaNow = countDown(eta ?? null, (clock - trEtaAt) / 1000);
+  const shrink = (x, at) => (x == null ? null : countDown(x, (clock - at) / 1000));
+  const piece = job.stage === "transcribing" && tr.piece?.at ? tr.piece : null;
+  const pieceText = piece ? `Working on ${tc(piece.start)} to ${tc(piece.end)}, for ${tc(Math.max(0, (clock - piece.at) / 1000))} so far.` : "";
+  const part = job.stage === "transcribing" && tr.part?.n > 1 ? tr.part : null;
   const leave = api.browser
     ? "Keep this tab open to finish faster. If you leave, it carries on when you come back."
     : "You can close this tab. Progress is saved.";
@@ -171,7 +206,7 @@ export default function Processing({ job, words, onResume }) {
       ? "Say which language is spoken, or try a bigger speech model, and Selects transcribes it again."
       : plainHint(job.error?.hint) || "Resume to carry on from the last saved step.";
   } else if (job.stage === "queued") {
-    headline = "Waiting for the video ahead of this one.";
+    headline = "Waiting for the file ahead of this one.";
     sub = "It starts by itself. You can close the laptop lid, and progress is saved after each step.";
   } else if (job.stage === "probing") {
     headline = "Opening the file.";
@@ -182,17 +217,20 @@ export default function Processing({ job, words, onResume }) {
   } else if (dl) {
     // the browser engine downloads its models the first time, then keeps them
     headline = dl.key === "judge" ? "Downloading Gemma, once." : "Downloading the speech model, once.";
-    sub = `${mb(dl.loaded)} of ${mb(dl.total)}. Later videos use the copy kept in this browser. ${leave}`;
+    sub = `${mb(dl.loaded)} of ${mb(dl.total)}. Later files use the copy kept in this browser. ${leave}`;
   } else if (job.stage === "transcribing" && /Getting ready/.test(tr.note || "")) {
     // Light mode: the free transcriber sleeps when idle (it was woken when the page opened)
     headline = "Getting ready...";
     sub = "The free transcriber sleeps when nobody uses it, so this can take up to a minute.";
   } else if (job.stage === "transcribing") {
-    headline = "Transcribing what's said.";
-    sub = eta != null ? `${cap(aboutMinutes(eta))} left. ${speedText} ${leave}` : `Timing the speed on this ${api.browser ? "device" : "laptop"}. ${leave}`;
+    headline = part ? `Transcribing what's said, part ${part.i} of ${part.n}.` : "Transcribing what's said.";
+    sub = etaNow != null
+      ? `${cap(leftText(etaNow, shrink(tr.etaLow, trEtaAt), shrink(tr.etaHigh, trEtaAt)))}. ${speedText} ${pieceText} ${leave}`
+      : `Timing the speed on this ${api.browser ? "device" : "laptop"}. ${pieceText || (tr.startedAt ? `Started ${tc(Math.max(0, (clock - Date.parse(tr.startedAt)) / 1000))} ago.` : "")} ${leave}`;
   } else if (stage === "candidates") {
-    headline = "Finding moments that start and end on a full sentence.";
-    sub = "This takes a few seconds.";
+    const note = String(st.candidates?.note || "");
+    headline = /laughter/i.test(note) ? "Listening for laughter and raised voices." : "Finding moments that start and end on a full sentence.";
+    sub = /laughter/i.test(note) ? `A small sound model on this ${api.browser ? "device" : "laptop"} hears what the words miss. ${leave}` : "This takes a few seconds.";
   } else {
     const note = String(jd.note || "");
     if (/waking/i.test(note)) {
@@ -203,7 +241,7 @@ export default function Processing({ job, words, onResume }) {
       sub = leave;
     } else {
       headline = note && /\d/.test(note) && !/model/i.test(note) ? `Gemma is reading ${note}.` : "Gemma is reading each moment.";
-      sub = `${jd.etaSec != null ? `${cap(aboutMinutes(jd.etaSec))} left. ` : ""}${leave}`;
+      sub = `${jd.etaSec != null ? `${cap(leftText(shrink(jd.etaSec, jdEtaAt), shrink(jd.etaLow, jdEtaAt), shrink(jd.etaHigh, jdEtaAt)))}. ` : ""}${leave}`;
     }
   }
 
@@ -217,19 +255,21 @@ export default function Processing({ job, words, onResume }) {
 
   const steps = STEPS.filter((s) => st[s.key] && st[s.key].status !== "skipped" && !(captionMode && (s.key === "candidates" || s.key === "judge")));
   const stepNow = steps.find((s) => st[s.key]?.status === "running" || st[s.key]?.status === "error");
-  const left = job.stage === "transcribing" ? eta : stage === "judging" ? jd.etaSec : null;
+  const left = job.stage === "transcribing" ? etaNow : stage === "judging" ? shrink(jd.etaSec ?? null, jdEtaAt) : null;
 
   return (
     <div className="proc">
       <Masthead job={job} />
       <main className="proc-stage">
         <section className="proc-left" aria-live="polite">
-          <div className="slate is-proposed">
-            <div className="slate-clap" aria-hidden="true">
-              <div className="slate-stick" />
-              <div className="slate-hinge" />
-              <div className="slate-stick slate-stick-base" />
-            </div>
+          <div className={"slate is-proposed" + (audio ? " is-audio" : "")}>
+            {!audio && (
+              <div className="slate-clap" aria-hidden="true">
+                <div className="slate-stick" />
+                <div className="slate-hinge" />
+                <div className="slate-stick slate-stick-base" />
+              </div>
+            )}
             <div className="slate-board">
               <dl className="slate-fields">
                 <div>
@@ -245,11 +285,11 @@ export default function Processing({ job, words, onResume }) {
                 </div>
                 <div>
                   <dt>Length</dt>
-                  <dd>{tc(dur)}</dd>
+                  <dd className={dur >= 3600 ? "is-hours" : undefined}>{tc(dur)}</dd>
                 </div>
                 <div>
                   <dt>Left</dt>
-                  <dd>{left != null ? tc(left) : "--:--"}</dd>
+                  <dd className={left >= 3600 ? "is-hours" : undefined}>{left != null ? tc(left) : "--:--"}</dd>
                 </div>
               </dl>
               <h1 className={"slate-line is-mid proc-headline" + (isErr ? " is-error" : "")}>{headline}</h1>
@@ -265,7 +305,7 @@ export default function Processing({ job, words, onResume }) {
             {needsFile && (
               <>
                 <button className="btn btn-mark btn-big proc-resume" disabled={resuming} onClick={() => fileRef.current?.click()}>
-                  {resuming ? "Checking the file" : `Choose ${job.source?.name || "the video"} again`}
+                  {resuming ? "Checking the file" : `Choose ${job.source?.name || `the ${what}`} again`}
                 </button>
                 <input
                   ref={fileRef}
@@ -365,8 +405,9 @@ export default function Processing({ job, words, onResume }) {
                 return (
                   <li key={s.key} className={"step is-" + state} aria-current={state === "running" ? "step" : undefined}>
                     <span className="step-mark" aria-hidden="true" />
-                    <span>{s.label}</span>
-                    {state === "running" && st[s.key]?.progress > 0 && <span className="step-pct mono">{Math.round(st[s.key].progress * 100)}%</span>}
+                    <span>{s.label}{state === "running" && s.key === "transcribe" && part ? <span className="step-part">, part {part.i} of {part.n}</span> : null}</span>
+                    {/* this step's own progress: the tab title shows the same number */}
+                    {state === "running" && st[s.key]?.progress > 0 && <span className="step-pct mono" title="This step's progress">{Math.round(st[s.key].progress * 100)}%</span>}
                     <span className="sr-only">{state === "done" ? ", done" : state === "running" ? ", in progress" : state === "error" ? ", stopped" : ""}</span>
                   </li>
                 );

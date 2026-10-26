@@ -239,6 +239,10 @@ kbd {
   gap: clamp(28px, 5vw, 80px); padding: 32px var(--gutter);
 }
 .proc-left .slate { gap: 16px; }
+/* hours need room: "Left 2:19:25" was cut off at the card's edge on a 1440 px screen */
+.proc-left .slate-fields { grid-template-columns: 0.8fr 1fr 1.05fr 1.15fr; }
+.proc-left .slate-fields dd.is-hours { font-size: 1.0625rem; letter-spacing: -0.01em; }
+.step-part { font-weight: 450; color: var(--ink-2); }
 .proc-headline { cursor: default; }
 .proc-headline.is-error { color: var(--slate-red); }
 /* the "Stopped" stamp sits in a strip kept clear below the error, so a long message never runs under it (375 to 430 px phones) */

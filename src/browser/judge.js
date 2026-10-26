@@ -1,7 +1,7 @@
 // The judge stage in the browser: the same rubric, scoring, blend, listwise round, ranking
 // and curve as the desktop (src/core/judge-core.mjs, rank.mjs), with the call itself made
 // by whichever backend runs here (llm.js).
-import { applyListOrder, blend, clamp, combine, tidyReason } from "../core/judge-core.mjs";
+import { applyListOrder, blend, combine, readJudge } from "../core/judge-core.mjs";
 import { plainKit } from "../core/kit-core.mjs";
 import { curve, rank } from "../core/rank.mjs";
 import { buildTask, readTask } from "../core/tasks.mjs";
@@ -39,9 +39,10 @@ async function ask(llm, task) {
 const FALLBACK_NOTE = "Google's free Gemma was slow, so this clip was judged on your device.";
 
 function scored(c, d, extra = {}) {
-  const scores = { hook: clamp(d.hook), standalone: clamp(d.standalone), payoff: clamp(d.payoff), clarity: clamp(d.clarity) };
+  const { scores, why, watch } = readJudge(d);
   const judgeTotal = combine(scores);
-  return { ...c, scores, judgeTotal, total: blend(judgeTotal, c.pre), reason: tidyReason(d.reason), ...extra };
+  // why leads the review card; watch (a critique or trim tip, often null) sits behind a tap
+  return { ...c, scores, judgeTotal, total: blend(judgeTotal, c.pre), reason: why, why, watch, ...extra };
 }
 
 /**

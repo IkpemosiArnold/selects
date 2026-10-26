@@ -3,7 +3,8 @@
 // when a clip is approved. Everything else on the page stays still.
 import { forwardRef } from "react";
 import { tc } from "../../lib/time.js";
-import { RUBRIC } from "./util.js";
+import { rubricFor } from "./util.js";
+import Why from "./Why.jsx";
 
 function Pips({ n }) {
   return (
@@ -60,10 +61,10 @@ const Slate = forwardRef(function Slate({ clip, line, total, onLineClick }, stic
       </div>
       {clip.reason && (
         <div className="slate-why">
-          <p className="slate-reason">{clip.reason}</p>
+          <Why clip={clip} />
           {clip.scores && (
             <dl className="rubric">
-              {RUBRIC.map(([k, l]) => (
+              {rubricFor(clip.scores).map(([k, l]) => (
                 <div key={k}>
                   <dt>{l}</dt>
                   <dd>

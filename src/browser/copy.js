@@ -12,7 +12,7 @@ export const COPY = {
   lightMode: {
     name: "Light",
     line: "Light mode sends your audio, not your video, to be transcribed.",
-    detail: "For slow or costly data: about half a megabyte of compressed audio for a 4-minute video, instead of a 140 MB speech model. The transcript's shortlisted passages are then judged as in Smart mode.",
+    detail: "For slow or costly data: about half a megabyte of compressed audio for 4 minutes of recording, instead of a 140 MB speech model. The transcript's shortlisted passages are then judged as in Smart mode.",
     busy: "The free transcriber is busy right now. Use your own free key, or transcribe on this phone.",
     keyLine: "Optional: a free Groq key from console.groq.com (no card needed). It stays in this tab and goes only to Groq.",
     waking: "Getting ready...",
@@ -43,3 +43,41 @@ export const COPY = {
     caption: "Captioning a whole video needs the desktop app. The browser build makes short clips.",
   },
 };
+
+/**
+ * Whether a picked file (a File, or a path or name) is a sound recording with no picture, from
+ * its type or its extension, so the copy can say "recording" instead of "video". null when it
+ * cannot tell (no file yet, or a .webm that does not say).
+ */
+export function isAudioFile(f) {
+  if (!f) return null;
+  const type = typeof f === "object" ? String(f.type || "") : "";
+  const name = typeof f === "string" ? f : String(f.name || "");
+  if (type.startsWith("audio/")) return true;
+  if (type.startsWith("video/")) return false;
+  if (/\.(m4a|mp3|aac|wav|flac|ogg|oga|opus)$/i.test(name)) return true;
+  if (/\.(mp4|mov|m4v|mkv|avi|mts|3gp)$/i.test(name)) return false;
+  return null;
+}
+
+/** "recording", "video" or "file" for isAudioFile's answer. */
+export const fileWord = (audio) => (audio === true ? "recording" : audio === false ? "video" : "file");
+
+/**
+ * The key hint in Light mode. The shared transcriber is promised only when the proxy confirmed
+ * it is on; when the check failed (CORS on a preview, a cold server) or said it is off, the
+ * hint asks for a key; while it is still checking, it says so.
+ */
+export function lightHint(mode) {
+  if (mode?.lightShared === true) return "Without a key, Selects uses its free shared transcriber, which does not keep the audio or the words. Your key stays in this tab and goes only to Groq.";
+  if (mode?.lightShared === false || mode?.lightChecked) return "Make one free at console.groq.com, no card needed. It stays in this tab and goes only to Groq.";
+  return "Checking whether the free shared transcriber is on. Your key stays in this tab and goes only to Groq.";
+}
+
+/** The warning above the key field in Light mode, or null when there is nothing to warn about. */
+export function lightWarning(mode) {
+  if (mode?.hasGroqKey || mode?.lightShared === true) return null;
+  if (mode?.lightShared === false) return "The free shared transcriber is not switched on yet, so Light mode needs your own free Groq key for now. Or use Private.";
+  if (mode?.lightChecked) return "Selects could not reach its free shared transcriber, so Light mode needs your own free Groq key for now. Or use Private.";
+  return null;
+}

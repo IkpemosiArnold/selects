@@ -4,8 +4,9 @@
 //
 // suggestMode is the rule for which mode to suggest, pure so it is tested in Node:
 //   - Private whenever the speech model is already in this browser (nothing to download).
-//   - Otherwise Light, whenever it can run: the free shared transcriber is switched on, or
-//     the person has given their own free Groq key. Private is one tap away (opt-in).
+//   - Otherwise Light, whenever it can run: the proxy confirmed its free shared transcriber is
+//     on, or the person has given their own free Groq key. An unanswered or failed health
+//     check is "unknown", never "on". Private is one tap away (opt-in).
 //   - With neither, Private, as before.
 // The reasons say why in plain words, from what the browser reports (Data Saver, 2G or 3G,
 // the speed) or from a timed 1 MB probe where it reports nothing (Safari), and on iPhones.
@@ -95,18 +96,27 @@ export async function speechModelCached(model, device = "wasm", { openStore = nu
 }
 
 const woken = new Map();
+
+/** The shared transcriber from a health check: true or false when the proxy said so, null when unknown. */
+export const lightState = (w) => (w?.reached && typeof w.light === "boolean" ? w.light : null);
+
+/** Whether Light mode can run without asking: the person's own Groq key, or a shared transcriber the proxy confirmed. */
+export const canRunLight = ({ own = false, proxyUrl = null, shared = null } = {}) => !!own || (!!proxyUrl && shared === true);
+
 /**
  * Fire-and-forget GET /healthz on page load, so a free server that sleeps when idle is awake
- * by the time a video is picked. Resolves { ok, sec, light } and never throws.
+ * by the time a file is picked. Resolves { ok, reached, sec, light } and never throws; light
+ * is null unless the proxy answered.
  */
 export function wakeProxy(url, { fetchImpl = globalThis.fetch, now = () => performance.now() } = {}) {
-  if (!url) return Promise.resolve({ ok: false, sec: 0, light: false });
+  if (!url) return Promise.resolve({ ok: false, sec: 0, light: null, reached: false });
   const base = url.replace(/\/+$/, "");
   if (!woken.has(base)) {
     const t0 = now();
     woken.set(base, fetchImpl(`${base}/healthz`, { credentials: "omit", cache: "no-store" })
-      .then((r) => r.json().then((j) => ({ ok: r.ok, light: !!j.light, sec: +((now() - t0) / 1000).toFixed(1) })))
-      .catch(() => ({ ok: false, light: false, sec: +((now() - t0) / 1000).toFixed(1) })));
+      .then((r) => r.json().then((j) => ({ ok: r.ok, reached: r.ok, light: r.ok && typeof j?.light === "boolean" ? j.light : null, sec: +((now() - t0) / 1000).toFixed(1) })))
+      // a failed check (offline, cold, refused by CORS) says nothing about the transcriber
+      .catch(() => ({ ok: false, reached: false, light: null, sec: +((now() - t0) / 1000).toFixed(1) })));
   }
   return woken.get(base);
 }

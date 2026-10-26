@@ -115,9 +115,23 @@ test("laughter events raise the pre-score of the window they land in, never its 
   const withLaugh = makeCandidates(sents, { minLen: 10, maxLen: 30, events });
   const same = withLaugh.find((c) => c.start === target.start && c.end === target.end);
   assert.ok(same.pre > target.pre, `${same.pre} vs ${target.pre}`);
-  assert.equal(same.preParts.laughter, 0.04);
+  // a laugh whisper wrote down has no score of its own: it counts as 0.5 (delivery.mjs)
+  assert.equal(same.preParts.laughter, 0.14);
   assert.equal(same.text, target.text);
   const far = withLaugh.find((c) => c.end + 2 < events[0].s);
   assert.ok(far);
   assert.equal(far.preParts.laughter, undefined);
+});
+
+test("a setup sentence (a question, or a story opener) always starts a window, whatever the stride", async () => {
+  const { isSetup } = await import("./candidates.mjs");
+  assert.ok(isSetup("Have you ever lost a bet on purpose?"));
+  assert.ok(isSetup("So I remember the first day."));
+  assert.ok(!isSetup("We kept going."));
+  const text = Array.from({ length: 40 }, (_, i) => (i === 9 ? "Wait, have you ever done that?" : "We kept going all week long.")).join(" ");
+  const ws = text.split(" ").map((w, i) => ({ w, s: i * 0.5, e: i * 0.5 + 0.4, p: 0.9 }));
+  const sents = toSentences(ws);
+  const q = sents.find((s) => s.text.startsWith("Wait"));
+  const c = makeCandidates(sents, { minLen: 10, maxLen: 40, stride: 30, peaks: false });
+  assert.ok(c.some((x) => x.start === q.s), "a window opens on the question");
 });

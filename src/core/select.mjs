@@ -28,18 +28,25 @@ export function loopExclusions(q) {
 export const JUDGE_MAX = 120;
 
 /**
- * How many windows the judge reads. Auto (judgeN null or "auto"): max(16, 2k, one per 5
- * minutes of video), then capped by the time budget (judgeBudgetSec) at the model's measured speed, but never
- * below what k clips need (k plus a fifth). An explicit judgeN is kept, raised only to what
- * k clips need, since 30 clips cannot come out of 8 judged windows.
+ * How many windows the judge reads. Auto (judgeN null or "auto"): max(16, 2k, one per
+ * PER_WINDOW_SEC of recording), so the whole of a long recording is read (a 51-minute
+ * podcast: 41 windows, where one per 5 minutes gave 16), then capped by the time budget
+ * (judgeBudgetSec) at the model's measured speed, but never below what k clips need (k plus a
+ * fifth). Smart mode (about 3 s a call) is never capped below that; Gemma on a CPU (40 to
+ * 100 s a call) is, and `estSec` says how long the judging will take. An explicit judgeN is
+ * kept, raised only to what k clips need, since 30 clips cannot come out of 8 judged windows.
  * @param {{k?:number, duration?:number|null, judgeN?:number|string|null, secPerCall?:number|null, budgetSec?:number|null}} o
- * @returns {{n:number, auto:boolean, capped:boolean, floor:number}}
+ * @returns {{n:number, auto:boolean, capped:boolean, floor:number, estSec:number|null}}
  */
 export function judgeCount({ k = null, duration = null, judgeN = null, secPerCall = null, budgetSec = judgeBudgetSec(duration) } = {}) {
   const floor = k ? k + Math.ceil(k / 5) : 0;
-  const explicit = judgeN != null && judgeN !== "auto" && Number.isFinite(Number(judgeN)) && Number(judgeN) > 0;
-  if (explicit) return { n: Math.min(JUDGE_MAX, Math.max(Math.round(Number(judgeN)), floor)), auto: false, capped: false, floor };
-  const want = Math.max(16, k ? 2 * k : 0, duration ? Math.ceil(duration / 300) : 0);
+  const explicit = judgeN != null && judgeN !== "auto" && judgeN !== "" && Number.isFinite(Number(judgeN)) && Number(judgeN) > 0;
+  const est = (n) => (secPerCall > 0 ? Math.round(n * secPerCall) : null);
+  if (explicit) {
+    const n = Math.min(JUDGE_MAX, Math.max(Math.round(Number(judgeN)), floor));
+    return { n, auto: false, capped: false, floor, estSec: est(n) };
+  }
+  const want = Math.max(16, k ? 2 * k : 0, duration ? Math.ceil(duration / PER_WINDOW_SEC) : 0);
   let n = want;
   let capped = false;
   if (secPerCall > 0 && budgetSec > 0) {
@@ -49,8 +56,12 @@ export function judgeCount({ k = null, duration = null, judgeN = null, secPerCal
       capped = true;
     }
   }
-  return { n: Math.min(JUDGE_MAX, Math.max(n, 1)), auto: true, capped, floor };
+  n = Math.min(JUDGE_MAX, Math.max(n, 1));
+  return { n, auto: true, capped, floor, estSec: est(n) };
 }
+
+/** Auto judgeN reads one window per this many seconds of recording (before the time budget). */
+export const PER_WINDOW_SEC = 75;
 
 /**
  * Words -> sentences -> candidate windows (with the pre-score) -> the shortlist the judge reads.
