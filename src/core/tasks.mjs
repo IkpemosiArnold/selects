@@ -9,15 +9,15 @@
 // | { kind: "faithful", candidate, before, after, hints } (does the cut keep what the speaker
 // meant? before/after are the sentences around the clip, hints from faithfulHints).
 // prompts is { judge, listwise, kit, faithful }: the text of the files in src/core/prompts.
-import { JUDGE_SCHEMA, judgeMessages, listMessages, listSchema, parseListAnswer, salvageJudge, splitPrompt } from "./judge-core.mjs";
+import { hasScores, JUDGE_MAX_TOKENS, JUDGE_SCHEMA, judgeMessages, judgeText, listMessages, listSchema, parseListAnswer, salvageJudge, splitPrompt } from "./judge-core.mjs";
 import { cleanKit, KIT_SCHEMA, kitMessages, kitSchema } from "./kit-core.mjs";
 import { MADE_FOR, madeForBlock } from "./madefor.mjs";
 import { FAITHFUL_SCHEMA, faithfulMessages, faithfulPrompt, readFaithful } from "./faithful-core.mjs";
 
-/** Output budgets, as on the desktop (num_predict): 80 for a judge call, 40 + 30 per clip for the round, 120 for a kit. */
+/** Output budgets, as on the desktop (num_predict): 100 for a judge call, 40 + 30 per clip for the round, 120 for a kit. */
 export function maxTokensFor(task) {
-  if (task.kind === "judge") return 80;
-  if (task.kind === "judgeBatch") return 40 + 70 * task.candidates.length;
+  if (task.kind === "judge") return JUDGE_MAX_TOKENS;
+  if (task.kind === "judgeBatch") return 40 + (JUDGE_MAX_TOKENS - 10) * task.candidates.length;
   if (task.kind === "listwise") return 40 + 30 * task.top.length;
   if (task.kind === "faithful") return 130;
   return 120;
@@ -46,9 +46,9 @@ function storyPrompt(md, madeFor) {
  * clip is scored on its own, and the clips lettered A, B, C with their lengths.
  */
 export function batchMessages(prompt, cands) {
-  const blocks = cands.map((c, i) => `Clip ${String.fromCharCode(65 + i)}, ${Math.round(c.end - c.start)} seconds:\n${c.text.trim()}`);
+  const blocks = cands.map((c, i) => `Clip ${String.fromCharCode(65 + i)}, ${Math.round(c.end - c.start)} seconds:\n${judgeText(c)}`);
   return [
-    { role: "system", content: `${prompt.system}\n\nYou will see several clips. Score each one on its own, as if it were the only clip, and give each its own reason.` },
+    { role: "system", content: `${prompt.system}\n\nYou will see several clips. Score each one on its own, as if it were the only clip, and give each its own why and watch.` },
     { role: "user", content: `${blocks.join("\n\n")}\n\nScore every clip, as JSON.` },
   ];
 }
@@ -89,27 +89,28 @@ export function extractJson(text) {
 
 /**
  * Read a task's answer (parsed data or raw text).
- *   judge    -> { hook, standalone, payoff, clarity, reason, truncated? } or null when the scores are missing
+ *   judge    -> { moment, share, hook, standalone, why, watch, truncated? } (or an answer in the
+ *               earlier rubric's shape) or null when the scores are missing
  *   listwise -> { order: letters[], reasons: {letter: text}, complete }
  *   kit      -> { title, caption, hashtags }
  */
 export function readTask(task, { data, text }) {
   const obj = data && typeof data === "object" ? data : extractJson(text);
   if (task.kind === "judge") {
-    if (obj && ["hook", "standalone", "payoff", "clarity"].every((k) => Number.isFinite(Number(obj[k])))) return obj;
+    if (hasScores(obj)) return obj;
     return salvageJudge(text ?? JSON.stringify(data ?? ""));
   }
   if (task.kind === "listwise") return parseListAnswer(obj?.ranking ? obj : String(text ?? ""), lettersFor(task.top));
   if (task.kind === "kit") return cleanKit(obj || {}, { madeFor: task.madeFor });
   if (task.kind === "faithful") return readFaithful(obj || String(text ?? ""), task.hints || []); // null when there is no verdict
   if (task.kind === "judgeBatch") {
-    // { byLetter: { A: { hook, standalone, payoff, clarity, reason } } }; clips the answer left out are missing
+    // { byLetter: { A: { moment, share, hook, standalone, why, watch } } }; clips the answer left out are missing
     const letters = lettersFor(task.candidates);
     const byLetter = {};
     const items = Array.isArray(obj?.clips) ? obj.clips : [];
     for (const it of items) {
       const l = String(it?.clip || "").trim().toUpperCase();
-      if (letters.includes(l) && ["hook", "standalone", "payoff", "clarity"].every((k) => Number.isFinite(Number(it[k])))) byLetter[l] = it;
+      if (letters.includes(l) && hasScores(it)) byLetter[l] = it;
     }
     if (!items.length) {
       // a cut-off answer: salvage each complete clip object
@@ -129,7 +130,7 @@ export function readTask(task, { data, text }) {
  */
 export function checkTaskShape(task, { maxChars = 3000, maxClips = 6 } = {}) {
   if (!task || typeof task !== "object") return "body must be a JSON object";
-  const clip = (c) => c && typeof c === "object" && typeof c.text === "string" && c.text.trim() && c.text.length <= maxChars && Number.isFinite(c.start) && Number.isFinite(c.end) && c.end > c.start && c.end - c.start <= 600;
+  const clip = (c) => c && typeof c === "object" && typeof c.text === "string" && c.text.trim() && c.text.length <= maxChars && (c.cueText == null || (typeof c.cueText === "string" && c.cueText.length <= maxChars * 1.2)) && Number.isFinite(c.start) && Number.isFinite(c.end) && c.end > c.start && c.end - c.start <= 600;
   if (task.kind === "judge" || task.kind === "kit") return clip(task.candidate) ? null : "candidate must be { text, start, end } with at most 3000 characters";
   if (task.kind === "faithful") {
     if (!clip(task.candidate)) return "candidate must be { text, start, end } with at most 3000 characters";
@@ -147,9 +148,12 @@ export function checkTaskShape(task, { maxChars = 3000, maxClips = 6 } = {}) {
   return "kind must be judge, judgeBatch, listwise, kit or faithful";
 }
 
-/** Only the fields a task needs, so nothing else from a job ever leaves the device. */
+/**
+ * Only the fields a task needs, so nothing else from a job ever leaves the device. cueText is
+ * the clip's own words with "(laughter)" and "(louder)" marks (delivery.mjs), when it has any.
+ */
 export function slimTask(task) {
-  const c = (x) => ({ text: x.text, hook: x.hook, start: x.start, end: x.end });
+  const c = (x) => ({ text: x.text, hook: x.hook, start: x.start, end: x.end, ...(typeof x.cueText === "string" && x.cueText ? { cueText: x.cueText } : {}) });
   if (task.kind === "listwise") return { kind: "listwise", top: task.top.map(c) };
   if (task.kind === "judgeBatch") return { kind: "judgeBatch", candidates: task.candidates.map(c), ...(task.madeFor ? { madeFor: task.madeFor } : {}) };
   if (task.kind === "faithful") return { kind: "faithful", candidate: c(task.candidate), before: task.before ?? null, after: task.after ?? null, hints: (task.hints || []).map((h) => ({ issue: h.issue, cue: h.cue })) };

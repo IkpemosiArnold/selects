@@ -35,7 +35,7 @@ const deps = {
 test("queued jobs run sequentially in order and the queue empties", async () => {
   const ids = ["a.mp4", "b.mp4", "c.mp4"].map((n) => {
     const f = path.join(home, n);
-    fs.writeFileSync(f, "x");
+    fs.writeFileSync(f, `x ${n}`); // different content: identical files would share one saved transcript (reuse.mjs)
     return createJob(f, { model: "mock", qualityGate: false, k: 2 }).id;
   });
   for (const id of ids) enqueue({ jobId: id });

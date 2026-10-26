@@ -9,9 +9,9 @@ const cand = (id, text) => ({ id, start: 0, end: 30, text, hook: text.split(".")
 
 test("the judge prompt has system and user parts and fills the clip in", () => {
   const p = loadPrompt();
-  assert.match(p.system, /hook/);
-  assert.match(p.system, /standalone/);
-  assert.ok(p.system.split(/\s+/).length < 190, "rubric stays short (under about 250 tokens)");
+  for (const k of ["moment", "share", "hook", "standalone", "why", "watch"]) assert.match(p.system, new RegExp(k));
+  assert.ok(p.system.split(/\s+/).length < 230, "rubric stays short (under about 300 tokens)");
+  assert.doesNotMatch(p.system, /[\u2014\u2013]/, "no dashes");
   const m = buildMessages(cand("c_1", "Nobody tells you this. It works."));
   assert.equal(m[0].role, "system");
   assert.match(m[1].content, /Nobody tells you this\. It works\./);
@@ -90,7 +90,7 @@ test("blend mixes judge and pre-score 0.7 / 0.3", async () => {
   assert.equal(blend(0.5, undefined), 0.5);
 });
 
-test("listwise orders the top distinct clips from first and last sentences only", async () => {
+test("listwise orders the top distinct clips from their words, or the opening and ending of a long one", async () => {
   const { listwise, buildListMessages, parseListAnswer } = await import("./judge.mjs");
   const mk = (id, start, total, text) => ({ id, start, end: start + 30, total, pre: 0.5, hook: text.split(". ")[0] + ".", text });
   const cs = [
@@ -99,9 +99,13 @@ test("listwise orders the top distinct clips from first and last sentences only"
     mk("c3", 100, 0.6, "Third opens. Then it lands the point."),
     mk("c4", 200, 0.5, "Fourth opens. Then fades."),
   ];
-  const msgs = buildListMessages([cs[0], cs[2]]);
-  assert.match(msgs[1].content, /Clip A \(30 s\)\nFirst: "First one opens\."\nLast: "It ends here\."/);
-  assert.doesNotMatch(msgs[1].content, /Middle bit/);
+  const msgs = buildListMessages([cs[0], { ...cs[2], cueText: "Third opens. (laughter) Then it lands the point." }]);
+  assert.match(msgs[1].content, /Clip A \(30 s\):\nFirst one opens\. Middle bit that is long\. It ends here\./, "a short clip goes whole");
+  assert.match(msgs[1].content, /Clip B \(30 s\):\nThird opens\. \(laughter\) Then/, "with the sound marks");
+  const long = { ...cs[0], text: Array.from({ length: 150 }, (_, i) => `w${i}`).join(" ") };
+  const lm = buildListMessages([long, cs[2]])[1].content;
+  assert.match(lm, /w0 w1 .* w40 \.\.\. w101 .* w149/, "a long clip: its opening and its ending");
+  assert.doesNotMatch(lm, /w60 /);
   let seen;
   const request = async (m) => {
     seen = m[1].content;
@@ -143,4 +147,61 @@ test("judge and listwise create a missing cacheDir before logging calls", async 
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("the judge answer: scores first, then why, then watch", async () => {
+  const { JUDGE_SCHEMA, readJudge, combine, salvageJudge } = await import("./judge-core.mjs");
+  assert.deepEqual(Object.keys(JUDGE_SCHEMA.properties), ["moment", "share", "hook", "standalone", "why", "watch"]);
+  const r = readJudge({ moment: 5, share: 4, hook: 4, standalone: 4, why: "The joke lands when she admits the diet lasted a day — big laugh", watch: "Trim the first sentence." });
+  assert.deepEqual(r.scores, { moment: 5, share: 4, hook: 4, standalone: 4 });
+  assert.equal(r.why, "The joke lands when she admits the diet lasted a day, big laugh.");
+  assert.equal(r.reason, r.why, "reason is kept for older readers");
+  assert.equal(r.watch, "Trim the first sentence.");
+  assert.equal(readJudge({ moment: 3, share: 3, hook: 3, standalone: 3, why: "Fine.", watch: "" }).watch, null);
+  assert.equal(readJudge({ moment: 3, share: 3, hook: 3, standalone: 3, why: "Fine.", watch: "None" }).watch, null);
+  // a model stuck in a loop is cut short
+  const loop = readJudge({ moment: 3, share: 3, hook: 2, standalone: 4, why: `Relatable talk about the ambiguity of ${"the topic ambiguity of ".repeat(60)}it.`, watch: "" });
+  assert.ok(loop.why.split(" ").length <= 25, loop.why);
+  assert.doesNotMatch(loop.why, /(ambiguity of the topic ){2}/i);
+  const long = readJudge({ moment: 4, share: 4, hook: 5, standalone: 4, why: "The escalating panic of realizing you are being filmed in a mundane setting, combined with the relatable obsession of the whole room with looking good and with lifting.", watch: "" });
+  assert.equal(long.why, "The escalating panic of realizing you are being filmed in a mundane setting, combined with the relatable obsession of the whole room with looking good.", "cut at 25 words, never on a dangling word");
+  // clips can score high: a strong beat that a stranger can follow
+  assert.ok(combine(r.scores) >= 0.8);
+  // standalone is a gate, not a score: 2 scales the total down, 3 and up cost nothing
+  const base = { moment: 5, share: 5, hook: 5 };
+  assert.equal(combine({ ...base, standalone: 3 }), combine({ ...base, standalone: 5 }));
+  assert.equal(combine({ ...base, standalone: 2 }), 0.92, "needs a one-line caption: a small cost");
+  assert.equal(combine({ ...base, standalone: 1 }), 0.7);
+  assert.equal(readJudge({ moment: 5, share: 4, hook: 4, standalone: 2, why: "A hot take.", watch: "" }).watch, "Needs a one-line caption for context.");
+  assert.equal(readJudge({ moment: 5, share: 4, hook: 4, standalone: 2, why: "A hot take.", watch: "Trim the start." }).watch, "Needs a one-line caption for context. Trim the start.");
+  // the earlier rubric still combines with its own weights
+  assert.equal(combine({ hook: 3, standalone: 3, payoff: 3, clarity: 3 }), 0.5);
+
+  // cut off in why: the scores and the whole words are kept
+  const cut = salvageJudge('{"moment": 4, "share": 5, "hook": 3, "standalone": 4, "why": "Everyone has a story like this, and her confession about the');
+  assert.deepEqual([cut.moment, cut.share, cut.hook, cut.standalone], [4, 5, 3, 4]);
+  assert.equal(cut.why, "Everyone has a story like this, and her confession about");
+  assert.equal(cut.truncated, true);
+  // cut off in watch: why is whole
+  const late = salvageJudge('{"moment": 5, "share": 4, "hook": 4, "standalone": 3, "why": "A hot take people will argue with.", "watch": "Starts a little slow, so trim the');
+  assert.equal(late.why, "A hot take people will argue with.");
+  assert.equal(late.watch, "Starts a little slow, so trim");
+  // scores missing: nothing to keep
+  assert.equal(salvageJudge('{"why": "Long text first and then nothing'), null);
+  assert.equal(salvageJudge('{"moment": 4, "share": 5, "why": "half'), null);
+});
+
+test("judge keeps why and watch on the candidate and reads the clip with its sound marks", async () => {
+  let seen;
+  const request = async (m) => {
+    seen = m[1].content;
+    return { data: { moment: 5, share: 4, hook: 4, standalone: 4, why: "The laugh lands on the confession.", watch: "Cut the first line." } };
+  };
+  const c = { ...cand("c_1", "I joined for one reason. It was the free coffee."), cueText: "I joined for one reason. It was the free coffee. (laughter)" };
+  const [out] = await judge([c], { model: "m", request });
+  assert.match(seen, /\(laughter\)/);
+  assert.equal(out.why, "The laugh lands on the confession.");
+  assert.equal(out.reason, out.why);
+  assert.equal(out.watch, "Cut the first line.");
+  assert.doesNotMatch(out.text, /laughter/, "the clip's own words stay clean");
 });

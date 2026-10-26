@@ -17,7 +17,7 @@ import { runtimes } from "./devices.js";
 import { COPY } from "./copy.js";
 import { enableNotifications, KEEP_OPEN, registerApp } from "./device.js";
 import { groqKeySender, proxySender, remoteTranscriber } from "./transcribers.js";
-import { isIos, measureDownlink, speechModelCached, suggestMode, wakeProxy } from "./light.js";
+import { canRunLight, isIos, lightState, measureDownlink, speechModelCached, suggestMode, wakeProxy } from "./light.js";
 
 const KEY_STORE = "selects.geminiKey"; // sessionStorage only: gone when the tab closes
 const GROQ_STORE = "selects.groqKey"; // Light mode's own-key option, also sessionStorage only
@@ -84,10 +84,17 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
   const make = { geminiKeyBackend, privateBackend, proxyBackend, ...deps };
   let state = { mode, smart: { proxyUrl: BUILT_PROXY, ...smart }, prefer };
   // wake the free proxy while the person picks a file (it sleeps when idle); never awaited here
-  const woke = state.smart.proxyUrl && typeof window !== "undefined" ? wakeProxy(state.smart.proxyUrl) : Promise.resolve({ ok: false, light: false });
-  // whether the free shared transcriber is switched on (the proxy has a key): null until it answers
+  const woke = state.smart.proxyUrl && typeof window !== "undefined" ? wakeProxy(state.smart.proxyUrl) : Promise.resolve({ ok: false, light: null, reached: false });
+  // whether the free shared transcriber is switched on (the proxy has a key): true only when the
+  // proxy said so, false only when it answered that it is off, null while it is unknown (still
+  // waking, or the check failed: no proxy, offline, or refused by CORS on a preview address).
+  // Selects never promises the shared transcriber unless it is true.
   let shared = null;
-  woke.then((w) => (shared = !!w.light));
+  let sharedChecked = false;
+  woke.then((w) => {
+    shared = lightState(w);
+    sharedChecked = true;
+  });
   let probe = null;
 
   const savedKey = () => {
@@ -216,7 +223,7 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
       }
       return this.getMode();
     },
-    getMode: () => ({ mode: state.mode, hasKey: !!(state.smart.key || savedKey()), hasGroqKey: !!(state.smart.groqKey || savedGroq()), lightShared: shared, proxyUrl: state.smart.proxyUrl || null, model: state.smart.model || null, prefer: state.prefer }),
+    getMode: () => ({ mode: state.mode, hasKey: !!(state.smart.key || savedKey()), hasGroqKey: !!(state.smart.groqKey || savedGroq()), lightShared: shared, lightChecked: sharedChecked, proxyUrl: state.smart.proxyUrl || null, model: state.smart.model || null, prefer: state.prefer }),
     /**
      * Which mode to suggest (light.js suggestMode): Private when the speech model is already
      * in this browser; otherwise Light whenever it can run (the free shared transcriber is on,
@@ -230,12 +237,13 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
       const w = speechModel(rt.speech);
       const [cached, woken] = await Promise.all([speechModelCached(w, rt.asr), wait ? woke : Promise.race([woke, new Promise((r) => setTimeout(() => r(null), 4000))])]);
       const own = !!(state.smart.groqKey || savedGroq());
-      const sharedOn = woken ? !!woken.light : null;
+      const sharedOn = woken ? lightState(woken) : null;
       const connection = globalThis.navigator?.connection || null;
       let probeMbps = null;
       if (doProbe && !connection && cached !== true) probeMbps = await (probe ??= measureDownlink(`${HF}/${w.id}/resolve/main/onnx/encoder_model.onnx`));
-      // unknown (the proxy is still waking) counts as on; a "busy" stop says so honestly if not
-      const lightAvailable = own || (!!state.smart.proxyUrl && sharedOn !== false);
+      // Light is picked by itself only when it can run: the person's own key, or a shared
+      // transcriber the proxy confirmed. Unknown (still waking, or the check failed) is not enough.
+      const lightAvailable = canRunLight({ own, proxyUrl: state.smart.proxyUrl, shared: sharedOn });
       return { ...suggestMode({ connection, probeMbps, ios: isIos(), asrCached: cached, asrBytes: w.bytes[rt.asr], lightAvailable }), shared: sharedOn, own };
     },
     preferBackend(p) {

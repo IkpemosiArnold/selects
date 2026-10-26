@@ -17,6 +17,7 @@ import { attributionLine, captionWithCredit, mediaReminder, normaliseLicense, OW
 import { judgeCount, loopExclusions, selectCandidates } from "./select.mjs";
 import { splitNonSpeech, speechOnly } from "./nonspeech.mjs";
 import { judge as realJudge, listwise as realListwise, measuredSpeeds } from "./judge.mjs";
+import { ensureSound as realSound } from "./sound-node.mjs";
 import { DEFAULT_RATES, diskFullError, diskNeed, estimateJob, isDiskFull, thumbCount } from "./estimate.mjs";
 import { checkFaithful as realFaithful } from "./faithful.mjs";
 import { orderByFaithful } from "./faithful-core.mjs";
@@ -405,6 +406,7 @@ async function runStages(id, { deps = {}, signal } = {}) {
     transcribe: realTranscribe,
     judge: realJudge,
     listwise: realListwise,
+    sound: realSound,
     faithful: realFaithful,
     thumbs: makeThumbs,
     decideLanguage: realDecideLanguage,
@@ -617,7 +619,27 @@ async function runStages(id, { deps = {}, signal } = {}) {
     // made from these inputs; otherwise that stage (and the ones after it) runs again. A finished
     // stage saved before signatures existed is taken as made from the current inputs (a desktop
     // job's settings did not change after it was created).
-    const events = loadEvents(dir, words);
+    // Sound events (sound-node.mjs): laughter, applause and raised voices heard on the device,
+    // by YAMNet, or by the fallback detector. Saved as sound.json, so this runs once per job.
+    // Optional: without it, selection runs on the words and the loudness alone.
+    let soundEvents = [];
+    if (job.settings.sound !== false && job.source?.path) {
+      const hadSound = fs.existsSync(path.join(dir, "sound.json"));
+      if (!hadSound) {
+        current = "candidates";
+        job.stage = STAGE_LABEL.candidates;
+        progress("candidates", { progress: 0, note: "listening for laughter" });
+      }
+      try {
+        const rec = await d.sound(dir, job.source.path, { words: speechOnly(words), duration: job.source.duration, signal, onProgress: (p) => progress("candidates", { progress: (p.progress ?? 0) * 0.9, note: p.note }) });
+        soundEvents = rec?.events || [];
+        job.sound = { by: rec?.by ?? null, events: soundEvents.length, laughter: soundEvents.filter((e) => e.type === "laughter").length, sec: rec?.sec ?? null, ...(rec?.why ? { why: rec.why } : {}) };
+      } catch (e) {
+        if (e?.name === "AbortError") throw e;
+        job.sound = { by: null, error: String(e?.message || e).slice(0, 200) };
+      }
+    }
+    const events = [...loadEvents(dir, words), ...soundEvents].sort((a, b) => a.s - b.s);
     const loudness = readJson(path.join(dir, "loudness.json"), null);
     const exclude = loopExclusions(job.transcriptQuality);
     const secPerCall = judgeSecPerCall(job.settings);
@@ -651,7 +673,8 @@ async function runStages(id, { deps = {}, signal } = {}) {
       job.signatures.selection = selSig;
       delete job.signatures.judgment;
       job.candidates = short;
-      finish("candidates", `${all.length} windows passed the filter, ${short.length} go to the judge`);
+      const judgeMin = sel.judgeN.estSec ? Math.max(1, Math.round(sel.judgeN.estSec / 60)) : null;
+      finish("candidates", `${all.length} windows passed the filter, ${short.length} go to the judge${judgeMin ? `, about ${judgeMin} min of judging${sel.judgeN.capped ? " (fewer on this computer, to keep it under half the recording's length)" : ""}` : ""}`);
       emit(id, "candidates", { ranked: false, candidates: short });
     } else {
       short = readJson(candFile).shortlist;

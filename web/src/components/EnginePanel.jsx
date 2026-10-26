@@ -4,10 +4,14 @@
 // exactly what leaves the device, and what downloads the first time.
 import { useEffect, useState } from "react";
 import { api, readEngineMode, saveEngineMode } from "../lib/api.js";
+import { lightHint, lightWarning } from "../../../src/browser/copy.js";
 
 export const PRIVATE_LINE = "Everything runs in this tab. Nothing leaves your device.";
 export const SMART_LINE = "The words from the shortlisted moments go to Google's free Gemma API, which may use them to improve its products. Your video never leaves your device.";
 export const LIGHT_LINE = "Light mode sends your audio, not your video, to be transcribed.";
+/** The same lines for a sound recording (or before a file is picked), which has no video to keep. */
+export const SMART_LINE_AUDIO = "The words from the shortlisted moments go to Google's free Gemma API, which may use them to improve its products. Your file never leaves your device.";
+export const LIGHT_LINE_AUDIO = "Light mode sends compressed audio to be transcribed. Your file stays on this device.";
 export const LAPTOP_LINE = "On a laptop, Selects can also blur faces and handle long videos.";
 
 const gb = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : `${Math.round(b / 1e6)} MB`);
@@ -28,8 +32,9 @@ export function useEngine() {
     const apply = (s) => {
       if (!alive || !s) return;
       setSuggested(s);
-      // never change the mode once a job has started (its judge is chosen later in the run)
-      if (readEngineMode() || api.engine?.jobs?.size) return;
+      // never change the mode once a job has started (its judge is chosen later in the run),
+      // but always show what the health check found (the shared transcriber on, off or unknown)
+      if (readEngineMode() || api.engine?.jobs?.size) return setModeState(api.getMode());
       const cur = api.getMode().mode;
       if (s.mode !== cur) setModeState(api.setMode(s.mode));
       else setModeState(api.getMode());
@@ -47,7 +52,7 @@ export function useEngine() {
   return { mode, setMode, downloads: dl, suggested };
 }
 
-export default function EnginePanel({ engine }) {
+export default function EnginePanel({ engine, audio = null }) {
   const { mode, setMode, downloads, suggested } = engine;
   const smart = mode.mode === "smart";
   const light = mode.mode === "light";
@@ -72,17 +77,15 @@ export default function EnginePanel({ engine }) {
           </button>
         ))}
       </div>
-      <p className="engine-line">{smart ? SMART_LINE : light ? LIGHT_LINE : PRIVATE_LINE}</p>
+      <p className="engine-line">{smart ? (audio === false ? SMART_LINE : SMART_LINE_AUDIO) : light ? (audio === false ? LIGHT_LINE : LIGHT_LINE_AUDIO) : PRIVATE_LINE}</p>
 
       {light ? (
         <div className="engine-smart">
-          {mode.lightShared === false && !mode.hasGroqKey && (
-            <p className="field-error" role="note">The free shared transcriber is not switched on yet, so Light mode needs your own free Groq key for now. Or use Private.</p>
-          )}
+          {lightWarning(mode) && <p className="field-error" role="note">{lightWarning(mode)}</p>}
           {suggested?.mode === "light" && suggested.reasons?.length > 0 && (
             <p className="field-hint">Chosen because {suggested.reasons.join(" and ")}. Private mode is one tap away.</p>
           )}
-          <p className="field-hint">About half a megabyte of audio for a 4-minute video, instead of downloading a speech model. The words of the shortlisted moments then go to Google's free Gemma API, as in Smart mode.</p>
+          <p className="field-hint">About half a megabyte of audio for 4 minutes of recording, instead of downloading a speech model. The words of the shortlisted moments then go to Google's free Gemma API, as in Smart mode.</p>
           {mode.hasGroqKey ? (
             <p className="field-hint">
               Using your Groq key, kept in this tab only.{" "}
@@ -108,7 +111,7 @@ export default function EnginePanel({ engine }) {
                 />
               </label>
               <button className="btn" type="button" disabled={!groq.trim()} onClick={() => { setMode("light", { groqKey: groq.trim() }); setGroq(""); }}>Use this key</button>
-              <p className="field-hint">{mode.lightShared === false ? "Make one free at console.groq.com, no card needed. It stays in this tab and goes only to Groq." : "Without a key, Selects uses its free shared transcriber, which does not keep the audio or the words. Your key stays in this tab and goes only to Groq."}</p>
+              <p className="field-hint">{lightHint(mode)}</p>
             </div>
           )}
         </div>

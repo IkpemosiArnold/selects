@@ -2,12 +2,21 @@ import { api } from "../../lib/api.js";
 import { toSentences } from "../../lib/sentences.js";
 import { audiogramStill, isAudioJob } from "../../lib/audiogram.js";
 
+/** The judge's scores: what makes people stop and share, and whether a stranger can follow it. */
 export const RUBRIC = [
+  ["moment", "Moment"],
+  ["share", "Share"],
+  ["hook", "Hook"],
+  ["standalone", "Stands alone"],
+];
+/** The first rubric, for jobs judged before it changed. */
+export const RUBRIC_V1 = [
   ["hook", "Hook"],
   ["standalone", "Stands alone"],
   ["payoff", "Payoff"],
   ["clarity", "Clarity"],
 ];
+export const rubricFor = (scores) => (scores && scores.moment == null && scores.payoff != null ? RUBRIC_V1 : RUBRIC);
 
 /** The filmstrip still nearest t (one per few seconds, already on disk). */
 export function thumbAt(job, t) {

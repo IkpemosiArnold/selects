@@ -230,8 +230,9 @@ function balanced(t) {
 
 // ------------------------------------------------------------- Smart mode: Gemini API
 
-export function geminiKeyBackend({ key, model = "gemma-4-26b-a4b-it", timeoutMs = 25000 }) {
+export function geminiKeyBackend({ key, model = "gemma-4-26b-a4b-it", timeoutMs = 25000, perMinute = 25 }) {
   let features = {};
+  const pace = pacer(perMinute); // Google's free tier: about 30 requests a minute
   return {
     id: "gemini-key",
     label: `Gemma (${model}) through the Gemini API, your key`,
@@ -243,6 +244,7 @@ export function geminiKeyBackend({ key, model = "gemma-4-26b-a4b-it", timeoutMs 
     isCached: async () => true,
     async load() {},
     async run(task) {
+      await pace();
       const { messages, schema, maxTokens } = buildTask(slimTask(task), PROMPTS);
       // Gemma 4 can spend output tokens on a thought before answering: leave headroom
       const r = await geminiGenerate({ key, model, messages, schema, maxTokens: Math.max(256, maxTokens * 3), temperature: 0.2, features, timeoutMs });
@@ -253,11 +255,36 @@ export function geminiKeyBackend({ key, model = "gemma-4-26b-a4b-it", timeoutMs 
 }
 
 /**
+ * Space calls to at most `perMinute` starts in any minute. The proxy allows 20 model calls a
+ * minute per visitor, and a long recording now sends 40 or more windows, so the page keeps
+ * under that instead of hitting the limit and losing clips to it. sleep is replaceable in tests.
+ */
+export function pacer(perMinute, { now = () => Date.now(), sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  const starts = [];
+  let chain = Promise.resolve();
+  return () => {
+    chain = chain.then(async () => {
+      for (;;) {
+        const t = now();
+        while (starts.length && t - starts[0] >= 60000) starts.shift();
+        if (starts.length < perMinute) {
+          starts.push(t);
+          return;
+        }
+        await sleep(60000 - (t - starts[0]) + 50);
+      }
+    });
+    return chain;
+  };
+}
+
+/**
  * Smart mode through server-proxy. The proxy sleeps when idle on a free host, so load()
  * pings /healthz until it answers (up to `wakeSec`), calling onWaking(secondsSoFar).
  */
-export function proxyBackend({ url, model = null, wakeSec = 90, callTimeoutMs = 60000 }) {
+export function proxyBackend({ url, model = null, wakeSec = 90, callTimeoutMs = 60000, perMinute = 18, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
   const base = url.replace(/\/+$/, "");
+  const pace = pacer(perMinute, { sleep });
   return {
     id: "gemini-proxy",
     label: "Gemma through the Gemini API, via the Selects proxy",
@@ -288,7 +315,8 @@ export function proxyBackend({ url, model = null, wakeSec = 90, callTimeoutMs = 
         await new Promise((r) => setTimeout(r, 3000));
       }
     },
-    async run(task) {
+    async run(task, { retried = false } = {}) {
+      await pace();
       const t0 = now();
       // the proxy allows 25 s per Google call plus one retry; past that, give up and let
       // the judge fall back to the device for this clip
@@ -303,6 +331,14 @@ export function proxyBackend({ url, model = null, wakeSec = 90, callTimeoutMs = 
         clearTimeout(timer);
       }
       const j = await r.json().catch(() => ({}));
+      // over the per-minute limit anyway (another tab, a retry): wait as asked, once
+      if (r.status === 429 && !retried) {
+        const wait = Math.min(60, Number(r.headers?.get?.("retry-after")) || 20);
+        if (!/day/i.test(String(j.error || ""))) {
+          await sleep(wait * 1000);
+          return this.run(task, { retried: true });
+        }
+      }
       if (!r.ok) throw Object.assign(new Error(j.error || `Proxy ${r.status}`), { status: r.status, transient: !!j.transient, hint: j.hint || "Try again in a minute, or switch to Private mode." });
       return { data: null, text: j.text, stats: { wallSec: secs(t0), promptTokens: j.promptTokens ?? null, outTokens: j.outTokens ?? null, model: j.model } };
     },

@@ -14,8 +14,8 @@ const cand = { id: "c_0001", start: 10, end: 40, text: "Nobody tells you this. I
 test("tasks build the same judge messages as the Ollama path", () => {
   const t = buildTask({ kind: "judge", candidate: cand }, prompts);
   assert.deepEqual(t.messages, buildMessages(cand));
-  assert.equal(t.maxTokens, 80);
-  assert.deepEqual(Object.keys(t.schema.properties), ["hook", "standalone", "payoff", "clarity", "reason"]);
+  assert.equal(t.maxTokens, 100);
+  assert.deepEqual(Object.keys(t.schema.properties), ["moment", "share", "hook", "standalone", "why", "watch"], "scores first, then why, then watch");
 });
 
 test("answers are read from fenced JSON, plain JSON or a cut-off answer", () => {
@@ -41,12 +41,12 @@ test("the proxy shape check accepts only clip text and times", () => {
 test("Gemini body: system instruction, JSON schema, minimal thinking; features can be turned off", () => {
   const { messages, schema } = buildTask({ kind: "judge", candidate: cand }, prompts);
   const b = geminiBody(messages, { schema, maxTokens: 80 });
-  assert.ok(b.systemInstruction.parts[0].text.includes("short-form video editor"));
+  assert.ok(b.systemInstruction.parts[0].text.includes("short clips"));
   assert.equal(b.generationConfig.responseMimeType, "application/json");
   assert.equal(b.generationConfig.responseSchema.properties.hook.type, "INTEGER");
   const plain = geminiBody(messages, { schema, features: { system: false, json: false, thinking: false } });
   assert.equal(plain.systemInstruction, undefined);
-  assert.ok(plain.contents[0].parts[0].text.startsWith("You are a senior"));
+  assert.ok(plain.contents[0].parts[0].text.startsWith("You pick moments"));
   assert.equal(plain.generationConfig.responseSchema, undefined);
   assert.equal(toGeminiSchema({ type: "array", minItems: 2, items: { type: "string", enum: ["A"] } }).minItems, "2");
   assert.equal(readGemini({ candidates: [{ content: { parts: [{ text: "x", thought: true }, { text: "{}" }] } }] }).text, "{}");
@@ -93,7 +93,7 @@ test("batch judge: one call scores every clip on its own; cut-off answers keep t
   const t = buildTask({ kind: "judgeBatch", candidates: cands }, prompts);
   assert.match(t.messages[1].content, /Clip A, 30 seconds:[\s\S]*Clip C, 30 seconds:/);
   assert.deepEqual(t.schema.properties.clips.items.properties.clip.enum, ["A", "B", "C"]);
-  assert.equal(t.maxTokens, 40 + 210);
+  assert.equal(t.maxTokens, 40 + 3 * 90);
   const full = readTask({ kind: "judgeBatch", candidates: cands }, { text: JSON.stringify({ clips: ["A", "B", "C"].map((clip, i) => ({ clip, hook: i + 1, standalone: 3, payoff: 3, clarity: 3, reason: "ok" })) }) });
   assert.equal(full.complete, true);
   assert.equal(full.byLetter.C.hook, 3);

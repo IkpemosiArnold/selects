@@ -149,6 +149,7 @@ export function strictTaskShape(task) {
   for (const c of clips) {
     if (!isObj(c)) return "each clip must be an object";
     if (c.hook != null && !shortStr(c.hook, 3000)) return "hook must be text (at most 3000 characters)";
+    if (c.cueText != null && !shortStr(c.cueText, 3600)) return "cueText must be text (at most 3600 characters)";
   }
   if (task.hints != null) {
     if (!Array.isArray(task.hints) || task.hints.length > 10) return "hints must be a list of at most 10";

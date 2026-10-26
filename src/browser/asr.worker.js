@@ -194,6 +194,8 @@ async function transcribe({ pcm, rate }) {
   for (let i = 0; i < wins.length; i++) {
     const [a, b] = wins[i];
     const t1 = performance.now();
+    // whisper gives nothing back inside a piece, so say which one is running (the page shows how long it has taken so far)
+    post({ type: "window", i, n: wins.length, start: +(a / rate).toFixed(2), end: +(b / rate).toFixed(2) });
     const res = await asr(pcm.subarray(a, b), { return_timestamps: "word" });
     const words = toWords(res.chunks, a / rate);
     // a word whisper placed past its window's end belongs to the next one; keep times monotonic

@@ -90,6 +90,12 @@ const blue = (s) => (isTTY ? `\x1b[34m${s}\x1b[0m` : s);
 const yellow = (s) => (isTTY ? `\x1b[33m${s}\x1b[0m` : s);
 const red = (s) => (isTTY ? `\x1b[31m${s}\x1b[0m` : s);
 
+
+/** The judge's scores as text: the current rubric, or the earlier one for an older job. */
+function scoreLine(s, sep = "  ") {
+  const names = s.moment != null || s.payoff == null ? [["moment", "moment"], ["share", "share"], ["hook", "hook"], ["standalone", "stands alone"]] : [["hook", "hook"], ["standalone", "stands alone"], ["payoff", "payoff"], ["clarity", "clarity"]];
+  return names.map(([k, l]) => `${l} ${s[k] ?? "-"}`).join(sep);
+}
 function fmtEta(sec) {
   if (sec == null) return "";
   if (sec < 90) return `about ${Math.max(1, Math.round(sec))} s left`;
@@ -167,9 +173,10 @@ function printCandidates(job) {
   for (const c of cs) {
     const s = c.scores || {};
     say("");
-    say(`${bold(String(c.rank ?? "-").padStart(2))}  ${tc(c.start)} to ${tc(c.end)}  ${Math.round(c.end - c.start)} s   ${blue(`score ${(c.total ?? 0).toFixed(2)}`)}${c.weak ? yellow(" (weak)") : ""}   ${dim(`hook ${s.hook ?? "-"}  stands alone ${s.standalone ?? "-"}  payoff ${s.payoff ?? "-"}  clarity ${s.clarity ?? "-"}`)}`);
+    say(`${bold(String(c.rank ?? "-").padStart(2))}  ${tc(c.start)} to ${tc(c.end)}  ${Math.round(c.end - c.start)} s   ${blue(`score ${(c.total ?? 0).toFixed(2)}`)}${c.weak ? yellow(" (weak)") : ""}   ${dim(scoreLine(s))}`);
     say(`    "${c.hook.length > 110 ? c.hook.slice(0, 107) + "..." : c.hook}"`);
-    if (c.reason) say(`    ${blue(c.reason)}`);
+    if (c.why || c.reason) say(`    ${blue(c.why || c.reason)}`);
+    if (c.watch) say(`    ${dim(`Watch: ${c.watch}`)}`);
     if (c.listRank) say(`    ${dim(`Side by side: ${c.listRank} of ${job.listwise?.order?.length ?? "?"}${c.listReason ? `. ${c.listReason}` : ""}`)}`);
     const f = c.faithful;
     if (f && f.verdict !== "faithful") {
@@ -249,7 +256,7 @@ function exportClips(job, outDir, { preview }) {
     try {
       kit = c[field].kit ? JSON.parse(fs.readFileSync(path.join(dir, c[field].kit), "utf8")) : null;
     } catch {}
-    lines.push(`## ${c.rank}. ${c.title || c.hook}`, "", `- File: ${mp4}`, `- Source: ${tc(c.start)} to ${tc(c.end)} (${Math.round(c.end - c.start)} s)`, `- Scores: hook ${c.scores?.hook}, stands alone ${c.scores?.standalone}, payoff ${c.scores?.payoff}, clarity ${c.scores?.clarity} (total ${c.total})`, `- Why: ${c.reason}`);
+    lines.push(`## ${c.rank}. ${c.title || c.hook}`, "", `- File: ${mp4}`, `- Source: ${tc(c.start)} to ${tc(c.end)} (${Math.round(c.end - c.start)} s)`, `- Scores: ${scoreLine(c.scores || {}, ", ")} (total ${c.total})`, `- Why: ${c.why || c.reason}`, ...(c.watch ? [`- Watch: ${c.watch}`] : []));
     if (kit) lines.push(`- Caption: ${kit.caption.replace(/\n+/g, " ")}`, `- Hashtags: ${kit.hashtags.map((h) => "#" + h).join(" ")}`);
     lines.push("");
   }

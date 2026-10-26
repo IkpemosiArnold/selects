@@ -1,0 +1,327 @@
+{
+  "generatedAt": "2026-10-26T11:49:51.922Z",
+  "note": "Exploratory, not pre-registered (eval/PLAN.md is unchanged). R rebuilt with the v2 code and checked against v2's cache.",
+  "model": "gemma-4-26b-a4b-it",
+  "rows": [
+    {
+      "id": "Aj0nf3rKG_E",
+      "n": 24,
+      "marked": 22,
+      "laughter": 1,
+      "sound": "yamnet",
+      "oldJudge": 0.6180555555555556,
+      "oldBlend": 0.7083333333333334,
+      "oldPre": 0.6736111111111112,
+      "newPre": 0.6180555555555556,
+      "newJudge": 0.4097222222222222,
+      "newBlend": 0.5
+    },
+    {
+      "id": "ASvx-QG6o04",
+      "n": 24,
+      "marked": 0,
+      "laughter": 0,
+      "sound": "yamnet",
+      "oldJudge": 0.6770833333333334,
+      "oldBlend": 0.7222222222222222,
+      "oldPre": 0.7291666666666666,
+      "newPre": 0.7569444444444444,
+      "newJudge": 0.6597222222222222,
+      "newBlend": 0.7430555555555556
+    },
+    {
+      "id": "BCiZc0n6COY",
+      "n": 24,
+      "marked": 22,
+      "laughter": 1,
+      "sound": "yamnet",
+      "oldJudge": 0.5277777777777778,
+      "oldBlend": 0.5243055555555556,
+      "oldPre": 0.5902777777777778,
+      "newPre": 0.5416666666666666,
+      "newJudge": 0.625,
+      "newBlend": 0.5555555555555556
+    },
+    {
+      "id": "C5FzMblXU4M",
+      "n": 24,
+      "marked": 18,
+      "laughter": 2,
+      "sound": "yamnet",
+      "oldJudge": 0.4375,
+      "oldBlend": 0.4791666666666667,
+      "oldPre": 0.5416666666666666,
+      "newPre": 0.625,
+      "newJudge": 0.3506944444444444,
+      "newBlend": 0.3958333333333333
+    },
+    {
+      "id": "CBYhVcO4WgI",
+      "n": 24,
+      "marked": 1,
+      "laughter": 0,
+      "sound": "yamnet",
+      "oldJudge": 0.65625,
+      "oldBlend": 0.6597222222222222,
+      "oldPre": 0.3784722222222222,
+      "newPre": 0.34375,
+      "newJudge": 0.7430555555555556,
+      "newBlend": 0.7361111111111112
+    },
+    {
+      "id": "G9NabGlnDCs",
+      "n": 24,
+      "marked": 14,
+      "laughter": 1,
+      "sound": "yamnet",
+      "oldJudge": 0.7152777777777778,
+      "oldBlend": 0.7430555555555556,
+      "oldPre": 0.6006944444444444,
+      "newPre": 0.5659722222222222,
+      "newJudge": 0.8576388888888888,
+      "newBlend": 0.8020833333333334
+    },
+    {
+      "id": "Gij3hiWXJ88",
+      "n": 24,
+      "marked": 12,
+      "laughter": 2,
+      "sound": "yamnet",
+      "oldJudge": 0.6111111111111112,
+      "oldBlend": 0.5763888888888888,
+      "oldPre": 0.5763888888888888,
+      "newPre": 0.6736111111111112,
+      "newJudge": 0.5277777777777778,
+      "newBlend": 0.5520833333333334
+    },
+    {
+      "id": "iqm-XEqpayc",
+      "n": 24,
+      "marked": 20,
+      "laughter": 4,
+      "sound": "yamnet",
+      "oldJudge": 0.5972222222222222,
+      "oldBlend": 0.5416666666666666,
+      "oldPre": 0.3506944444444444,
+      "newPre": 0.2222222222222222,
+      "newJudge": 0.5555555555555556,
+      "newBlend": 0.5069444444444444
+    },
+    {
+      "id": "JXm0-ilIknE",
+      "n": 24,
+      "marked": 21,
+      "laughter": 2,
+      "sound": "yamnet",
+      "oldJudge": 0.6180555555555556,
+      "oldBlend": 0.5833333333333334,
+      "oldPre": 0.2951388888888889,
+      "newPre": 0.2847222222222222,
+      "newJudge": 0.5347222222222222,
+      "newBlend": 0.4513888888888889
+    },
+    {
+      "id": "k4715CJ0Ii8",
+      "n": 24,
+      "marked": 6,
+      "laughter": 0,
+      "sound": "yamnet",
+      "oldJudge": 0.2465277777777778,
+      "oldBlend": 0.25,
+      "oldPre": 0.2569444444444444,
+      "newPre": 0.23958333333333334,
+      "newJudge": 0.5,
+      "newBlend": 0.375
+    },
+    {
+      "id": "luM2Y4otHUY",
+      "n": 24,
+      "marked": 17,
+      "laughter": 0,
+      "sound": "yamnet",
+      "oldJudge": 0.5104166666666666,
+      "oldBlend": 0.5381944444444444,
+      "oldPre": 0.5208333333333334,
+      "newPre": 0.4097222222222222,
+      "newJudge": 0.3333333333333333,
+      "newBlend": 0.3263888888888889
+    },
+    {
+      "id": "MSgoeuMqUmU",
+      "n": 24,
+      "marked": 0,
+      "laughter": 1,
+      "sound": "yamnet",
+      "oldJudge": 0.6597222222222222,
+      "oldBlend": 0.7256944444444444,
+      "oldPre": 0.7916666666666666,
+      "newPre": 0.7361111111111112,
+      "newJudge": 0.3090277777777778,
+      "newBlend": 0.3611111111111111
+    },
+    {
+      "id": "tExPpuk-UQ8",
+      "n": 24,
+      "marked": 11,
+      "laughter": 3,
+      "sound": "yamnet",
+      "oldJudge": 0.5694444444444444,
+      "oldBlend": 0.5486111111111112,
+      "oldPre": 0.5034722222222222,
+      "newPre": 0.4930555555555556,
+      "newJudge": 0.4236111111111111,
+      "newBlend": 0.4236111111111111
+    },
+    {
+      "id": "uFyk5UOyNqI",
+      "n": 24,
+      "marked": 1,
+      "laughter": 0,
+      "sound": "yamnet",
+      "oldJudge": 0.8229166666666666,
+      "oldBlend": 0.8125,
+      "oldPre": 0.6111111111111112,
+      "newPre": 0.6979166666666666,
+      "newJudge": 0.8402777777777778,
+      "newBlend": 0.8472222222222222
+    },
+    {
+      "id": "VoRbPxyo2uU",
+      "n": 24,
+      "marked": 3,
+      "laughter": 1,
+      "sound": "yamnet",
+      "oldJudge": 0.4305555555555556,
+      "oldBlend": 0.4236111111111111,
+      "oldPre": 0.3506944444444444,
+      "newPre": 0.4409722222222222,
+      "newJudge": 0.5034722222222222,
+      "newBlend": 0.5
+    },
+    {
+      "id": "vRVV1hq9WXE",
+      "n": 24,
+      "marked": 18,
+      "laughter": 5,
+      "sound": "yamnet",
+      "oldJudge": 0.2951388888888889,
+      "oldBlend": 0.4548611111111111,
+      "oldPre": 0.7534722222222222,
+      "newPre": 0.7326388888888888,
+      "newJudge": 0.4826388888888889,
+      "newBlend": 0.4895833333333333
+    },
+    {
+      "id": "wBoEsrpnPHA",
+      "n": 24,
+      "marked": 19,
+      "laughter": 5,
+      "sound": "yamnet",
+      "oldJudge": 0.3888888888888889,
+      "oldBlend": 0.3263888888888889,
+      "oldPre": 0.3819444444444444,
+      "newPre": 0.3680555555555556,
+      "newJudge": 0.3506944444444444,
+      "newBlend": 0.3125
+    },
+    {
+      "id": "xlAyUkscaFg",
+      "n": 24,
+      "marked": 16,
+      "laughter": 1,
+      "sound": "yamnet",
+      "oldJudge": 0.5625,
+      "oldBlend": 0.6111111111111112,
+      "oldPre": 0.5520833333333334,
+      "newPre": 0.625,
+      "newJudge": 0.5347222222222222,
+      "newBlend": 0.5763888888888888
+    },
+    {
+      "id": "Yiaatr-Noh0",
+      "n": 24,
+      "marked": 18,
+      "laughter": 0,
+      "sound": "yamnet",
+      "oldJudge": 0.625,
+      "oldBlend": 0.6597222222222222,
+      "oldPre": 0.7361111111111112,
+      "newPre": 0.7256944444444444,
+      "newJudge": 0.6180555555555556,
+      "newBlend": 0.6319444444444444
+    }
+  ],
+  "aggregate": {
+    "oldJudge": {
+      "mean": 0.5562865497076024,
+      "lo": 0.4930555555555555,
+      "hi": 0.6162280701754386,
+      "n": 19
+    },
+    "newJudge": {
+      "mean": 0.5347222222222222,
+      "lo": 0.46600877192982454,
+      "hi": 0.6059941520467838,
+      "n": 19
+    },
+    "oldBlend": {
+      "mean": 0.5730994152046783,
+      "lo": 0.5085891812865496,
+      "hi": 0.6352339181286549,
+      "n": 19
+    },
+    "newBlend": {
+      "mean": 0.5308845029239767,
+      "lo": 0.46308479532163743,
+      "hi": 0.6008771929824562,
+      "n": 19
+    },
+    "oldPre": {
+      "mean": 0.5365497076023392,
+      "lo": 0.46509502923976614,
+      "hi": 0.608187134502924,
+      "n": 19
+    },
+    "newPre": {
+      "mean": 0.5316154970760234,
+      "lo": 0.4524853801169591,
+      "hi": 0.6085526315789472,
+      "n": 19
+    }
+  },
+  "tests": {
+    "judge": {
+      "n": 19,
+      "mean": -0.021564327485380126,
+      "p": 0.5309333801269531,
+      "ci": {
+        "mean": -0.021564327485380126,
+        "lo": -0.08644005847953214,
+        "hi": 0.0398391812865497,
+        "n": 19
+      }
+    },
+    "blend": {
+      "n": 19,
+      "mean": -0.042214912280701754,
+      "p": 0.1520233154296875,
+      "ci": {
+        "mean": -0.042214912280701754,
+        "lo": -0.09904970760233921,
+        "hi": 0.007127192982456142,
+        "n": 19
+      }
+    },
+    "pre": {
+      "n": 19,
+      "mean": -0.004934210526315789,
+      "p": 0.7555999755859375,
+      "ci": {
+        "mean": -0.004934210526315789,
+        "lo": -0.03362573099415206,
+        "hi": 0.02339181286549709,
+        "n": 19
+      }
+    }
+  }
+}

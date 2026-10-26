@@ -210,10 +210,11 @@ export function pcmStore({ storage = globalThis.navigator?.storage } = {}) {
  * better done on a laptop (hours of whisper on a phone CPU, and the tab is frozen whenever
  * it is in the background). Returns the note to show, or null.
  */
-export function longVideoNote(duration, { mobile = isMobile() } = {}) {
+export function longVideoNote(duration, { mobile = isMobile(), audio = false } = {}) {
   if (!(duration > 0)) return null;
-  if (mobile && duration > 30 * 60) return "For videos over about 30 minutes, use Selects on a laptop. A phone can take hours on one this long, and stops whenever the tab is in the background.";
-  if (duration > 60 * 60) return "This is a long video for a browser tab. Selects works through it 10 minutes at a time and saves as it goes, but it can take a few hours; the desktop app is faster.";
+  const what = audio ? "recording" : "video";
+  if (mobile && duration > 30 * 60) return `For ${what}s over about 30 minutes, use Selects on a laptop. A phone can take hours on one this long, and stops whenever the tab is in the background.`;
+  if (duration > 60 * 60) return `This is a long ${what} for a browser tab. Selects works through it 10 minutes at a time and saves as it goes, but it can take a few hours; the desktop app is faster.`;
   return null;
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api, inBrowser, MEDIA_ACCEPT } from "../lib/api.js";
+import { api, fileWord as wordFor, inBrowser, isAudioFile, MEDIA_ACCEPT } from "../lib/api.js";
 import EnginePanel, { useEngine, LAPTOP_LINE } from "./EnginePanel.jsx";
 import { tc, plural } from "../lib/time.js";
 import { Masthead, MiddleTruncate, go } from "../App.jsx";
@@ -108,7 +108,7 @@ export default function NewJob() {
     }
   };
   const [k, setK] = useState(5);
-  const [judgeN, setJudgeN] = useState(8);
+  const [judgeN, setJudgeN] = useState(""); // empty: auto, more for longer recordings
   const [mode, setMode] = useState("clips");
   const [language, setLanguage] = useState("en");
   const [credit, setCredit] = useState("");
@@ -221,7 +221,7 @@ export default function NewJob() {
         language,
         ...(mode === "caption"
           ? {}
-          : { model, k: Number(k), judgeN: Number(judgeN), preset: "shorts", madeFor, ...(ownLengths ? { minLen: Number(minLen), maxLen: Number(maxLen) } : {}) }),
+          : { model, k: Number(k), judgeN: String(judgeN).trim() ? Number(judgeN) : null, preset: "shorts", madeFor, ...(ownLengths ? { minLen: Number(minLen), maxLen: Number(maxLen) } : {}) }),
         ...(credit.trim() ? { credit: credit.trim() } : {}),
         ...(license && license !== "other" ? { license } : {}),
         ...(sourceUrl.trim() ? { sourceUrl: sourceUrl.trim() } : {}),
@@ -270,6 +270,9 @@ export default function NewJob() {
     : license === "own"
     ? "Your own video. No credit line is added."
     : "None yet. Add one if someone else made the video.";
+  // "video", "recording" or "file": never call a sound recording a video
+  const audioPicked = isAudioFile(inBrowser ? file : path.trim());
+  const fileWord = wordFor(audioPicked);
   const picked = path.trim();
   const pickedName = picked.split(/[\\/]/).pop();
 
@@ -359,7 +362,7 @@ export default function NewJob() {
                   ? "Selects writes the captions, you fix any word, and it renders the video with them. Nothing is uploaded."
                   : inBrowser
                   ? smart
-                    ? "Gemma picks the best moments and says why. You approve each clip before anything is rendered. Your video stays on this device."
+                    ? `Gemma picks the best moments and says why. You approve each clip before anything is rendered. Your ${fileWord} stays on this device.`
                     : "Gemma picks the best moments and says why. You approve each clip before anything is rendered. Everything runs in this tab, and nothing is uploaded."
                   : "Gemma picks the best moments and says why. You approve each clip before anything is rendered. Nothing is uploaded."}
               </p>
@@ -449,7 +452,7 @@ export default function NewJob() {
             </fieldset>
           )}
 
-          {inBrowser && <EnginePanel engine={engine} />}
+          {inBrowser && <EnginePanel engine={engine} audio={audioPicked} />}
 
           <div className="folds">
             <details className="fold">
@@ -494,7 +497,7 @@ export default function NewJob() {
                       Up to
                       <input className="input num mono" type="number" inputMode="numeric" min={1} max={30} value={k} onChange={(e) => setK(e.target.value)} aria-label="Most clips to suggest" />
                       clips. Gemma reads the best
-                      <input className="input num mono" type="number" inputMode="numeric" min={2} max={30} value={judgeN} onChange={(e) => setJudgeN(e.target.value)} aria-label="Moments Gemma reads" />
+                      <input className="input num mono" type="number" inputMode="numeric" min={2} max={120} value={judgeN} placeholder="auto" onChange={(e) => setJudgeN(e.target.value)} aria-label="Moments Gemma reads (empty: more for longer recordings)" />
                       moments to choose them.
                     </p>
                     <details className="more" open={ownLengths || undefined}>
@@ -513,7 +516,7 @@ export default function NewJob() {
                       </p>
                     </details>
                     {inBrowser ? null : models ? (
-                      <ModelControl models={models} value={model} onChange={setModel} judgeN={Number(judgeN) || 8} rates={rates} />
+                      <ModelControl models={models} value={model} onChange={setModel} judgeN={Number(judgeN) || 16} rates={rates} />
                     ) : (
                       <div className="model-control is-loading" aria-busy="true" />
                     )}
