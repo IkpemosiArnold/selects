@@ -32,6 +32,10 @@ export function createMockGemini({ refuseJson = true, log = () => {} } = {}) {
     if (/Order every clip/.test(text)) {
       const letters = [...text.matchAll(/^Clip ([A-Z]) \(/gm)].map((m) => m[1]);
       answer = { ranking: letters.reverse().map((l) => ({ clip: l, reason: `Clip ${l} lands its point.` })) };
+    } else if (/Which clip would you post first, A or B\?/.test(text)) {
+      // the head-to-head round: the longer clip wins, whichever order it is shown in
+      const [a = "", b = ""] = text.split(/^Clip B \(/m);
+      answer = { first: a.length >= b.length ? "A" : "B", why: "It has the stronger beat." };
     } else if (/Sentence before the clip:/.test(text)) {
       answer = { clip_says: "Strength training is safe.", speaker_means: "Strength training is safe.", verdict: "faithful", issue: "none", extend: "none", note: "The clip keeps what the speaker meant." };
     } else if (/posting kit/i.test(text)) {

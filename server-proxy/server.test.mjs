@@ -75,6 +75,21 @@ test("limiter windows reset", () => {
   assert.equal(l.allow("a", 1, 1000).ok, true);
 });
 
+test("proxy runs the head-to-head pair task, and refuses a pair without both clips", async () => {
+  const s = await setup();
+  try {
+    const post = (body) => fetch(`${s.url}/v1/task`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const r = await post({ kind: "pair", a: clip, b: { ...clip, text: `${clip.text} And one more line that lands.`, secret: "not sent" } });
+    assert.equal(r.status, 200);
+    assert.match((await r.json()).text, /"first"\s*:\s*"B"/);
+    assert.ok(!JSON.stringify(s.mock.seen.at(-1).body).includes("not sent"), "only the slim task reaches Google");
+    assert.equal((await post({ kind: "pair", a: clip })).status, 400);
+    assert.equal((await post({ kind: "pair", a: clip, b: clip, extra: 1 })).status, 400);
+  } finally {
+    s.close();
+  }
+});
+
 test("proxy runs the faithful task and survives a request that throws", async () => {
   const s = await setup();
   try {

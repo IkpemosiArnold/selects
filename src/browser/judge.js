@@ -1,7 +1,8 @@
 // The judge stage in the browser: the same rubric, scoring, blend, listwise round, ranking
 // and curve as the desktop (src/core/judge-core.mjs, rank.mjs), with the call itself made
 // by whichever backend runs here (llm.js).
-import { applyListOrder, blend, combine, readJudge } from "../core/judge-core.mjs";
+import { applyListOrder, blend, combine, readJudge, tidyReason } from "../core/judge-core.mjs";
+import { applyH2H, H2H_DEFAULTS, h2hSummary, tournament } from "../core/h2h-core.mjs";
 import { plainKit } from "../core/kit-core.mjs";
 import { curve, rank } from "../core/rank.mjs";
 import { buildTask, readTask } from "../core/tasks.mjs";
@@ -157,6 +158,30 @@ export async function listwiseRound(judged, llm, { n = 4 } = {}) {
     sec: +((performance.now() - t0) / 1000).toFixed(1),
     stats: r.stats,
   };
+}
+
+/**
+ * The head-to-head round, as headToHead in src/core/judge.mjs: the best `n` distinct judged
+ * clips (by their absolute totals) play a Swiss tournament of pairs, and a Bradley-Terry fit
+ * orders them (h2h-core.mjs). Smart mode: the top 20 in both orders, at most 150 calls; on
+ * the device: the top 8, each pair once, 12 calls. A pair the model could not answer is left
+ * out of the fit, so the round never fails the run.
+ * Returns { candidates (with h2hRank on the clips that played), summary } (summary null when
+ * fewer than 3 clips could play).
+ */
+export async function headToHeadRound(judged, llm, { n, rounds, orders, maxCalls, concurrency, signal, onProgress } = {}) {
+  const d = H2H_DEFAULTS[llm.where === "google" ? "smart" : "device"];
+  const o = { n: n ?? d.n, rounds: rounds ?? d.rounds, orders: orders ?? d.orders, maxCalls: maxCalls ?? d.maxCalls };
+  const scoredOnly = judged.filter((c) => c.scores && typeof c.total === "number").map(({ h2hRank, ...c }) => c);
+  const top = rank(scoredOnly, { k: o.n, iou: 0.3 });
+  if (top.length < 3) return { candidates: judged, summary: null };
+  const t0 = performance.now();
+  const askPair = async (a, b) => {
+    const r = await ask(llm, { kind: "pair", a, b });
+    return { first: r.parsed.first, why: tidyReason(r.parsed.why) };
+  };
+  const result = await tournament(top, askPair, { ...o, concurrency: concurrency ?? (llm.where === "google" ? 2 : 1), signal, onProgress });
+  return { candidates: applyH2H(judged, top, result), summary: h2hSummary(top, result, { orders: o.orders, sec: +((performance.now() - t0) / 1000).toFixed(1) }) };
 }
 
 /** Rank and curve, exactly as runJob does after judging. */

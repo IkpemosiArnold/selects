@@ -145,3 +145,21 @@ test("one stretch where whisper looped does not fail a 2-hour transcript, and ne
   assert.notEqual(loopy.verdict, "good");
   assert.ok(loopy.score < clean.score - 0.1, `${loopy.score} against ${clean.score}`);
 });
+
+test("setups get a fair share: a stretch crowded by louder windows still sends its best setup window to the judge", () => {
+  // 51 minutes; stretch 6 of 14 is full of strong windows, and its only setup window scores lower
+  const dur = 3090;
+  const cands = windows(dur).map((c) => ({ ...c, hook: "So I went there." }));
+  const b6 = (c) => Math.floor((c.start / dur) * 14) === 6;
+  for (const c of cands) if (b6(c)) c.pre = 0.9;
+  const setup = cands.find((c) => b6(c) && c.start > 1450);
+  Object.assign(setup, { pre: 0.6, hook: "Have you ever cooked for twenty people?" });
+  const on = shortlist(cands, { n: 42, duration: dur });
+  const off = shortlist(cands, { n: 42, duration: dur, setups: false });
+  assert.ok(on.includes(setup), "the setup window is read");
+  assert.ok(!off.includes(setup), "without the fair share the stretch's cap is filled by louder windows");
+  assert.equal(on.length, 42);
+  // one setup per stretch at most from this pass: stretches that already have a setup window get no second one
+  const setups = on.filter((c) => /\?$/.test(c.hook));
+  assert.equal(setups.length, 1);
+});

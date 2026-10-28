@@ -7,12 +7,15 @@
 // | { kind: "judgeBatch", candidates } (Smart mode: the whole shortlist in one call, each
 // clip still scored on its own with the same rubric)
 // | { kind: "faithful", candidate, before, after, hints } (does the cut keep what the speaker
-// meant? before/after are the sentences around the clip, hints from faithfulHints).
-// prompts is { judge, listwise, kit, faithful }: the text of the files in src/core/prompts.
+// meant? before/after are the sentences around the clip, hints from faithfulHints)
+// | { kind: "pair", a, b } (the head-to-head round: which of two clips to post first, a shown
+// first; h2h-core.mjs).
+// prompts is { judge, listwise, kit, faithful, pairwise }: the text of the files in src/core/prompts.
 import { hasScores, JUDGE_MAX_TOKENS, JUDGE_SCHEMA, judgeMessages, judgeText, listMessages, listSchema, parseListAnswer, salvageJudge, splitPrompt } from "./judge-core.mjs";
 import { cleanKit, KIT_SCHEMA, kitMessages, kitSchema } from "./kit-core.mjs";
 import { MADE_FOR, madeForBlock } from "./madefor.mjs";
 import { FAITHFUL_SCHEMA, faithfulMessages, faithfulPrompt, readFaithful } from "./faithful-core.mjs";
+import { PAIR_MAX_TOKENS, PAIR_SCHEMA, pairMessages, parsePairAnswer } from "./h2h-core.mjs";
 
 /** Output budgets, as on the desktop (num_predict): 100 for a judge call, 40 + 30 per clip for the round, 120 for a kit. */
 export function maxTokensFor(task) {
@@ -20,6 +23,7 @@ export function maxTokensFor(task) {
   if (task.kind === "judgeBatch") return 40 + (JUDGE_MAX_TOKENS - 10) * task.candidates.length;
   if (task.kind === "listwise") return 40 + 30 * task.top.length;
   if (task.kind === "faithful") return 130;
+  if (task.kind === "pair") return PAIR_MAX_TOKENS;
   return 120;
 }
 
@@ -32,6 +36,7 @@ export function buildTask(task, prompts) {
   if (task.kind === "kit") return { messages: kitMessages(prompts.kit, task.candidate, { madeFor: task.madeFor }), schema: task.madeFor ? kitSchema(task.madeFor) : KIT_SCHEMA, maxTokens: task.madeFor === "linkedin" ? 200 : maxTokensFor(task) };
   if (task.kind === "faithful") return { messages: faithfulMessages(faithfulPrompt(prompts.faithful), { text: task.candidate.text, before: task.before, after: task.after, hints: task.hints }), schema: FAITHFUL_SCHEMA, maxTokens: maxTokensFor(task) };
   if (task.kind === "judgeBatch") return { messages: batchMessages(storyPrompt(prompts.judge, task.madeFor), task.candidates), schema: batchSchema(lettersFor(task.candidates)), maxTokens: maxTokensFor(task) };
+  if (task.kind === "pair") return { messages: pairMessages(splitPrompt(prompts.pairwise, "prompts/pairwise.md"), task.a, task.b), schema: PAIR_SCHEMA, maxTokens: maxTokensFor(task) };
   throw new Error(`unknown task kind ${task.kind}`);
 }
 
@@ -93,6 +98,7 @@ export function extractJson(text) {
  *               earlier rubric's shape) or null when the scores are missing
  *   listwise -> { order: letters[], reasons: {letter: text}, complete }
  *   kit      -> { title, caption, hashtags }
+ *   pair     -> { first: "A"|"B", why } or null when no choice can be read
  */
 export function readTask(task, { data, text }) {
   const obj = data && typeof data === "object" ? data : extractJson(text);
@@ -103,6 +109,7 @@ export function readTask(task, { data, text }) {
   if (task.kind === "listwise") return parseListAnswer(obj?.ranking ? obj : String(text ?? ""), lettersFor(task.top));
   if (task.kind === "kit") return cleanKit(obj || {}, { madeFor: task.madeFor });
   if (task.kind === "faithful") return readFaithful(obj || String(text ?? ""), task.hints || []); // null when there is no verdict
+  if (task.kind === "pair") return (obj && parsePairAnswer(obj)) || parsePairAnswer(String(text ?? ""));
   if (task.kind === "judgeBatch") {
     // { byLetter: { A: { moment, share, hook, standalone, why, watch } } }; clips the answer left out are missing
     const letters = lettersFor(task.candidates);
@@ -141,11 +148,12 @@ export function checkTaskShape(task, { maxChars = 3000, maxClips = 6 } = {}) {
     if (!Array.isArray(task.candidates) || task.candidates.length < 1 || task.candidates.length > 8) return "candidates must hold 1 to 8 clips";
     return task.candidates.every(clip) ? null : "each clip must be { text, start, end } with at most 3000 characters";
   }
+  if (task.kind === "pair") return clip(task.a) && clip(task.b) ? null : "a and b must each be { text, start, end } with at most 3000 characters";
   if (task.kind === "listwise") {
     if (!Array.isArray(task.top) || task.top.length < 2 || task.top.length > maxClips) return `top must hold 2 to ${maxClips} clips`;
     return task.top.every((c) => clip(c) && typeof c.hook === "string" && c.hook.length <= maxChars) ? null : "each clip must be { text, hook, start, end }";
   }
-  return "kind must be judge, judgeBatch, listwise, kit or faithful";
+  return "kind must be judge, judgeBatch, listwise, pair, kit or faithful";
 }
 
 /**
@@ -155,6 +163,7 @@ export function checkTaskShape(task, { maxChars = 3000, maxClips = 6 } = {}) {
 export function slimTask(task) {
   const c = (x) => ({ text: x.text, hook: x.hook, start: x.start, end: x.end, ...(typeof x.cueText === "string" && x.cueText ? { cueText: x.cueText } : {}) });
   if (task.kind === "listwise") return { kind: "listwise", top: task.top.map(c) };
+  if (task.kind === "pair") return { kind: "pair", a: c(task.a), b: c(task.b) };
   if (task.kind === "judgeBatch") return { kind: "judgeBatch", candidates: task.candidates.map(c), ...(task.madeFor ? { madeFor: task.madeFor } : {}) };
   if (task.kind === "faithful") return { kind: "faithful", candidate: c(task.candidate), before: task.before ?? null, after: task.after ?? null, hints: (task.hints || []).map((h) => ({ issue: h.issue, cue: h.cue })) };
   return { kind: task.kind, candidate: c(task.candidate), ...(task.madeFor ? { madeFor: task.madeFor } : {}) };

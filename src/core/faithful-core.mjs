@@ -5,6 +5,7 @@
 // the bottom until the person accepts it or applies the fix).
 import { splitPrompt, tidyReason } from "./judge-core.mjs";
 import { snapTrim, toSentences } from "./sentences.mjs";
+import { byRank } from "./rank.mjs";
 
 export const FAITHFUL_VERDICTS = ["faithful", "check", "misleading"];
 export const FAITHFUL_ISSUES = ["turn", "quote", "sarcasm", "qualifier", "reference"];
@@ -295,11 +296,11 @@ export const isDemoted = (c) => c?.faithful?.verdict === "misleading" && !c.fait
  * `demoted` on the ones that moved down. Does not mutate the input.
  */
 export function orderByFaithful(cands) {
-  const score = (c) => (typeof c.total === "number" ? c.total : -1);
   return cands
     .map((c, i) => ({ c, i }))
-    // the same order as rank(): total, then the pre-score, then the earlier start
-    .sort((a, b) => (isDemoted(a.c) ? 1 : 0) - (isDemoted(b.c) ? 1 : 0) || score(b.c) - score(a.c) || (b.c.pre ?? 0) - (a.c.pre ?? 0) || (a.c.start ?? 0) - (b.c.start ?? 0) || a.i - b.i)
+    // the same order as rank() (the head-to-head order, then total, the pre-score and the
+    // earlier start), with misleading cuts moved to the end
+    .sort((a, b) => (isDemoted(a.c) ? 1 : 0) - (isDemoted(b.c) ? 1 : 0) || byRank({ ...a.c, start: a.c.start ?? 0 }, { ...b.c, start: b.c.start ?? 0 }) || a.i - b.i)
     .map(({ c }, i) => {
       const out = { ...c, rank: i + 1 };
       if (isDemoted(c)) out.demoted = true;

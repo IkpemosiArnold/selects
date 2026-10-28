@@ -44,6 +44,8 @@ Options
                     for long videos, capped at about half the video's length in judge time)
   --faithful <m>    check each pick still says what the speaker meant: model (default, one
                     call per pick), rules (no model), or off
+  --h2h             order the best 8 clips by comparing them two at a time (about 12 more
+                    model calls, 10 to 30 minutes on a laptop CPU) instead of one side-by-side call
   --preview         render fast 720x1280 drafts instead of final 1080x1920 clips
   --plain-kit       skip the model for post titles (use the clip's first line)
   --out <dir>       where clips go (default ./selects-out/<video-name>)
@@ -178,6 +180,7 @@ function printCandidates(job) {
     if (c.why || c.reason) say(`    ${blue(c.why || c.reason)}`);
     if (c.watch) say(`    ${dim(`Watch: ${c.watch}`)}`);
     if (c.listRank) say(`    ${dim(`Side by side: ${c.listRank} of ${job.listwise?.order?.length ?? "?"}${c.listReason ? `. ${c.listReason}` : ""}`)}`);
+    if (c.h2hRank) say(`    ${dim(`Head to head: ${c.h2hRank} of ${job.h2h?.clips ?? "?"} (won ${c.h2hRecord?.replace("-", ", lost ") ?? "?"})${c.h2hWhy ? `. ${c.h2hWhy}` : ""}`)}`);
     const f = c.faithful;
     if (f && f.verdict !== "faithful") {
       const label = f.verdict === "misleading" ? red("Misleading cut") : yellow("Check the cut");
@@ -336,6 +339,7 @@ async function cmdClip(video, values) {
     judgeN: values["judge-n"] ? +values["judge-n"] : undefined,
     madeFor: values["made-for"],
     faithful: values.faithful,
+    h2h: values.h2h ? true : undefined,
     kit: values["plain-kit"] ? "plain" : undefined,
     credit: values.credit,
     license: values.license,
@@ -684,6 +688,7 @@ async function main() {
       "made-for": { type: "string" },
       fresh: { type: "boolean" },
       faithful: { type: "string" },
+      h2h: { type: "boolean" },
       out: { type: "string" },
       port: { type: "string" },
       yes: { type: "boolean", short: "y" },

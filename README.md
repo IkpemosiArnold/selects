@@ -292,7 +292,7 @@ The proxy spends one shared, free Gemini quota, so its limits are the protection
 | Gate | Limit | What a refusal costs |
 |---|---|---|
 | Ingress, per client IP, before the body is read | 60 a minute, 2,000 a day | nothing: 429, the body is not read |
-| Body cap and task check | 16 KB; only the judge, listwise, faithful and kit task shapes | nothing: 413 or 400, no model quota used |
+| Body cap and task check | 16 KB; only the judge, listwise, pair, faithful and kit task shapes | nothing: 413 or 400, no model quota used |
 | Model quota, per client IP and for everyone | 20 a minute and 300 a day per IP; 25 a minute and 12,000 a day in total | charged only when every counter has room |
 
 Light mode's `POST /transcribe` has the same three gates with its own counters: ingress (30 a minute and 1,000 a day per IP, before the body is read); the checks (at most 1.5 MB and 180 seconds of audio, sniffed from its bytes as Ogg, WebM, M4A, MP3, AAC, WAV or FLAC, and refused if it carries a video track); then the quota (12 pieces a minute and 400 a day per IP; 18 a minute and 1,900 a day in total, under Groq's free 20 and 2,000), plus audio seconds charged after each answer (2 hours a day per IP; 7,000 an hour and 27,000 a day in total, under Groq's free 7,200 and 28,800). The audio and the words pass through memory for that one request: nothing is stored, and the log has sizes and timings only.
@@ -392,7 +392,7 @@ Raised voices come from the loudness track (bursts of a second or more above the
 
 Every window starts and ends on a sentence boundary, so a clip never cuts a word in half. Windows start at sentences at least 6 s apart, and always at a setup: a question, or a sentence that opens a story or a turn ("Have you ever...", "I remember...", "What if..."), so a moment's setup is never skipped. Besides windows at the short end, the middle and the long end of the length range, Selects makes windows around each laugh, applause or strong raised-voice peak: they end on the sentence the beat lands in (so the laugh is in the clip) and start a few sentences earlier (so the setup is too). A window is dropped when its first sentence points back at something a viewer never saw (for example "As I said", "That's why" or a lowercase start) or when its last sentence stops mid-thought (for example "let me show you" or a trailing "and").
 
-The pre-score rewards an opening with a hook phrase, a question or a number, a contrast word inside the window, a steady pace without long pauses, moments louder than the talk's median, laughter in the window or just after it (more when it comes in the second half, the payoff), a faster pace than usual and quick exchanges. It penalises soft openers and filler words. A window that ends on a question loses a little, unless the question is put to the listener ("would you?"), which invites comments. The shortlist first takes the best windows around laughs (up to 30% of it, one per laugh), then the best window from each stretch of the recording, then fills up by score, skipping windows that overlap a chosen one by more than 40%.
+The pre-score rewards an opening with a hook phrase, a question or a number, a contrast word inside the window, a steady pace without long pauses, moments louder than the talk's median, laughter in the window or just after it (more when it comes in the second half, the payoff), a faster pace than usual and quick exchanges. It penalises soft openers and filler words. A window that ends on a question loses a little, unless the question is put to the listener ("would you?"), which invites comments. The shortlist first takes the best windows around laughs (up to 30% of it, one per laugh), then, in each stretch of the recording, the best window that starts on a setup (a setup line is often quiet, so louder windows nearby could crowd it out), then the best window from each stretch that still has none, then fills up by score, skipping windows that overlap a chosen one by more than 40%.
 
 How many windows the judge reads scales with the length: at least 16, and one per 75 s of recording (41 for a 51-minute podcast), capped by a time budget of half the recording's length at the judge's measured speed. Smart mode (about 3 s a call) is never capped; Gemma on a CPU is, and the job says how long the judging will take.
 
@@ -416,6 +416,17 @@ The rubric score is blended with the pre-score (70% and 30%) because the model's
 ### The listwise round
 
 After the pointwise scores, the 4 best distinct windows go to the model together, each as its words with the sound marks (or, past 90 words, its opening and its ending), so it can judge the build-up, the energy and the payoff, and the model puts them in order, the one that makes people stop, laugh or react first, with a reason of 10 words or fewer. The first place adds 0.15 to a clip's total and the last adds 0. The prompt is in [`src/core/prompts/listwise.md`](src/core/prompts/listwise.md). Turn the round off with `settings.listwise: false` in the job settings.
+
+### The head-to-head round (optional)
+
+On a long conversation the absolute scores saturate: in one 51-minute test, 14 of 36 judged clips got the top moment score, so the order at the top came from the pre-score, not from the model. The head-to-head round tries the other way to rank: after the absolute scores (the gate), the best distinct clips are compared two at a time ("which would you post first, and why?") in a short Swiss tournament, each round pairing clips of similar strength that have not met, and a Bradley-Terry fit of the answers orders them. Models prefer the clip they read first (Gemma 4 picked it in about 70% of evenly matched pairs, and its two answers for one pair agreed only about 60% of the time), so the fit has a term for the first position, and Smart mode asks every pair in both orders.
+
+| Where | Clips compared | Rounds | Orders | Calls | Time |
+|---|---|---|---|---|---|
+| Smart mode | the top 20 | 6 | both | 120 (cap 150) | about 6 to 8 minutes at the proxy's 20 calls a minute |
+| On the device | the top 8 | 3 | each pair once, balanced | 12 | the job states it: 12 x 1.6 x the measured seconds per judge call (about 15 minutes at 50 s) |
+
+It replaces the listwise round when it runs, and it changes only the order: `total` and the quality bar still read the absolute judge. It is off by default (`settings.h2h: true`, or `selects <video> --h2h`), because on the tests so far it did not find better clips than the absolute order: see [eval/results/EXPLORE-h2h.md](eval/results/EXPLORE-h2h.md). The prompt is in [`src/core/prompts/pairwise.md`](src/core/prompts/pairwise.md) and the method in [`src/core/h2h-core.mjs`](src/core/h2h-core.mjs).
 
 ### Faithful cuts
 

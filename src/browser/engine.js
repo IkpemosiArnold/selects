@@ -21,7 +21,8 @@ import { loadAsr, resolveSpeech, transcribePcm } from "./asr.js";
 import { canJudgeInTab } from "./devices.js";
 import { publishPicks, transcribeLight } from "./light-run.js";
 import { cachedFetch } from "./cache.js";
-import { faithfulRound, judgeShortlist, listwiseRound, makeKit, rankAndCurve } from "./judge.js";
+import { faithfulRound, headToHeadRound, judgeShortlist, listwiseRound, makeKit, rankAndCurve } from "./judge.js";
+import { h2hOn } from "../core/h2h-core.mjs";
 import { audioDecodeTrial, audioDecodeUnsupported, decodeAudio16k, loudnessFromPcm, makeThumbs, probeFile } from "./media.js";
 import { decodeAudioSegments, longVideoNote, pcmStore } from "./pcm.js";
 import { MODELS } from "./models.js";
@@ -520,7 +521,7 @@ export class Engine {
       if (savedJudgment?.candidates) {
         ranked = savedJudgment.candidates;
         r.judged = savedJudgment.judged;
-        Object.assign(job, { curve: savedJudgment.curve, verdict: savedJudgment.verdict, listwise: savedJudgment.listwise, faithful: savedJudgment.faithful, judge: savedJudgment.judge });
+        Object.assign(job, { curve: savedJudgment.curve, verdict: savedJudgment.verdict, listwise: savedJudgment.listwise, h2h: savedJudgment.h2h ?? null, faithful: savedJudgment.faithful, judge: savedJudgment.judge });
         reuse("judge", `${savedJudgment.judged.length} clips judged by ${job.judge?.model || "the judge"}`);
       } else {
         begin("judge");
@@ -529,7 +530,7 @@ export class Engine {
         finish("judge", job.judge.secPerCandidate ? `${r.judged.length} clips judged, ${job.judge.secPerCandidate} s each` : `${r.judged.length} clips judged`);
         // signed with the judge that actually did the work (Smart mode can fall back to the device)
         const made = judgmentSignature({ selection: selSig, judge: judgeIdentity(llm), prompts: PROMPTS, settings: job.settings });
-        await this.save(r, "judge", { judgment: { judged: r.judged, candidates: ranked, curve: job.curve, verdict: job.verdict ?? null, listwise: job.listwise ?? null, faithful: job.faithful ?? null, judge: job.judge } }, { judge: made });
+        await this.save(r, "judge", { judgment: { judged: r.judged, candidates: ranked, curve: job.curve, verdict: job.verdict ?? null, listwise: job.listwise ?? null, h2h: job.h2h ?? null, faithful: job.faithful ?? null, judge: job.judge } }, { judge: made });
       }
       job.candidates = this.withDecisions(r, ranked);
       this.emit(id, "candidates", { ranked: true, candidates: structuredClone(job.candidates), curve: job.curve });
@@ -734,7 +735,22 @@ export class Engine {
     if (jr.fallbacks) job.judge.note = `Google's free Gemma was slow, so ${jr.fallbacks} of ${short.length} clips were judged on your device with the model already saved in this browser.`;
     const kept = judged.filter((c) => c && !c.scores).length;
     if (kept && llm.where === "google" && !clipFallback) job.judge.note = `Smart mode could not judge ${kept} of ${short.length} clips, so they keep their first-stage score. Nothing was downloaded.`;
-    if (job.settings.listwise !== false && judged.filter((c) => c.scores).length >= 3) {
+    if (h2hOn(job.settings) && judged.filter((c) => c.scores).length >= 3) {
+      // the head-to-head round replaces the listwise round: the absolute scores are the gate,
+      // pairs of the best clips decide their order (h2h-core.mjs)
+      const smart = llm.where === "google";
+      progress("judge", { progress: 0.8, note: smart ? "comparing the best clips two at a time" : "comparing the best 8 clips two at a time on this device" });
+      try {
+        const h = await headToHeadRound(judged, llm, {
+          onProgress: (p) => progress("judge", { progress: 0.8 + 0.1 * p.progress, note: `compared ${p.done} of ${p.total} pairs` }),
+        });
+        judged = h.candidates;
+        job.h2h = h.summary;
+      } catch (e) {
+        if (e?.name === "AbortError") throw e;
+        job.h2h = { error: e.message };
+      }
+    } else if (job.settings.listwise !== false && judged.filter((c) => c.scores).length >= 3) {
       progress("judge", { progress: 0.8, note: "comparing the best clips side by side" });
       try {
         const lw = await listwiseRound(judged.filter((c) => c.scores), llm, { n: job.settings.listN ?? 4 });

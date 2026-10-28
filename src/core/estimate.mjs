@@ -2,6 +2,7 @@
 // overnight mode. Pure and browser-safe (no Node imports). The defaults are the measured
 // numbers in notes/timings.md for a 2017 dual-core MacBook Pro under load; callers pass
 // better rates when this machine has measured its own (models.json, earlier jobs).
+import { H2H_DEFAULTS, h2hEstimateSec } from "./h2h-core.mjs";
 
 /** Rates measured on the reference laptop (notes/timings.md). */
 export const DEFAULT_RATES = {
@@ -27,7 +28,8 @@ export const OVERNIGHT_SEC = 30 * 60;
 /**
  * Seconds per stage for a job, from its settings and the source length.
  * @param {{duration:number, k?:number, judgeN?:number, minLen?:number, maxLen?:number, faithful?:string,
- *   listwise?:boolean, language?:string, smart?:boolean, clips?:number, preset?:string, kit?:string|false}} o
+ *   listwise?:boolean, h2h?:boolean, language?:string, smart?:boolean, clips?:number, preset?:string, kit?:string|false}} o
+ *   h2h: the head-to-head round runs in place of the listwise round (h2h-core.mjs)
  * @param {Partial<typeof DEFAULT_RATES>} rates
  * @returns {{stages:{probe:number,language:number,transcribe:number,judge:number,render:number},
  *   analysisSec:number, renderSec:number, totalSec:number, overnight:boolean}}
@@ -45,7 +47,7 @@ export function estimateJob(o, rates = {}) {
     probe: 2 + (dur / 3600) * r.thumbsPerHourSec,
     language: o.language === "auto" ? 60 : 8,
     transcribe: dur / Math.max(0.05, r.asrSpeed),
-    judge: o.mode === "caption" ? 0 : n * per + (o.listwise === false ? 0 : o.smart ? per * 2 : r.listwiseSec) + (o.faithful === "off" || o.faithful === "rules" ? 0 : k * per),
+    judge: o.mode === "caption" ? 0 : n * per + (o.h2h ? h2hEstimateSec(H2H_DEFAULTS[o.smart ? "smart" : "device"], per) : o.listwise === false ? 0 : o.smart ? per * 2 : r.listwiseSec) + (o.faithful === "off" || o.faithful === "rules" ? 0 : k * per),
     render: o.mode === "caption" ? dur * (preview ? r.previewFactor : r.renderFactor) : clips * clipLen * (preview ? r.previewFactor : r.renderFactor) + (preview || o.kit === false || o.kit === "plain" ? 0 : clips * (o.smart ? per : r.kitSec)),
   };
   for (const s in stages) stages[s] = Math.round(stages[s]);

@@ -60,6 +60,31 @@ test("cache: Made for, k and the length range are judgment inputs; the length ra
   assert.match(r3.job.stages.transcribe.note, /saved on this device/);
 });
 
+test("head-to-head: on the device the top 8 play 12 pairs in place of the listwise call, and the saved order is reused", async () => {
+  const s = await seeded(Engine);
+  const a = fakeBackend({ model: "gemma-h2h" });
+  const one = await runOnce(Engine, s, a, { h2h: true });
+  assert.equal(one.job.stage, "ready", one.job.error?.message);
+  assert.equal(a.count("listwise"), 0, "the head-to-head round replaces the listwise call");
+  assert.ok(a.count("pair") > 0 && a.count("pair") <= 12, `pairs ${a.count("pair")}`);
+  assert.equal(one.job.h2h.orders, "alternate");
+  assert.equal(one.job.h2h.calls, a.count("pair"));
+  const played = one.job.candidates.filter((c) => c.h2hRank);
+  assert.ok(played.length >= 3);
+  assert.deepEqual(played.map((c) => c.h2hRank), played.map((_, i) => i + 1), "the clips that played lead the list, in their order");
+  assert.equal(one.job.candidates[0].h2hRank, 1);
+
+  const b = fakeBackend({ model: "gemma-h2h" });
+  const two = await runOnce(Engine, s, b, { h2h: true });
+  assert.equal(b.calls.length, 0, "the judgment with its head-to-head order was saved");
+  assert.deepEqual(two.job.h2h.order, one.job.h2h.order);
+
+  const c = fakeBackend({ model: "gemma-h2h-off" }); // a model of its own: answers are cached for the page's life
+  await runOnce(Engine, s, c, { h2h: false });
+  assert.equal(c.count("pair"), 0);
+  assert.equal(c.count("listwise"), 1, "turned off, the listwise round runs as before");
+});
+
 test("decisions: a decision survives a run that drops its window, and comes back with the window", async () => {
   const s = await seeded(Engine);
   const one = await runOnce(Engine, s, fakeBackend({ model: "m" }));
