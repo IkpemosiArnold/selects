@@ -272,12 +272,18 @@ export function iou(a, b) {
  * Segments: n/3. On inputs over 30 minutes, one per 10 minutes when that is more (never
  * more than n), and no stretch may hold more than `perSegment` picks (default twice its fair share, at least 3),
  * so a 2-hour sermon or podcast gets candidates from the whole of it. Up to 30 minutes
- * the picks are exactly as before (the eval measured those), except for windows around
+ * the picks are as the eval measured them, except for windows around
  * a laugh or applause (`c.peak`, delivery.mjs): when there are some, the best of them, up to
  * `peakShare` of n, are taken first, each from a different beat, so a laugh the text rules
  * cannot see still reaches the judge. (Raised-voice peaks compete on the pre-score.)
+ * Then each stretch gets its best window that starts on a setup (`isSetup`: a question, or a
+ * line that opens a story or a turn), unless it already has one (`setups: false` turns this
+ * off). The pre-score rewards a loud or laughing stretch, and a setup line is often quiet: in
+ * one 51-minute conversation a full stretch of louder windows left out the question that
+ * started its best story. Setup windows are already made at every setup sentence
+ * (makeCandidates); this makes sure the judge reads one per stretch.
  */
-export function shortlist(cands, { n = 8, maxIou = 0.4, duration, minP = 0.45, perSegment, peakShare = 0.3 } = {}) {
+export function shortlist(cands, { n = 8, maxIou = 0.4, duration, minP = 0.45, perSegment, peakShare = 0.3, setups = true } = {}) {
   // drop windows whisper barely heard, as long as enough others are left to choose from
   const heard = cands.filter((c) => c.meanP == null || c.meanP >= minP);
   if (heard.length >= Math.min(n, cands.length) / 2 && heard.length >= 1) cands = heard;
@@ -299,8 +305,21 @@ export function shortlist(cands, { n = 8, maxIou = 0.4, duration, minP = 0.45, p
     beatsUsed.add(c.peak.at);
     count[bucketOf(c)]++;
   }
+  // a fair share for setups: each stretch of the timeline gets its best window that starts on
+  // a setup (a question, or a line that opens a story or a turn), so a moment whose setup
+  // sounds quiet on paper is not crowded out by louder stretches nearby
+  if (setups) {
+    for (let b = 0; b < buckets && chosen.length < n; b++) {
+      if (count[b] >= cap || chosen.some((c) => bucketOf(c) === b && isSetup(c.hook))) continue;
+      const best = byScore.find((c) => bucketOf(c) === b && isSetup(c.hook) && ok(c));
+      if (best) {
+        chosen.push(best);
+        count[b]++;
+      }
+    }
+  }
   for (let b = 0; b < buckets && chosen.length < n; b++) {
-    if (count[b]) continue; // this stretch already has a peak window
+    if (count[b]) continue; // this stretch already has a peak or setup window
     const best = byScore.find((c) => bucketOf(c) === b && ok(c));
     if (best) {
       chosen.push(best);

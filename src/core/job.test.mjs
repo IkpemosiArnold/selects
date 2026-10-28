@@ -477,6 +477,30 @@ test("quality bar: a video with no strong clips says so and offers only the clos
   assert.deepEqual(ok.candidates.map((c) => c.weak), ok.candidates.map((c) => c.total < 0.55));
 });
 
+test("head-to-head: with --h2h the top 8 are compared in about 12 calls in place of the listwise call", async () => {
+  const { headToHead } = await import("./judge.mjs");
+  const job = createJob(video, { k: 3, model: "mock", qualityGate: false, h2h: true });
+  const deps = mocks({ probe: 0, transcribe: 0, judge: 0 });
+  let listwise = 0;
+  deps.listwise = async (cands) => (listwise++, { candidates: cands, order: [], reasons: {} });
+  const asked = [];
+  // the stand-in prefers the later clip, whichever order it is shown in
+  deps.headToHead = (cands, o) => headToHead(cands, { ...o, request: async (m) => {
+    asked.push(m);
+    const t = m[1].content;
+    const len = (l) => Number(t.match(new RegExp(`Clip ${l} \\((\\d+) s\\)`))[1]);
+    return { data: { first: len("A") >= len("B") ? "A" : "B", why: "It lands." } };
+  } });
+  const done = await runJob(job.id, { deps });
+  assert.equal(done.stage, "ready", done.error?.message);
+  assert.equal(listwise, 0);
+  assert.ok(asked.length > 0 && asked.length <= 12, `pairs ${asked.length}`);
+  assert.equal(done.h2h.calls, asked.length);
+  assert.equal(done.h2h.orders, "alternate");
+  assert.equal(done.candidates[0].h2hRank, 1);
+  assert.match(done.stages.judge.note || "", /judged/);
+});
+
 test("transcript reuse: a second job on the same video skips the language check and whisper", async () => {
   delete process.env.SELECTS_REUSE;
   try {

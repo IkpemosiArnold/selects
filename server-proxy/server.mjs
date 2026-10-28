@@ -1,7 +1,7 @@
 // Selects Smart mode proxy: one endpoint that judges clip text with Gemma through the
 // Gemini API, using the project's key, so visitors without a key can try Smart mode.
 //
-// It accepts only the judge, listwise and posting-kit task shapes (clip text and times,
+// It accepts only the judge, listwise, pair and posting-kit task shapes (clip text and times,
 // size-limited), builds the prompt itself from src/core/prompts (so it cannot be used as a
 // general chatbot), rate limits per IP and overall, and never logs or stores clip text.
 //
@@ -40,14 +40,14 @@ import { buildTask, checkTaskShape, slimTask } from "../src/core/tasks.mjs";
 import { asrFromEnv, checkAudio } from "./asr.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const PROMPTS = Object.fromEntries(["judge", "listwise", "kit", "faithful"].map((k) => [k, fs.readFileSync(path.join(here, "../src/core/prompts", `${k}.md`), "utf8")]));
+const PROMPTS = Object.fromEntries(["judge", "listwise", "kit", "faithful", "pairwise"].map((k) => [k, fs.readFileSync(path.join(here, "../src/core/prompts", `${k}.md`), "utf8")]));
 
 export const LIMITS = {
   // 1. ingress: every task request from one client IP, valid or not, before its body is read
   ingressPerIpPerMinute: 60,
   ingressPerIpPerDay: 2000,
   // 3. the model quota, charged only after the body passed the checks
-  perIpPerMinute: 20, // a full Selects run is 8 judge calls, 1 listwise call and a kit per rendered clip
+  perIpPerMinute: 20, // a 51-minute recording is about 42 judge calls, up to 120 head-to-head pair calls, a faithful check per pick and a kit per rendered clip
   perIpPerDay: 300,
   globalPerMinute: 25, // the free Gemma quota is about 30 requests a minute per key
   globalPerDay: 12000, // and about 14,400 a day
@@ -129,8 +129,8 @@ export function clientIp(req, hops = 0) {
   return req.socket.remoteAddress || "unknown";
 }
 
-const KINDS = new Set(["judge", "judgeBatch", "listwise", "kit", "faithful"]);
-const TOP_KEYS = new Set(["kind", "candidate", "candidates", "top", "before", "after", "hints", "madeFor", "model"]);
+const KINDS = new Set(["judge", "judgeBatch", "listwise", "pair", "kit", "faithful"]);
+const TOP_KEYS = new Set(["kind", "candidate", "candidates", "top", "a", "b", "before", "after", "hints", "madeFor", "model"]);
 const isObj = (x) => x != null && typeof x === "object" && !Array.isArray(x);
 const shortStr = (x, n) => typeof x === "string" && x.length <= n;
 
@@ -142,10 +142,10 @@ const shortStr = (x, n) => typeof x === "string" && x.length <= n;
 export function strictTaskShape(task) {
   if (!isObj(task)) return "body must be a JSON object";
   for (const k of Object.keys(task)) if (!TOP_KEYS.has(k)) return `unknown field ${k.slice(0, 40)}`;
-  if (!KINDS.has(task.kind)) return "kind must be judge, judgeBatch, listwise, kit or faithful";
+  if (!KINDS.has(task.kind)) return "kind must be judge, judgeBatch, listwise, pair, kit or faithful";
   if (task.madeFor != null && !(typeof task.madeFor === "string" && Object.hasOwn(MADE_FOR, task.madeFor))) return `madeFor must be one of ${Object.keys(MADE_FOR).join(", ")}`;
   if (task.model != null && !(typeof task.model === "string" && /^[\w.:-]{1,64}$/.test(task.model))) return "model must be a model name";
-  const clips = [task.candidate, ...(Array.isArray(task.candidates) ? task.candidates : []), ...(Array.isArray(task.top) ? task.top : [])].filter((c) => c !== undefined);
+  const clips = [task.candidate, task.a, task.b, ...(Array.isArray(task.candidates) ? task.candidates : []), ...(Array.isArray(task.top) ? task.top : [])].filter((c) => c !== undefined);
   for (const c of clips) {
     if (!isObj(c)) return "each clip must be an object";
     if (c.hook != null && !shortStr(c.hook, 3000)) return "hook must be text (at most 3000 characters)";

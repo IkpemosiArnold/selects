@@ -3,9 +3,10 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { config, ollamaUrl, PROMPTS_DIR, selectsHome } from "./config.mjs";
-import { applyListOrder, blend, combine, JUDGE_MAX_TOKENS, JUDGE_SCHEMA as SCHEMA, judgeMessages, judgeText, listMessages, listSchema, parseListAnswer, readJudge, salvageJudge, splitPrompt } from "./judge-core.mjs";
+import { applyListOrder, blend, combine, JUDGE_MAX_TOKENS, JUDGE_SCHEMA as SCHEMA, judgeMessages, judgeText, listMessages, listSchema, parseListAnswer, readJudge, salvageJudge, splitPrompt, tidyReason } from "./judge-core.mjs";
 import { appendJsonLine, readJson, sha1, writeJsonAtomic } from "./util.mjs";
 import { MADE_FOR, madeForBlock } from "./madefor.mjs";
+import { applyH2H, H2H_DEFAULTS, h2hSummary, PAIR_MAX_TOKENS, PAIR_SCHEMA, pairMessages, parsePairAnswer, tournament } from "./h2h-core.mjs";
 
 // The rubric weights, the blend, the JSON schemas, answer parsing and the listwise maths
 // have no Node imports (judge-core.mjs), so the browser build scores clips the same way.
@@ -277,4 +278,67 @@ export async function listwise(candidates, { model, n = 4, cacheDir, request, si
   }
   const { candidates: out, byLetter } = applyListOrder(candidates, top, hit.order, hit.reasons);
   return { candidates: out, order: hit.order.map((l) => byLetter[l].id), reasons: Object.fromEntries(hit.order.map((l) => [byLetter[l].id, hit.reasons[l] || null])), complete: hit.complete, stats: hit.stats };
+}
+
+// ---------------------------------------------------------------- head-to-head round
+
+let pairPromptCache = null;
+function loadPairPrompt() {
+  if (pairPromptCache) return pairPromptCache;
+  pairPromptCache = { ...splitPrompt(fs.readFileSync(path.join(PROMPTS_DIR, "pairwise.md"), "utf8"), "prompts/pairwise.md"), version: null };
+  pairPromptCache.version = sha1(`${pairPromptCache.system}\n---\n${pairPromptCache.user}`).slice(0, 10);
+  return pairPromptCache;
+}
+
+/** The pair prompt's messages: clip a shown first (A), clip b second (B). */
+export function buildPairMessages(a, b) {
+  return pairMessages(loadPairPrompt(), a, b);
+}
+
+/**
+ * The head-to-head round (h2h-core.mjs): the absolute judge is the gate, and the best `n`
+ * distinct judged clips play a Swiss tournament of pairs, ordered by a Bradley-Terry fit.
+ * Every answer is cached by the two clips' words in the order shown, so a resumed run only
+ * pays for pairs it has not asked. Returns { candidates (with h2hRank on the clips that
+ * played), summary } (summary null when fewer than 3 clips could play).
+ * @param {object[]} candidates judged candidates
+ * @param {{model:string, n?:number, rounds?:number, orders?:"both"|"alternate", maxCalls?:number,
+ *   concurrency?:number, cacheDir?:string, request?:Function, signal?:AbortSignal, onProgress?:Function}} opts
+ *   `request` replaces the Ollama call (tests and the eval use it).
+ */
+export async function headToHead(candidates, { model, n = H2H_DEFAULTS.device.n, rounds = H2H_DEFAULTS.device.rounds, orders = H2H_DEFAULTS.device.orders, maxCalls = H2H_DEFAULTS.device.maxCalls, concurrency = 1, cacheDir, request, signal, onProgress } = {}) {
+  const { rank } = await import("./rank.mjs");
+  // the gate: clips the judge scored, by their absolute total (any earlier round's order is dropped)
+  const scored = candidates.filter((c) => c.scores && typeof c.total === "number").map(({ h2hRank, ...c }) => c);
+  const top = rank(scored, { k: n, iou: 0.3 });
+  if (top.length < 3) return { candidates, summary: null };
+  const p = loadPairPrompt();
+  const cacheFile = cacheDir ? path.join(cacheDir, "judge-cache.json") : null;
+  const cache = cacheFile ? readJson(cacheFile, {}) : {};
+  const call = request || ((m) => ollamaJson({ model, messages: m, schema: PAIR_SCHEMA, numPredict: PAIR_MAX_TOKENS, signal }));
+  const ask = async (a, b) => {
+    const messages = buildPairMessages(a, b);
+    const key = sha1(`pair|${model}|${p.version}|${messages[1].content}`);
+    if (cache[key]) return cache[key];
+    let parsed;
+    let stats = null;
+    try {
+      const res = await call(messages);
+      stats = res.stats ?? null;
+      parsed = parsePairAnswer(res.data ?? res);
+    } catch (e) {
+      if (e.content == null) throw e;
+      stats = e.stats ?? null;
+      parsed = parsePairAnswer(e.content);
+    }
+    if (cacheDir) appendJsonLine(path.join(cacheDir, "judge-calls.jsonl"), { at: new Date().toISOString(), model, id: `${a.id}|${b.id}`, kind: "pair", answered: !!parsed, ...(stats || {}) });
+    if (!parsed) return null;
+    const hit = { first: parsed.first, why: tidyReason(parsed.why) };
+    cache[key] = hit;
+    if (cacheFile) writeJsonAtomic(cacheFile, cache);
+    return hit;
+  };
+  const t0 = Date.now();
+  const result = await tournament(top, ask, { rounds, orders, maxCalls, concurrency, signal, onProgress });
+  return { candidates: applyH2H(candidates, top, result), summary: h2hSummary(top, result, { orders, sec: +((Date.now() - t0) / 1000).toFixed(1) }), result, top };
 }

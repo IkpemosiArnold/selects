@@ -2,16 +2,26 @@
 import { iou } from "./candidates.mjs";
 
 const score = (c) => (typeof c.total === "number" ? c.total : -1);
+const h2h = (c) => (Number.isFinite(c.h2hRank) ? c.h2hRank : Infinity);
 
 /**
- * Sort by judge total (ties broken by the cheap pre-score, then earlier start), then walk
- * down the list keeping a candidate only if it overlaps every kept one by at most `iou`.
- * Returns the top k with rank 1..k set. Does not mutate the input.
+ * The ranking order: clips placed by the head-to-head round (h2hRank, h2h-core.mjs) first, in
+ * that order; then by judge total, ties broken by the cheap pre-score, then the earlier start.
+ */
+export function byRank(a, b) {
+  const ha = h2h(a);
+  const hb = h2h(b);
+  if (ha !== hb) return ha === Infinity ? 1 : hb === Infinity ? -1 : ha - hb;
+  return score(b) - score(a) || (b.pre ?? 0) - (a.pre ?? 0) || a.start - b.start;
+}
+
+/**
+ * Sort in the ranking order (byRank), then walk down the list keeping a candidate only if it
+ * overlaps every kept one by at most `iou`. Returns the top k with rank 1..k set. Does not
+ * mutate the input.
  */
 export function rank(candidates, { k = 5, iou: maxIou = 0.3 } = {}) {
-  const sorted = candidates
-    .slice()
-    .sort((a, b) => score(b) - score(a) || (b.pre ?? 0) - (a.pre ?? 0) || a.start - b.start);
+  const sorted = candidates.slice().sort(byRank);
   const kept = [];
   for (const c of sorted) {
     if (kept.length >= k) break;

@@ -18,6 +18,7 @@
 // Pure and browser-safe: no Node imports.
 import { MADE_FOR } from "./madefor.mjs";
 import { judgeCount } from "./select.mjs";
+import { h2hOn } from "./h2h-core.mjs";
 
 /** Bump one of these when the code that computes that stage changes what it produces. */
 export const SIG_VERSIONS = { transcript: 1, selection: 1, judgment: 1, kit: 1 };
@@ -111,6 +112,8 @@ export function judgmentSignature({ selection, judge, prompts = {}, settings = {
     maxLen: settings.maxLen ?? 60,
     k: settings.k ?? 5,
     smartBatch: !!settings.smartBatch,
+    // the head-to-head round, only when it runs, so judgments made without it keep their signature
+    ...(h2hOn(settings) ? { h2h: true, pairPrompt: hashText(prompts.pairwise ?? "") } : {}),
   });
 }
 

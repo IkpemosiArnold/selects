@@ -5,5 +5,6 @@ import judgeMd from "../core/prompts/judge.md?raw";
 import listwiseMd from "../core/prompts/listwise.md?raw";
 import kitMd from "../core/prompts/kit.md?raw";
 import faithfulMd from "../core/prompts/faithful.md?raw";
+import pairwiseMd from "../core/prompts/pairwise.md?raw";
 
-export const PROMPTS = { judge: judgeMd, listwise: listwiseMd, kit: kitMd, faithful: faithfulMd };
+export const PROMPTS = { judge: judgeMd, listwise: listwiseMd, kit: kitMd, faithful: faithfulMd, pairwise: pairwiseMd };

@@ -47,6 +47,7 @@ function answer(task) {
   }
   if (task.kind === "listwise") return { ranking: lettersFor(task.top).map((l) => ({ clip: l, reason: `Clip ${l} lands its point.` })) };
   if (task.kind === "faithful") return { clip_says: "x", speaker_means: "x", verdict: "faithful", issue: "none", extend: "none", note: "Keeps what the speaker meant." };
+  if (task.kind === "pair") return { first: task.a.text.length >= task.b.text.length ? "A" : "B", why: "The longer clip has more to it." };
   if (task.kind === "kit") return { title: `About: ${task.candidate.hook}`.slice(0, 60), caption: task.candidate.text, hashtags: ["talks", "ideas", "learning"] };
   throw new Error(`no fake answer for ${task.kind}`);
 }

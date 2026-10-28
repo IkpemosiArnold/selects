@@ -16,7 +16,8 @@ import { transcriptQuality } from "./quality.mjs";
 import { attributionLine, captionWithCredit, mediaReminder, normaliseLicense, OWN_FOOTAGE } from "./attribution.mjs";
 import { judgeCount, loopExclusions, selectCandidates } from "./select.mjs";
 import { splitNonSpeech, speechOnly } from "./nonspeech.mjs";
-import { judge as realJudge, listwise as realListwise, measuredSpeeds } from "./judge.mjs";
+import { headToHead as realHeadToHead, judge as realJudge, listwise as realListwise, measuredSpeeds } from "./judge.mjs";
+import { H2H_DEFAULTS, h2hEstimateSec, h2hOn } from "./h2h-core.mjs";
 import { ensureSound as realSound } from "./sound-node.mjs";
 import { DEFAULT_RATES, diskFullError, diskNeed, estimateJob, isDiskFull, thumbCount } from "./estimate.mjs";
 import { checkFaithful as realFaithful } from "./faithful.mjs";
@@ -36,7 +37,7 @@ import { AUDIOGRAM_PRESETS, audiogramSettings, isAudioOnly } from "./audiogram.m
 
 /** The prompt files' text, for the judgment signature (a prompt change is a new judgment). */
 function promptTexts() {
-  return Object.fromEntries(["judge", "listwise", "faithful", "kit"].map((k) => [k, fs.readFileSync(new URL(`./prompts/${k}.md`, import.meta.url), "utf8")]));
+  return Object.fromEntries(["judge", "listwise", "faithful", "kit", "pairwise"].map((k) => [k, fs.readFileSync(new URL(`./prompts/${k}.md`, import.meta.url), "utf8")]));
 }
 
 /**
@@ -394,7 +395,7 @@ export function jobEstimate(job, { rates = {} } = {}) {
   const asrSpeed = measuredAsrSpeed();
   const judgeN = judgeCount({ k: s.k ?? null, duration: job.source.duration, judgeN: s.judgeN ?? null, secPerCall: judgeSec }).n;
   const est = estimateJob(
-    { duration: job.source.duration, k: s.k, judgeN, minLen: s.minLen, maxLen: s.maxLen, faithful: s.faithful, listwise: s.listwise, language: s.language, preset: s.preset, kit: s.kit, mode: s.mode },
+    { duration: job.source.duration, k: s.k, judgeN, minLen: s.minLen, maxLen: s.maxLen, faithful: s.faithful, listwise: s.listwise, h2h: h2hOn(s), language: s.language, preset: s.preset, kit: s.kit, mode: s.mode },
     { judgeSec, asrSpeed, ...rates },
   );
   return { ...est, judgeN, at: now(), measured: { judgeSec, asrSpeed } };
@@ -406,6 +407,7 @@ async function runStages(id, { deps = {}, signal } = {}) {
     transcribe: realTranscribe,
     judge: realJudge,
     listwise: realListwise,
+    headToHead: realHeadToHead,
     sound: realSound,
     faithful: realFaithful,
     thumbs: makeThumbs,
@@ -698,7 +700,16 @@ async function runStages(id, { deps = {}, signal } = {}) {
         },
       });
       const st = judged.stats;
-      if (job.settings.listwise !== false && judged.length >= 3) {
+      if (h2hOn(job.settings) && judged.length >= 3) {
+        // the head-to-head round replaces the listwise round (h2h-core.mjs): the top 8 on this
+        // computer, each pair asked once, about 12 calls
+        const o = H2H_DEFAULTS.device;
+        const est = h2hEstimateSec(o, st?.secPerCandidate ?? secPerCall);
+        progress("judge", { progress: 0.8, note: `comparing the best ${o.n} clips two at a time${est ? `, about ${Math.max(1, Math.round(est / 60))} min` : ""}` });
+        const h = await d.headToHead(judged, { model: job.settings.model, ...o, cacheDir: dir, signal, onProgress: (p) => progress("judge", { progress: 0.8 + 0.1 * p.progress, note: `compared ${p.done} of ${p.total} pairs` }) });
+        judged = h.candidates;
+        job.h2h = h.summary;
+      } else if (job.settings.listwise !== false && judged.length >= 3) {
         progress("judge", { progress: 0.8, note: "comparing the best clips side by side" });
         const t0 = Date.now();
         const lw = await d.listwise(judged, { model: job.settings.model, n: job.settings.listN ?? 4, cacheDir: dir, signal });
