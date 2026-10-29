@@ -201,6 +201,7 @@ export const DEFAULT_SETTINGS = {
   madeFor: "shorts", // where the clips go: "shorts" (Shorts, Reels or TikTok), "linkedin", "x" or "story"; sets the length range, the caption style and the kit's format
   judgeN: null, // how many pre-scored windows the LLM judge reads (the slow step on a CPU); null = auto, scaled with k and the length and capped by a time budget (judgeCount in select.mjs)
   listwise: true, // a final side-by-side round on the best few clips (one extra model call)
+  hear: null, // the hearing judge (hear-node.mjs): null (off), "cues" (laughter, overlap, loudness) or "gemma3n" (Gemma 3n listens; opt-in, slow on a CPU)
   faithful: "model", // check each top pick still says what the speaker meant: "model" (one call per pick), "rules" (no model) or "off"
   credit: null, // who to credit in each posting kit, for example "Jenni, EMF 2026"
   license: null, // the source's licence id, for example "CC-BY-SA-4.0"

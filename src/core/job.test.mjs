@@ -581,3 +581,35 @@ test("render: the MP4 is announced before the posting kit is written, and a fail
   assert.equal(kit.title, "Better title");
   assert.equal(loadJob(job.id).candidates.find((x) => x.id === c.id).title, "Better title");
 });
+
+test("hearing judge (opt-in): stretch scores reach the shortlist and the totals; a listener that cannot run leaves the words to decide", async () => {
+  const { blendWithHearing } = await import("./hear-core.mjs");
+  const job = createJob(video, { k: 3, model: "mock", qualityGate: false, hear: "cues" });
+  const deps = mocks({ probe: 0, transcribe: 0, judge: 0 });
+  let asked = null;
+  deps.hear = async (_dir, _src, stretches, o) => {
+    asked = { n: stretches.length, listener: o.listener };
+    o.onProgress?.({ done: stretches.length, total: stretches.length, secPer: 0.3 });
+    return stretches.map((g, i) => ({ ...g, score: i % 4 === 1 ? 0.9 : 0.2 }));
+  };
+  const judge = deps.judge;
+  deps.judge = async (cands, o) => (await judge(cands, o)).map((c) => ({ ...c, judgeTotal: c.total }));
+  const ready = await runJob(job.id, { deps });
+  assert.equal(ready.stage, "ready");
+  assert.equal(asked.listener, "cues");
+  assert.ok(asked.n >= 20, "the whole recording, 30 s stretches every 15 s");
+  assert.equal(ready.hear.listener, "cues");
+  const judged = JSON.parse(fs.readFileSync(path.join(jobDir(job.id), "judged.json"), "utf8"));
+  assert.ok(judged.length && judged.every((c) => typeof c.hear === "number"));
+  for (const c of judged) assert.equal(c.total, blendWithHearing(c.judgeTotal, c.pre, c.hear, null));
+
+  const job2 = createJob(video, { k: 3, model: "mock", qualityGate: false, hear: "gemma3n" });
+  const deps2 = mocks({ probe: 0, transcribe: 0, judge: 0 });
+  deps2.hear = async () => {
+    throw new Error("Gemma 3n is not downloaded");
+  };
+  const ready2 = await runJob(job2.id, { deps: deps2 });
+  assert.equal(ready2.stage, "ready");
+  assert.match(ready2.hear.error, /not downloaded/);
+  assert.ok(ready2.candidates.every((c) => c.hear == null));
+});
