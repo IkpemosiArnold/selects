@@ -34,3 +34,18 @@ test("selectCandidates drops non-speech words and uses defaults", () => {
   const empty = selectCandidates({ words: [] });
   assert.deepEqual([empty.sentences, empty.windows, empty.shortlist], [[], [], []]);
 });
+
+test("selectCandidates with hearing: windows carry `hear`, the shortlist leans to what sounds alive, `pre` stays the text's", () => {
+  const words = talk();
+  const settings = { minLen: 20, maxLen: 60, stride: 6, judgeN: 3 };
+  const plain = selectCandidates({ words, settings, duration: 180 });
+  // the listener hears one stretch near the end as far better than the rest
+  const hearing = [0, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150].map((s) => ({ s, e: Math.min(180, s + 30), score: s === 135 ? 1 : 0.1 }));
+  const heard = selectCandidates({ words, settings, duration: 180, hearing });
+  assert.ok(heard.windows.every((w) => w.hear === null || typeof w.hear === "number"));
+  assert.ok(heard.shortlist.some((w) => w.hear === 1), "a window around the stretch heard as alive reaches the judge");
+  const byId = new Map(plain.windows.map((w) => [w.id, w]));
+  for (const w of heard.shortlist) assert.equal(w.pre, byId.get(w.id).pre, "the window's own pre-score is unchanged");
+  // without hearing, nothing changes
+  assert.deepEqual(selectCandidates({ words, settings, duration: 180, hearing: [] }).shortlist, plain.shortlist);
+});

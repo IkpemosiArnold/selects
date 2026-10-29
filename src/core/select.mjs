@@ -4,6 +4,7 @@
 import { makeCandidates, shortlist } from "./candidates.mjs";
 import { speechOnly } from "./nonspeech.mjs";
 import { toSentences } from "./sentences.mjs";
+import { preWithHearing, windowHearing } from "./hear-core.mjs";
 
 /**
  * The judge's default time budget when judgeN is auto: half the video's length, at least 10
@@ -72,9 +73,13 @@ export const PER_WINDOW_SEC = 75;
  *           duration?: number|null, judge?: { secPerCall?: number|null, budgetSec?: number|null } }} input
  *   judge: the judge's measured seconds per call and the time budget, for an auto judgeN
  *   exclude: [{ s, e }] stretches to keep out of the shortlist (whisper loops)
+ *   hearing: [{ s, e, score }] the hearing judge's stretch scores (hear-core.mjs), or null. When
+ *     given, every window gets `hear` (its best overlapping stretch) and the shortlist is drawn
+ *     by the pre-score mixed with it, so a moment that sounds alive can reach the judge even
+ *     when its words look ordinary. Each window's own `pre` is unchanged.
  * @returns {{ sentences: object[], windows: object[], shortlist: object[], judgeN: object }}
  */
-export function selectCandidates({ words, events = null, loudness = null, settings = {}, duration = null, judge = {}, exclude = [] }) {
+export function selectCandidates({ words, events = null, loudness = null, settings = {}, duration = null, judge = {}, exclude = [], hearing = null }) {
   const speech = speechOnly(words || []);
   const sentences = toSentences(speech);
   const windows = makeCandidates(sentences, {
@@ -88,6 +93,10 @@ export function selectCandidates({ words, events = null, loudness = null, settin
   const count = judgeCount({ k: settings.k ?? null, duration, judgeN: settings.judgeN ?? null, secPerCall: judge.secPerCall ?? null, budgetSec: judge.budgetSec ?? settings.judgeBudgetSec ?? judgeBudgetSec(duration) });
   // stretches where whisper looped (transcriptQuality's `loops`) never become clips
   const usable = exclude?.length ? windows.filter((w) => !exclude.some((x) => w.start < x.e && w.end > x.s)) : windows;
-  const short = shortlist(usable, { n: count.n, duration: duration ?? undefined });
+  if (hearing?.length) for (const w of windows) w.hear = windowHearing(w, hearing);
+  // with hearing, the shortlist is drawn on a mixed score; the windows it returns are the originals
+  const byId = new Map(usable.map((w) => [w.id, w]));
+  const pool = hearing?.length ? usable.map((w) => ({ ...w, pre: preWithHearing(w.pre, w.hear) })) : usable;
+  const short = shortlist(pool, { n: count.n, duration: duration ?? undefined }).map((w) => byId.get(w.id));
   return { sentences, windows, shortlist: short, judgeN: count };
 }

@@ -18,6 +18,8 @@ import { judgeCount, loopExclusions, selectCandidates } from "./select.mjs";
 import { splitNonSpeech, speechOnly } from "./nonspeech.mjs";
 import { judge as realJudge, listwise as realListwise, measuredSpeeds } from "./judge.mjs";
 import { ensureSound as realSound } from "./sound-node.mjs";
+import { hearStretches as realHear } from "./hear-node.mjs";
+import { blendWithHearing, hearGrid } from "./hear-core.mjs";
 import { DEFAULT_RATES, diskFullError, diskNeed, estimateJob, isDiskFull, thumbCount } from "./estimate.mjs";
 import { checkFaithful as realFaithful } from "./faithful.mjs";
 import { orderByFaithful } from "./faithful-core.mjs";
@@ -407,6 +409,7 @@ async function runStages(id, { deps = {}, signal } = {}) {
     judge: realJudge,
     listwise: realListwise,
     sound: realSound,
+    hear: realHear,
     faithful: realFaithful,
     thumbs: makeThumbs,
     decideLanguage: realDecideLanguage,
@@ -639,6 +642,31 @@ async function runStages(id, { deps = {}, signal } = {}) {
         job.sound = { by: null, error: String(e?.message || e).slice(0, 200) };
       }
     }
+    // The hearing judge (hear-node.mjs), opt-in: a listener scores 30 s stretches of the audio
+    // on this computer, and the scores join the shortlist and the totals (hear-core.mjs).
+    // Cached per stretch in hear-<listener>.json, so a resumed job only listens to what is left.
+    let hearing = null;
+    if (job.settings.hear && job.source?.path) {
+      const listener = job.settings.hear;
+      current = "candidates";
+      job.stage = STAGE_LABEL.candidates;
+      progress("candidates", { progress: 0, note: "listening for moments worth posting" });
+      try {
+        const sound = readJson(path.join(dir, "sound.json"), null);
+        const t0 = Date.now();
+        hearing = await d.hear(dir, job.source.path, hearGrid(job.source.duration), {
+          listener,
+          soundFrames: sound?.frames ?? null,
+          signal,
+          onProgress: (p) => progress("candidates", { progress: 0.9 * (p.done / p.total), etaSec: p.secPer ? Math.round(p.secPer * (p.total - p.done)) : null, note: `listened to ${p.done} of ${p.total} stretches` }),
+        });
+        job.hear = { listener, stretches: hearing.length, sec: +((Date.now() - t0) / 1000).toFixed(1) };
+      } catch (e) {
+        if (e?.name === "AbortError") throw e;
+        hearing = null;
+        job.hear = { listener, error: String(e?.message || e).slice(0, 200) };
+      }
+    }
     const events = [...loadEvents(dir, words), ...soundEvents].sort((a, b) => a.s - b.s);
     const loudness = readJson(path.join(dir, "loudness.json"), null);
     const exclude = loopExclusions(job.transcriptQuality);
@@ -662,7 +690,7 @@ async function runStages(id, { deps = {}, signal } = {}) {
       // sentences and windows are built from speech only; laughter is kept as a pre-score signal
       // how many windows the judge reads: scaled with k and the length, capped by a time budget
       // at the judge's measured speed (judgeCount in select.mjs)
-      const sel = selectCandidates({ words, events, loudness, settings: job.settings, duration: job.source.duration, judge: { secPerCall }, exclude });
+      const sel = selectCandidates({ words, events, loudness, settings: job.settings, duration: job.source.duration, judge: { secPerCall }, exclude, hearing });
       const { sentences, windows: all } = sel;
       short = sel.shortlist;
       job.judgeN = sel.judgeN;
@@ -698,6 +726,8 @@ async function runStages(id, { deps = {}, signal } = {}) {
         },
       });
       const st = judged.stats;
+      // with the hearing judge on, what was heard joins the total (HEAR_BLEND)
+      if (judged.some((c) => typeof c.hear === "number")) judged = judged.map((c) => ({ ...c, total: blendWithHearing(c.judgeTotal, c.pre, c.hear, c.total) }));
       if (job.settings.listwise !== false && judged.length >= 3) {
         progress("judge", { progress: 0.8, note: "comparing the best clips side by side" });
         const t0 = Date.now();

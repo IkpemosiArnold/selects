@@ -80,6 +80,8 @@ export function selectionSignature({ transcript, settings = {}, duration = null,
     n,
     duration: duration == null ? null : Math.round(duration * 10) / 10,
     exclude: (exclude || []).map((x) => [x.s, x.e]),
+    // only when on, so a selection made before the hearing judge existed keeps its signature
+    ...(settings.hear ? { hear: settings.hear } : {}),
   });
 }
 

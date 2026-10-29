@@ -44,6 +44,9 @@ Options
                     for long videos, capped at about half the video's length in judge time)
   --faithful <m>    check each pick still says what the speaker meant: model (default, one
                     call per pick), rules (no model), or off
+  --hear <l>        also listen to the audio for moments worth posting (off by default):
+                    cues (laughter, overlapping voices, loudness; seconds), or gemma3n
+                    (Gemma 3n hears each 30 s; a 4.6 GB download, slow on a laptop CPU)
   --preview         render fast 720x1280 drafts instead of final 1080x1920 clips
   --plain-kit       skip the model for post titles (use the clip's first line)
   --out <dir>       where clips go (default ./selects-out/<video-name>)
@@ -336,6 +339,7 @@ async function cmdClip(video, values) {
     judgeN: values["judge-n"] ? +values["judge-n"] : undefined,
     madeFor: values["made-for"],
     faithful: values.faithful,
+    hear: values.hear || undefined,
     kit: values["plain-kit"] ? "plain" : undefined,
     credit: values.credit,
     license: values.license,
@@ -349,6 +353,10 @@ async function cmdClip(video, values) {
   }
   if (values.faithful && !["model", "rules", "off"].includes(values.faithful)) {
     say(red(`--faithful takes model, rules or off, not "${values.faithful}".`));
+    process.exit(1);
+  }
+  if (values.hear && !["cues", "gemma3n"].includes(values.hear)) {
+    say(red(`--hear takes cues or gemma3n, not "${values.hear}".`));
     process.exit(1);
   }
   let job;
@@ -365,6 +373,8 @@ async function cmdClip(video, values) {
   job = await runJob(job.id);
   stop();
   printSpeech(job);
+  if (job.hear?.error) say(dim(`The hearing judge did not run, so clips were picked from the words alone: ${job.hear.error}`));
+  else if (job.hear) say(dim(`Heard ${job.hear.stretches} stretches of the audio (${job.hear.listener}).`));
   if (job.stage !== "error") say(dim(`Found clips in ${((Date.now() - t0) / 60000).toFixed(1)} min.`));
   await finishJob(job, values);
 }
@@ -684,6 +694,7 @@ async function main() {
       "made-for": { type: "string" },
       fresh: { type: "boolean" },
       faithful: { type: "string" },
+      hear: { type: "string" },
       out: { type: "string" },
       port: { type: "string" },
       yes: { type: "boolean", short: "y" },
