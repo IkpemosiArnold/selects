@@ -30,7 +30,7 @@ function CopyButton({ text, label, done = "Copied" }) {
   );
 }
 
-function ShareSave({ url, name, title, text }) {
+function ShareSave({ url, name, title, text, onPosted }) {
   const [state, setState] = useState(null);
   const share = canShareFiles();
   const ref = useRef(null);
@@ -55,6 +55,7 @@ function ShareSave({ url, name, title, text }) {
           disabled={state === "busy"}
           onClick={async () => {
             setState("busy");
+            onPosted?.();
             try {
               const r = await shareClip({ url, name, title, text });
               setState(r === "saved" ? "saved" : null);
@@ -67,7 +68,7 @@ function ShareSave({ url, name, title, text }) {
           {state === "busy" ? "Getting the video" : "Share"}
         </button>
       )}
-      <a className={"btn" + (share ? "" : " btn-mark")} href={url} download={name}>
+      <a className={"btn" + (share ? "" : " btn-mark")} href={url} download={name} onClick={() => onPosted?.()}>
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M5 7l3 3 3-3M3 13.5h10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
         Save video
       </a>
@@ -163,7 +164,7 @@ function Row({ job, c, kit }) {
         </p>
         <h2 className="take-title">{title || c.hook}</h2>
         {done && r.stale && <p className="take-stale">You changed the captions or the {job.source?.hasVideo === false ? "background" : "blur"} after this render. Render it again to use the changes.</p>}
-        {done && clip && <ShareSave url={clip} name={clipFileName(c.rank, title || c.hook)} title={title || ""} text={fullCaption} />}
+        {done && clip && <ShareSave url={clip} name={clipFileName(c.rank, title || c.hook)} title={title || ""} text={fullCaption} onPosted={() => Promise.resolve(api.markPosted?.(job.id, c.id)).catch(() => {})} />}
         {r.status === "error" && <p className="take-error">{r.message || r.error || "This clip did not render."}</p>}
         {done && c.render?.saved === false && (
           // ready to download, but not kept on the device (engine.js render): say so, plainly
@@ -355,11 +356,11 @@ export default function RenderScreen({ job, refetch }) {
           </h1>
           <p className="lede">
             {all === 0
-              ? "Approve clips in the review, then render them here."
+              ? "Mark clips Post in the review, then render them here."
               : finished
               ? "Each clip is a vertical video with the captions on it. Share it or save it, and post it with the title and caption."
               : active
-              ? `${done} of ${all} done. Only the clips you approved are rendered.`
+              ? `${done} of ${all} done. Only the clips you marked Post are rendered.`
               : ""}
             {errors ? ` ${plural(errors, "clip")} did not render.` : ""}
           </p>

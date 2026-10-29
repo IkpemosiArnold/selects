@@ -39,6 +39,10 @@ function createHttpApi() {
     getWords: (id) => get(`/api/jobs/${id}/words`),
     createJob: (path, settings) => send("POST", "/api/jobs", { path, settings }),
     patchCandidate: (id, cid, body) => send("PATCH", `/api/jobs/${id}/candidates/${cid}`, body),
+    // Taste: Post and Skip answers kept in a file on this laptop ({ n, posts, skips, active, weight, need })
+    taste: () => get("/api/taste"),
+    resetTaste: () => send("DELETE", "/api/taste"),
+    markPosted: (id, cid) => send("POST", `/api/jobs/${id}/candidates/${cid}/posted`),
     patchJob: (id, settings) => send("PATCH", `/api/jobs/${id}`, { settings }),
     // Audiograms: a background image kept in the job's folder, and the meter's loudness
     setCover: (id, file) => fetch(`/api/jobs/${id}/cover`, { method: "POST", headers: { "content-type": file.type || "application/octet-stream" }, body: file }).then(j),

@@ -291,6 +291,10 @@ export function createBrowserApi({ mode = "private", smart = {}, prefer = "auto"
     registerApp,
     keepOpenLine: KEEP_OPEN,
     patchCandidate: (id, cid, body) => wrap(() => engine.patchCandidate(id, cid, body)),
+    // Taste: Post and Skip answers kept in this browser ({ n, posts, skips, active, weight, need })
+    taste: () => wrap(() => engine.taste.status()),
+    resetTaste: () => wrap(() => engine.taste.reset()),
+    markPosted: (id, cid) => wrap(() => engine.markPosted(id, cid)),
     patchJob: (id, settings) => wrap(() => engine.patchJob(id, settings)),
     // Audiograms (a file with no picture): the person's background image, kept on this device
     setCover: (id, file) => wrap(() => engine.setCover(id, file)),

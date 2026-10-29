@@ -30,6 +30,8 @@ import { clipGainDb, renderInWorker } from "./render.js";
 import { keepAwake, notifyDone, titleProgress } from "./device.js";
 import { downloadAdvice } from "./devices.js";
 import { contentKey, createJobStore, dropVideo, indexedDbBackend, keepVideo, keptVideo, memoryBackend, resumePoint } from "./store.js";
+import { createTasteStore } from "./taste-store.js";
+import { tasteSummary } from "../core/taste.mjs";
 
 export const STAGES = ["probe", "language", "transcribe", "candidates", "judge", "render"];
 /** What Private mode says on a phone, where the in-tab judge does not run (devices.js, inTabJudgeFits). */
@@ -39,7 +41,7 @@ const STAGE_LABEL = { probe: "probing", language: "transcribing", transcribe: "t
 /** Desktop defaults (src/core/config.mjs) with the browser's own: judge and kit run on whichever backend is chosen. */
 export const DEFAULT_SETTINGS = {
   // minLen and maxLen come from the "made for" preset (src/core/madefor.mjs) unless set
-  model: null, k: 5, madeFor: "shorts", faithful: "model", preset: "shorts", judgeN: null, listwise: true, // judgeN null: auto, scaled with the length (select.mjs judgeCount)
+  model: null, k: 10, madeFor: "shorts", faithful: "model", preset: "shorts", judgeN: null, listwise: true, // judgeN null: auto, scaled with the length (select.mjs judgeCount)
   credit: null, license: null, sourceUrl: null, mode: "clips", language: "en", captions: true, kit: "model",
   asrDevice: "auto", // "auto" (WebGPU when there is an adapter), "webgpu" or "wasm"
   asrModel: "auto", // "auto" (tiny.en on phones and small-memory devices, base.en elsewhere), "base" or "tiny"
@@ -60,6 +62,8 @@ const LONG_SEC = 20 * 60;
 export class Engine {
   constructor({ getJudge, getFallback, getTranscriber, getProfile, store, render = renderInWorker, inTabJudge = canJudgeInTab } = {}) {
     this.store = store || createJobStore(typeof indexedDB !== "undefined" ? indexedDbBackend() : memoryBackend());
+    // the person's Post and Skip answers, in the same on-device store (taste-store.js)
+    this.taste = createTasteStore(this.store.backend);
     // getProfile(): the adapter's choices now (privacy mode, judge route, key fingerprints),
     // frozen onto each job when it starts (frozenProfile) and passed to every call below, so a
     // mode switch or a key change affects only jobs started after it.
@@ -746,7 +750,7 @@ export class Engine {
       }
     }
     r.judged = judged;
-    let { ranked, curve } = rankAndCurve(judged, { k: job.settings.k, duration: job.source.duration });
+    let { ranked, curve } = rankAndCurve(judged, { k: job.settings.k, duration: job.source.duration, taste: await this.tasteFor(job) });
     // Faithful cuts: does each top pick still say what the speaker meant? (one call per pick)
     const fmode = job.settings.faithful ?? "model";
     if (fmode !== "off" && ranked.length) {
@@ -792,7 +796,7 @@ export class Engine {
     progress("judge", { progress: 0.5, note: "ranking by the first-stage score" });
     const judged = short.map((c) => ({ ...c, scores: null, judgeTotal: null, total: c.pre ?? 0, judgedOn: "prescore", reason: "Ranked by the first-stage score (sentence shape, pauses, laughter, loudness), not by a model." }));
     r.judged = judged;
-    let { ranked, curve } = rankAndCurve(judged, { k: job.settings.k, duration: job.source.duration });
+    let { ranked, curve } = rankAndCurve(judged, { k: job.settings.k, duration: job.source.duration, taste: await this.tasteFor(job) });
     if ((job.settings.faithful ?? "model") !== "off" && ranked.length) {
       const maxLen = job.settings.maxLen ?? 60;
       const fr = await faithfulRound(ranked, null, { words: r.words, maxLen: Math.max(maxLen * 1.5, maxLen + 15), rulesOnly: true });
@@ -850,6 +854,25 @@ export class Engine {
   }
 
   /** Approve, skip or trim a candidate (trims snap to sentences, as the server's PATCH). */
+  /** The taste model for a job's ranking (null when the job turned it off); puts a summary on the job. */
+  async tasteFor(job) {
+    if (job.settings.taste === "off") {
+      job.taste = null;
+      return null;
+    }
+    const model = await this.taste.model().catch(() => null);
+    job.taste = tasteSummary(model);
+    return model;
+  }
+
+  /** A rendered clip saved or shared counts as a Post. */
+  markPosted(id, cid) {
+    const r = this.rec(id);
+    const c = r.job.candidates.find((x) => x.id === cid);
+    if (!c) throw Object.assign(new Error(`No candidate ${cid} in job ${id}.`), { status: 404 });
+    return this.taste.record(r.key, c, "approved", { by: "download" });
+  }
+
   patchCandidate(id, cid, patch = {}) {
     const r = this.rec(id);
     const c = r.job.candidates.find((x) => x.id === cid);
@@ -870,6 +893,8 @@ export class Engine {
     }
     if (patch.status) {
       if (!["proposed", "approved", "skipped"].includes(patch.status)) throw Object.assign(new Error("status must be proposed, approved or skipped."), { status: 400 });
+      // a Post or Skip is a taste answer, kept on this device; proposed takes it back
+      if (c.status !== patch.status) this.taste.record(r.key, c, patch.status).catch(() => {});
       c.status = patch.status;
     }
     if (patch.start != null || patch.end != null) {

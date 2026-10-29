@@ -392,7 +392,7 @@ export default function CaptionStudio({ job, words, mode, faces, captionsVersion
                 <h2 className="h-18">Fix caption words</h2>
                 <div className="seg seg-light" role="group" aria-label="Which captions">
                   <button type="button" className={"seg-btn" + (scope === "clips" ? " is-on" : "")} aria-pressed={scope === "clips"} disabled={!approved.length} onClick={() => setScope("clips")}>
-                    {approved.length ? `In ${plural(approved.length, "approved clip")}` : "No approved clips"}
+                    {approved.length ? `In ${plural(approved.length, "clip")} to post` : "No clips marked Post"}
                   </button>
                   <button type="button" className={"seg-btn" + (scope === "all" ? " is-on" : "")} aria-pressed={scope === "all"} onClick={() => setScope("all")}>
                     Whole video
@@ -535,7 +535,7 @@ export default function CaptionStudio({ job, words, mode, faces, captionsVersion
                   }
                 }}
               >
-                {approved.length ? `Render ${plural(approved.length, "clip")}` : "Approve a clip to render it"}
+                {approved.length ? `Render ${plural(approved.length, "clip")}` : "Mark a clip Post to render it"}
               </button>
             </>
           )}

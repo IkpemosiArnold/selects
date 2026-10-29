@@ -1,21 +1,43 @@
 // Ranking with non-maximum suppression on time overlap, and the interest curve.
 import { iou } from "./candidates.mjs";
 
-const score = (c) => (typeof c.total === "number" ? c.total : -1);
+/**
+ * What the ranking sorts by: the taste blend (`order`, taste.mjs) when the person's own
+ * answers are in it, otherwise the judge total. -1 for a clip nobody scored.
+ */
+export const rankKey = (c) => (typeof c.order === "number" ? c.order : typeof c.total === "number" ? c.total : -1);
+const score = rankKey;
 
 /**
- * Sort by judge total (ties broken by the cheap pre-score, then earlier start), then walk
- * down the list keeping a candidate only if it overlaps every kept one by at most `iou`.
+ * The review's clips do not overlap in time: about ten distinct moments, each a separate
+ * Post or Skip answer (taste.mjs). Only when a short video has fewer than k such moments are
+ * the rest filled with clips that overlap a kept one by at most `fill` (the old limit, 0.3).
+ */
+export const REVIEW_IOU = 0;
+export const REVIEW_FILL = 0.3;
+
+/**
+ * Sort by judge total, or the taste blend when there is one (ties broken by the cheap
+ * pre-score, then earlier start), then walk down the list keeping a candidate only if it
+ * overlaps every kept one by at most `iou`.
  * Returns the top k with rank 1..k set. Does not mutate the input.
  */
-export function rank(candidates, { k = 5, iou: maxIou = 0.3 } = {}) {
+export function rank(candidates, { k = 5, iou: maxIou = 0.3, fill = null } = {}) {
   const sorted = candidates
     .slice()
     .sort((a, b) => score(b) - score(a) || (b.pre ?? 0) - (a.pre ?? 0) || a.start - b.start);
   const kept = [];
-  for (const c of sorted) {
-    if (kept.length >= k) break;
-    if (kept.every((x) => iou(x, c) <= maxIou)) kept.push(c);
+  const walk = (limit) => {
+    for (const c of sorted) {
+      if (kept.length >= k) break;
+      if (!kept.includes(c) && kept.every((x) => iou(x, c) <= limit)) kept.push(c);
+    }
+  };
+  walk(maxIou);
+  // too few distinct moments (a short video): fill up to k, still in score order overall
+  if (fill != null && fill > maxIou && kept.length < k) {
+    walk(fill);
+    kept.sort((a, b) => sorted.indexOf(a) - sorted.indexOf(b));
   }
   return kept.map((c, i) => ({ ...c, rank: i + 1 }));
 }

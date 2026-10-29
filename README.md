@@ -390,6 +390,10 @@ Raised voices come from the loudness track (bursts of a second or more above the
 
 **The hearing judge (opt-in, desktop only, experimental).** `--hear cues` or `--hear gemma3n` adds a listener that scores 30 s stretches of the audio on this computer. `cues` needs no language model: it combines laughter, how much two voices overlap (pyannote segmentation 3.0, 1.5 MB) and how much the loudness moves, and takes about half a second per stretch on the 2017 laptop. `gemma3n` lets Gemma 3n E2B listen to each stretch (transformers.js 3.8 on onnxruntime-node 1.21, a 4.6 GB download, install with `npm install --no-save @huggingface/transformers@3.8.1`). With hearing on, the shortlist is drawn by half the pre-score and half the hearing score, and the total is 0.5 judge + 0.15 pre-score + 0.35 hearing. It is off by default because it has not been shown to help: on the 19 eval videos the `cues` listener is at chance against Most Replayed (AUC 0.55, [EXPLORE-hear.md](eval/results/EXPLORE-hear.md)), and it did not move one podcast host's own picks up. Gemma 3n is not measured yet. Sources and runtime notes: [notes/HEARING.md](notes/HEARING.md).
 
+### Your taste: Post and Skip
+
+The review shows about ten clips that do not overlap, each leading with why it is worth posting, and asks Post or Skip. Selects learns from those answers on your device (IndexedDB in the browser, `~/.selects/taste/labels.json` on the desktop), keeping only the numbers each clip was ranked on, never words or audio. A small logistic regression joins the ranking from 8 answers with both kinds, at a weight that grows with the answers and never passes 0.6. It has not been shown to help yet: on the eval it is at chance against Most Replayed, though it learns a planted pattern easily ([EXPLORE-taste.md](eval/results/EXPLORE-taste.md)), and it did not move one host's own picks. Details: [notes/TASTE.md](notes/TASTE.md).
+
 ### Stage 1: windows and the pre-score
 
 Every window starts and ends on a sentence boundary, so a clip never cuts a word in half. Windows start at sentences at least 6 s apart, and always at a setup: a question, or a sentence that opens a story or a turn ("Have you ever...", "I remember...", "What if..."), so a moment's setup is never skipped. Besides windows at the short end, the middle and the long end of the length range, Selects makes windows around each laugh, applause or strong raised-voice peak: they end on the sentence the beat lands in (so the laugh is in the clip) and start a few sentences earlier (so the setup is too). A window is dropped when its first sentence points back at something a viewer never saw (for example "As I said", "That's why" or a lowercase start) or when its last sentence stops mid-thought (for example "let me show you" or a trailing "and").
@@ -477,6 +481,7 @@ selects queue add <video...>   queue videos for overnight mode
 selects queue run              work through the queue, one video at a time
 selects queue                  show the queue
 selects jobs                   list jobs
+selects taste [reset]          what Selects has learned from your Post and Skip answers, or forget them
 selects serve [--port 4317]    start the local review app
 selects doctor [--json]        show the resolved config; check whisper, Ollama, the judge model and disk
 ```
@@ -484,20 +489,21 @@ selects doctor [--json]        show the resolved config; check whisper, Ollama, 
 | Option | Default | Meaning |
 |---|---|---|
 | `--model <name>` | `gemma3:4b`, else a local `gemma3` tag | the Ollama model that judges the clips |
-| `--k <n>` | 5 | how many clips to propose |
+| `--k <n>` | 10 | how many clips to propose; they do not overlap in time (a short video with too few distinct moments is filled with clips that overlap a little) |
 | `--made-for <p>` | `shorts` | where the clips go: `shorts`, `linkedin`, `x` or `story` (see "Made for" above) |
 | `--min <sec>` | 20 (from `--made-for`) | shortest clip |
 | `--max <sec>` | 60 (from `--made-for`) | longest clip |
 | `--judge-n <n>` | auto | how many pre-scored windows the model reads: auto is one per 75 s of recording (at least 16), capped at half the recording's length of judging on a CPU (more is slower) |
 | `--faithful <m>` | `model` | check each pick still says what the speaker meant: `model` (one call per pick), `rules` (no model) or `off` |
 | `--hear <l>` | off | also listen to the audio (experimental, not shown to help yet): `cues` (laughter, overlapping voices, loudness) or `gemma3n` (Gemma 3n listens; 4.6 GB, slow on a CPU) |
+| `--labels <file>` | `~/.selects/taste/labels.json` | learn your taste from this file of Post and Skip answers, and add this job's answers to it. With `selects review <job-id>`, ranks a judged job again with the file, without judging again. Answers keep only the numbers each clip was ranked on, never words or audio |
 | `--preview` | off | render fast 720x1280 drafts instead of final 1080x1920 clips |
 | `--plain-kit` | off | skip the model for post titles and use the clip's first line |
 | `--out <dir>` | `./selects-out/<video-name>` | where the clips go |
 | `--credit <text>` | none | who to credit in each post caption, for example `"Jenni, EMF 2026"` |
 | `--license <id>` | none | the source's licence, for example `CC-BY-SA-4.0` (adds the licence link) |
 | `--source-url <url>` | none | where the source video lives (added to the credit) |
-| `--yes`, `-y` | off | approve every proposed clip without asking |
+| `--yes`, `-y` | off | approve every proposed clip without asking (not counted as Post answers) |
 | `--force` | off | judge clips even when the transcript looks unreliable |
 | `--language <code>` | `en` | the spoken language: an ISO code such as `en` or `yo`, or `auto` (decode and compare) |
 | `--asr-model <name>` | `auto` | the whisper model: a name in the models folder (`base.en`, `small.en`, `medium.en-q5_0`, `small`) or a path. Auto is `base.en` for English and the best installed multilingual model otherwise |

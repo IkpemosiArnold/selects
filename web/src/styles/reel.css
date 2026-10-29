@@ -79,6 +79,20 @@
 .slate-mark.is-skipped { color: var(--slate-red); }
 .slate.is-skipped .slate-line { text-decoration: line-through; text-decoration-color: var(--slate-red); text-decoration-thickness: 2px; color: var(--chalk-2); }
 
+/* why the clip is worth posting leads the slate; its opening line follows, smaller */
+.slate-lead { padding: 16px 18px 0; font: 500 var(--t-24)/1.3 var(--sans); color: var(--chalk); text-wrap: pretty; max-width: 34ch; }
+.slate-line.is-quote { padding-top: 10px; font-size: clamp(1.05rem, 1.25vw, 1.25rem); line-height: 1.25; letter-spacing: -0.01em; color: var(--chalk-2); }
+.slate-line.is-quote::before { content: "\201C"; }
+.slate-line.is-quote::after { content: "\201D"; }
+.slate.is-skipped .slate-lead { color: var(--chalk-2); }
+
+/* the quiet taste line (taste.mjs), its meaning and a way to forget the answers */
+.taste-note { display: grid; gap: 6px; font-size: var(--t-15); color: var(--ink); }
+.taste-note p { max-width: 44ch; text-wrap: pretty; }
+.taste-small { font-size: var(--t-13); color: var(--ink-2); }
+.controls .taste-note { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.done-go .taste-note { flex-basis: 100%; margin-top: 10px; }
+
 .slate-why { display: grid; gap: 14px; padding: 0 2px; }
 .slate-reason { color: var(--blue-ink); font-size: var(--t-18); line-height: 1.45; max-width: 40ch; text-wrap: pretty; }
 .slate-reason.is-yours { color: var(--ink-2); font-size: var(--t-15); }
@@ -490,14 +504,29 @@
   }
   .sheet .slate-clap { margin: 0 8px -1px; flex: none; touch-action: none; cursor: grab; }
   .sheet .slate-board { margin: 0 8px; border-radius: 0; flex: none; box-shadow: 0 0 0 1px var(--slate-rule), 0 -16px 30px -18px rgba(0, 0, 0, 0.7); }
-  .sheet-head { display: grid; grid-template-columns: minmax(0, 1fr) 58px; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+  .sheet-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+  .sheet-meta { padding: 8px 6px 0 14px; font-size: var(--t-13); color: var(--chalk-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sheet-meta .mono { color: var(--chalk); }
+  .sheet-lead {
+    grid-column: 1 / -1; padding: 4px 14px 14px; font: 500 1.1875rem/1.32 var(--sans); color: var(--chalk); text-wrap: pretty;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden;
+  }
+  .sheet-lead.is-quote { font-family: var(--mono); letter-spacing: -0.02em; }
+  .sheet.is-skipped .sheet-lead { color: var(--chalk-2); text-decoration: line-through; text-decoration-color: var(--slate-red); }
+  .sheet .slate-mark { bottom: auto; top: 6px; right: 76px; }
+  .sheet-opens { display: grid; gap: 6px; }
+  .sheet .sheet-opens .slate-line { background: var(--slate); color: var(--chalk); border-radius: 6px; font-size: 1.125rem; line-height: 1.25; padding: 12px 14px; }
+  .sheet-times { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .sheet-times dt { font-size: var(--t-13); color: var(--ink-2); }
+  .sheet-times dd { font: 500 1.0625rem/1.2 var(--mono); font-feature-settings: "tnum" 1; }
+  .sheet-times .is-mine dd { color: var(--blue-ink); }
   .sheet .slate-fields { grid-template-columns: 0.95fr 1fr 1fr 0.9fr; border-bottom: 0; }
   .sheet .slate-fields > div { padding: 9px 8px 10px 10px; }
   .sheet .slate-fields dd { font-size: 1.0625rem; }
   .sheet.is-open .sheet-head { border-bottom: 1px solid var(--slate-rule); }
   .sheet-toggle {
-    display: grid; place-items: center; align-content: center; gap: 2px; min-height: 56px; padding: 0; border: 0;
-    border-left: 1px solid var(--slate-rule); background: none; color: var(--chalk); font: 600 0.75rem/1 var(--sans); cursor: pointer;
+    display: inline-flex; align-items: center; gap: 4px; min-height: 44px; min-width: 64px; padding: 0 14px 0 10px; border: 0;
+    background: none; color: var(--chalk); font: 600 0.8125rem/1 var(--sans); cursor: pointer;
     touch-action: manipulation;
   }
   .sheet-toggle svg { transition: rotate 220ms var(--ease-out); }
@@ -542,7 +571,8 @@
   .bar-btn.is-approve.is-on { box-shadow: inset 0 0 0 2px var(--on-yellow); }
   .bar-btn:focus-visible { outline-offset: 3px; }
 
-  .reel.is-phone .toast { bottom: calc(var(--bar-h) + var(--peek-h) + 14px + env(safe-area-inset-bottom, 0px)); }
+  /* the sheet now leads with a few lines of why, so the toast sits under the masthead instead */
+  .reel.is-phone .toast { top: calc(var(--mast-h) + env(safe-area-inset-top, 0px) + 10px); bottom: auto; }
 
   /* trim and blur on a phone: a smaller clip on top, the tool below */
   .reel.is-phone.is-trim .reel-stage, .reel.is-phone.is-blur .reel-stage { grid-template-columns: minmax(0, 1fr); grid-template-areas: "deck" "left" "right"; gap: 14px; }

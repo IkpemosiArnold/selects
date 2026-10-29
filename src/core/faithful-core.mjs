@@ -295,7 +295,8 @@ export const isDemoted = (c) => c?.faithful?.verdict === "misleading" && !c.fait
  * `demoted` on the ones that moved down. Does not mutate the input.
  */
 export function orderByFaithful(cands) {
-  const score = (c) => (typeof c.total === "number" ? c.total : -1);
+  // the same key as rank(): the taste blend when there is one, else the total
+  const score = (c) => (typeof c.order === "number" ? c.order : typeof c.total === "number" ? c.total : -1);
   return cands
     .map((c, i) => ({ c, i }))
     // the same order as rank(): total, then the pre-score, then the earlier start

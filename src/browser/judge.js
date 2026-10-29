@@ -3,7 +3,8 @@
 // by whichever backend runs here (llm.js).
 import { applyListOrder, blend, combine, readJudge } from "../core/judge-core.mjs";
 import { plainKit } from "../core/kit-core.mjs";
-import { curve, rank } from "../core/rank.mjs";
+import { curve, rank, REVIEW_FILL, REVIEW_IOU } from "../core/rank.mjs";
+import { applyTaste } from "../core/taste.mjs";
 import { buildTask, readTask } from "../core/tasks.mjs";
 import { taskKey } from "../core/signatures.mjs";
 import { PROMPTS } from "./prompts.js";
@@ -159,9 +160,12 @@ export async function listwiseRound(judged, llm, { n = 4 } = {}) {
   };
 }
 
-/** Rank and curve, exactly as runJob does after judging. */
-export function rankAndCurve(judged, { k = 5, duration }) {
-  return { ranked: rank(judged, { k, iou: 0.3 }), curve: curve(judged, duration, { step: 5 }) };
+/**
+ * Rank and curve, exactly as runJob does after judging: the person's taste model (taste.mjs)
+ * blended in when it is active, then about k clips that never overlap in time.
+ */
+export function rankAndCurve(judged, { k = 10, duration, taste = null }) {
+  return { ranked: rank(applyTaste(judged, taste), { k, iou: REVIEW_IOU, fill: REVIEW_FILL }), curve: curve(judged, duration, { step: 5 }) };
 }
 
 /**
