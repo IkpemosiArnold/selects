@@ -34,8 +34,7 @@ export const TASTE_FEATURES = [
 
 /**
  * When and how much the taste model counts. Fixed before any evaluation (see
- * selects-test-media/taste/PROTOCOL.md for the private test, eval/results/EXPLORE-taste.md
- * for the public one); not tuned on either.
+ * eval/TASTE-PLAN.md; the private test's protocol stays with its data); not tuned on either.
  *   minLabels  answers needed before it joins the ranking (and at least one Post and one Skip)
  *   maxWeight  the most it can ever count against the generic ranking
  *   half       with this many answers in the smaller class, it counts half of maxWeight
