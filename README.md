@@ -388,6 +388,8 @@ In a conversation the moments worth posting are often in the delivery: a laugh, 
 
 Raised voices come from the loudness track (bursts of a second or more above the recording's 92nd percentile), the pace from words per second against the recording's median, and quick exchanges from very short sentences ("No way.", "Exactly."), a cheap stand-in for turn-taking because whisper does not say who is speaking.
 
+**The hearing judge (opt-in, desktop only, experimental).** `--hear cues` or `--hear gemma3n` adds a listener that scores 30 s stretches of the audio on this computer. `cues` needs no language model: it combines laughter, how much two voices overlap (pyannote segmentation 3.0, 1.5 MB) and how much the loudness moves, and takes about half a second per stretch on the 2017 laptop. `gemma3n` lets Gemma 3n E2B listen to each stretch (transformers.js 3.8 on onnxruntime-node 1.21, a 4.6 GB download, install with `npm install --no-save @huggingface/transformers@3.8.1`). With hearing on, the shortlist is drawn by half the pre-score and half the hearing score, and the total is 0.5 judge + 0.15 pre-score + 0.35 hearing. It is off by default because it has not been shown to help: on the 19 eval videos the `cues` listener is at chance against Most Replayed (AUC 0.55, [EXPLORE-hear.md](eval/results/EXPLORE-hear.md)), and it did not move one podcast host's own picks up. Gemma 3n is not measured yet. Sources and runtime notes: [notes/HEARING.md](notes/HEARING.md).
+
 ### Stage 1: windows and the pre-score
 
 Every window starts and ends on a sentence boundary, so a clip never cuts a word in half. Windows start at sentences at least 6 s apart, and always at a setup: a question, or a sentence that opens a story or a turn ("Have you ever...", "I remember...", "What if..."), so a moment's setup is never skipped. Besides windows at the short end, the middle and the long end of the length range, Selects makes windows around each laugh, applause or strong raised-voice peak: they end on the sentence the beat lands in (so the laugh is in the clip) and start a few sentences earlier (so the setup is too). A window is dropped when its first sentence points back at something a viewer never saw (for example "As I said", "That's why" or a lowercase start) or when its last sentence stops mid-thought (for example "let me show you" or a trailing "and").
@@ -488,6 +490,7 @@ selects doctor [--json]        show the resolved config; check whisper, Ollama, 
 | `--max <sec>` | 60 (from `--made-for`) | longest clip |
 | `--judge-n <n>` | auto | how many pre-scored windows the model reads: auto is one per 75 s of recording (at least 16), capped at half the recording's length of judging on a CPU (more is slower) |
 | `--faithful <m>` | `model` | check each pick still says what the speaker meant: `model` (one call per pick), `rules` (no model) or `off` |
+| `--hear <l>` | off | also listen to the audio (experimental, not shown to help yet): `cues` (laughter, overlapping voices, loudness) or `gemma3n` (Gemma 3n listens; 4.6 GB, slow on a CPU) |
 | `--preview` | off | render fast 720x1280 drafts instead of final 1080x1920 clips |
 | `--plain-kit` | off | skip the model for post titles and use the clip's first line |
 | `--out <dir>` | `./selects-out/<video-name>` | where the clips go |
