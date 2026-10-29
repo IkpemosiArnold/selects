@@ -1,8 +1,10 @@
 // Review, one clip at a time. The clip plays large at 9:16 with the captions
-// the render will burn in; its slate sits beside it; the next clip peeks out
-// from behind. Approve (A or right arrow) claps the slate and throws the card
-// onto the approved pile; Skip (S or left arrow) slides it quietly away. The
-// next clip is already playing underneath, so nobody waits for the motion.
+// the render will burn in; its slate sits beside it, leading with why the clip
+// is worth posting; the next clip peeks out from behind. Post (P, A or right
+// arrow) claps the slate and throws the card onto the pile to render; Skip (S
+// or left arrow) slides it quietly away. Each answer also teaches Selects what
+// this person posts (taste.mjs). The next clip is already playing underneath,
+// so nobody waits for the motion.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, inBrowser, retryJob } from "../../lib/api.js";
 import { plural, tc } from "../../lib/time.js";
@@ -19,6 +21,7 @@ import TopN from "./TopN.jsx";
 import Script from "./Script.jsx";
 import Sheet, { DecisionBar } from "./Sheet.jsx";
 import FaithNote, { fixLabel } from "./FaithNote.jsx";
+import { TasteNote, useTaste } from "./Taste.jsx";
 import { byRank, clipName, firstLine, thumbAt } from "./util.js";
 import { BlurOverlay, BlurPanel, useBlurDraft, useContentBox, trackLabelsFor, blurSummary, blurIsEmpty } from "../Blur.jsx";
 import { usePlayerTime } from "../../lib/player.js";
@@ -126,6 +129,8 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
   const peek = cur ? nextOf(cur) : null;
 
   const flash = useCallback((msg, kind = "ok") => setToast({ msg, kind, at: Date.now() }), []);
+  // what Selects has learned from the Post and Skip answers so far (kept on this device)
+  const { taste, refresh: refreshTaste, reset: resetTaste } = useTaste();
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 3400);
@@ -324,12 +329,13 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
         throwCard(c, status, gesture?.from, gesture?.vx);
         if (status === "approved") clap();
       }
-      if (c.status !== status) patch(c, { status }, { status });
+      if (c.status !== status) patch(c, { status }, { status }).then(refreshTaste);
       buzz(status === "approved" ? 12 : 6);
-      if (phone) setToast({ msg: `${status === "approved" ? "Approved" : "Skipped"} ${clipName(c).toLowerCase()}.`, kind: "ok", at: Date.now(), undo: true });
+      const answer = status === "approved" ? "Post" : "Skip";
+      if (phone) setToast({ msg: `${clipName(c)}: ${answer}.`, kind: "ok", at: Date.now(), undo: true });
       forward.current = !!next;
       setCurrentId(next?.id ?? null);
-      setSaid(`${status === "approved" ? "Approved" : "Skipped"} ${clipName(c).toLowerCase()}. ${next ? `Now ${clipName(next).toLowerCase()}: ${next.hook || ""}` : "Every clip has a decision."}`);
+      setSaid(`${clipName(c)} marked ${answer}. ${next ? `Now ${clipName(next).toLowerCase()}: ${next.why || next.hook || ""}` : "Every clip has an answer."}`);
       if (mode === "blur") setMode("review");
     },
     [cur, mode, nextOf, reduce, patch, phone] // eslint-disable-line react-hooks/exhaustive-deps
@@ -345,6 +351,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
     if (c.start !== h.start) body.start = h.start;
     if (c.end !== h.end) body.end = h.end;
     if (Object.keys(body).length) await patch(c, body, body);
+    if (body.status) refreshTaste();
     setCurrentId(c.id);
     flash(`Back to ${clipName(c).toLowerCase()}.`);
   }, [ranked, patch, flash]);
@@ -438,6 +445,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
       if (mode === "blur" && k === "Escape") return; // the blur tool uses Escape itself
       const map = {
         ArrowRight: () => decide("approved"),
+        p: () => decide("approved"),
         a: () => decide("approved"),
         ArrowLeft: () => decide("skipped"),
         s: () => decide("skipped"),
@@ -613,7 +621,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
             </span>
           )}
           <span className="pile-count">
-            <b>{count}</b> approved
+            <b>{count}</b> to post
             {skipped.length > 0 && <span className="pile-skipped">, {skipped.length} skipped</span>}
           </span>
         </div>
@@ -724,7 +732,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
                       if (res) flash("Kept the cut as it is.");
                     }}
                   />
-                  <span className="lean is-approve" ref={(el) => (leanRef.current.a = el)} aria-hidden="true">Approve</span>
+                  <span className="lean is-approve" ref={(el) => (leanRef.current.a = el)} aria-hidden="true">Post</span>
                   <span className="lean is-skip" ref={(el) => (leanRef.current.s = el)} aria-hidden="true">Skip</span>
                 </Card>
               </div>
@@ -770,12 +778,14 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
                   jobId={job.id}
                   onUndo={undo}
                   topN={topN}
+                  taste={taste}
+                  onResetTaste={resetTaste}
                 />
               )}
             </div>}
           </>
         ) : (
-          <Done job={job} ranked={ranked} approved={approved} rendered={rendered} onPick={pick} onRender={renderNow} rendering={rendering} note={verdictNote} />
+          <Done job={job} ranked={ranked} approved={approved} rendered={rendered} onPick={pick} onRender={renderNow} rendering={rendering} note={verdictNote} taste={taste} onResetTaste={resetTaste} />
         )}
       </main>
 
@@ -797,6 +807,8 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
             fileName={job.source?.name}
             timeline={timeline}
             topN={topN}
+            taste={taste}
+            onResetTaste={resetTaste}
           />
           <DecisionBar ref={barRef} cur={cur} onDecide={(st) => decide(st)} />
         </>
@@ -823,7 +835,7 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
               </p>
             </div>
           )}
-          {g.status === "approved" && <span className="ghost-stamp">Approved</span>}
+          {g.status === "approved" && <span className="ghost-stamp">Post</span>}
         </div>
       ))}
 
@@ -849,18 +861,18 @@ export default function Reel({ job, words, faces, captionsVersion, onCandidate, 
   );
 }
 
-function Controls({ cur, mode, waiting, total, onDecide, onNudge, onTrim, onBlur, blurText, captionsOn, jobId, onUndo, topN }) {
+function Controls({ cur, mode, waiting, total, onDecide, onNudge, onTrim, onBlur, blurText, captionsOn, jobId, onUndo, topN, taste, onResetTaste }) {
   const decided = cur.status !== "proposed";
   return (
     <section className="controls" aria-label="Decide">
       <p className="controls-left">
-        {decided ? (cur.status === "approved" ? "Approved. Skip it if you change your mind." : "Skipped. Approve it to bring it back.") : waiting === total ? `${plural(total, "clip")} to check` : `${waiting} of ${total} still to check`}
+        {decided ? (cur.status === "approved" ? "Marked Post. Skip it if you change your mind." : "Marked Skip. Post it to bring it back.") : waiting === total ? `${plural(total, "clip")} to answer` : `${waiting} of ${total} still to answer`}
       </p>
       <button type="button" className={"decide is-approve" + (cur.status === "approved" ? " is-on" : "")} onClick={() => onDecide("approved")} disabled={mode === "trim"}>
-        <span className="keycap" aria-hidden="true">A</span>
+        <span className="keycap" aria-hidden="true">P</span>
         <span className="decide-text">
-          <b>Approve</b>
-          <small>Keep it for the render</small>
+          <b>Post</b>
+          <small>You would post this</small>
         </span>
         <span className="decide-alt" aria-hidden="true">→</span>
       </button>
@@ -868,7 +880,7 @@ function Controls({ cur, mode, waiting, total, onDecide, onNudge, onTrim, onBlur
         <span className="keycap" aria-hidden="true">S</span>
         <span className="decide-text">
           <b>Skip</b>
-          <small>Leave it out</small>
+          <small>Not this one</small>
         </span>
         <span className="decide-alt" aria-hidden="true">←</span>
       </button>
@@ -909,6 +921,7 @@ function Controls({ cur, mode, waiting, total, onDecide, onNudge, onTrim, onBlur
         </a>
       </div>
       {topN}
+      <TasteNote taste={taste} onReset={onResetTaste} heading={false} />
       <p className="hint">
         <kbd>Space</kbd> play or pause <button type="button" className="hint-undo" onClick={onUndo}><kbd>Z</kbd> undo</button>
       </p>
@@ -916,15 +929,15 @@ function Controls({ cur, mode, waiting, total, onDecide, onNudge, onTrim, onBlur
   );
 }
 
-function Done({ job, ranked, approved, rendered, onPick, onRender, rendering, note }) {
+function Done({ job, ranked, approved, rendered, onPick, onRender, rendering, note, taste, onResetTaste }) {
   return (
     <section className="done" aria-labelledby="done-h">
       <h2 id="done-h" className="done-big">
-        {approved.length ? `${plural(approved.length, "clip")} to render.` : ranked.length ? "No clips approved." : "No clips found."}
+        {approved.length ? `${plural(approved.length, "clip")} to render.` : ranked.length ? "No clips marked Post." : "No clips found."}
       </h2>
       <p className="done-sub">
         {ranked.length
-          ? "You've checked every clip. Pick one to change your mind."
+          ? "You've answered every clip. Pick one to change your mind."
           : note || "Gemma found no moment that starts and ends on a full sentence. Try shorter clips in a new job."}
       </p>
       {ranked.length > 0 && (
@@ -938,7 +951,7 @@ function Done({ job, ranked, approved, rendered, onPick, onRender, rendering, no
                 <span className="done-n mono">{c.rank ?? "+"}</span>
                 <span className="done-hook">{c.hook}</span>
                 <span className="done-time mono">{tc(c.start)}</span>
-                <span className="done-s">{c.status === "approved" ? "Approved" : c.status === "skipped" ? "Skipped" : "To check"}</span>
+                <span className="done-s">{c.status === "approved" ? "Post" : c.status === "skipped" ? "Skip" : "To answer"}</span>
               </button>
             </li>
           ))}
@@ -948,7 +961,7 @@ function Done({ job, ranked, approved, rendered, onPick, onRender, rendering, no
         {ranked.length > 0 ? (
           <>
             <button type="button" className="btn btn-primary btn-render btn-big" disabled={!approved.length || rendering} onClick={onRender}>
-              {approved.length ? `Render ${plural(approved.length, "clip")}` : "Approve a clip to render it"}
+              {approved.length ? `Render ${plural(approved.length, "clip")}` : "Mark a clip Post to render it"}
             </button>
             <a className="btn btn-quiet" href={`#/job/${job.id}/captions`}>Fix caption words first</a>
           </>
@@ -958,6 +971,7 @@ function Done({ job, ranked, approved, rendered, onPick, onRender, rendering, no
             {!inBrowser && <a className="btn btn-quiet" href={`#/job/${job.id}/captions`}>Caption the whole video instead</a>}
           </>
         )}
+        {ranked.length > 0 && <TasteNote taste={taste} onReset={onResetTaste} heading={false} />}
         {rendered > 0 && (
           <a className="btn btn-quiet" href={`#/job/${job.id}/render`}>
             See {plural(rendered, "rendered clip")}

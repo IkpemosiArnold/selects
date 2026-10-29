@@ -1,13 +1,15 @@
 // The review on a phone. The clip fills the screen; the slate becomes a
-// bottom sheet whose top edge is the clap stick. Collapsed, it shows the
-// slate's fields (clip, in, out, length). Pull it up, or tap "Why", to read
-// Gemma's reason and scores and to trim. Skip and Approve sit in a bar under
-// the sheet, where a thumb rests, and follow the card as it is swiped.
+// bottom sheet whose top edge is the clap stick. Collapsed, it leads with why
+// the clip is worth posting, under one short row (which clip, and what Selects
+// has learned of your taste). Pull it up, or tap it, for the opening line, the
+// times, Gemma's scores, your taste and the trim tools. Skip and Post sit in a
+// bar under the sheet, where a thumb rests, and follow the card as it is swiped.
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { tc } from "../../lib/time.js";
 import { setNow, springTo, current as springNow } from "../../lib/spring.js";
 import { rubricFor } from "./util.js";
 import Why from "./Why.jsx";
+import { TasteNote, tasteShort } from "./Taste.jsx";
 
 function Pips({ n }) {
   return (
@@ -27,14 +29,14 @@ export const DecisionBar = forwardRef(function DecisionBar({ cur, onDecide }, re
         Skip
       </button>
       <button type="button" className={"bar-btn is-approve" + (cur.status === "approved" ? " is-on" : "")} onClick={() => onDecide("approved")}>
-        Approve
+        Post
         <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M7 4l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </button>
     </div>
   );
 });
 
-const Sheet = forwardRef(function Sheet({ clip, line, total, waiting, onNudge, onTrim, onBlur, blurText, captionsOn, jobId, timeline, stickRef, fileName, topN = null }, ref) {
+const Sheet = forwardRef(function Sheet({ clip, line, total, waiting, onNudge, onTrim, onBlur, blurText, captionsOn, jobId, timeline, stickRef, fileName, topN = null, taste = null, onResetTaste = null }, ref) {
   const sheetRef = useRef(null);
   const bodyRef = useRef(null);
   const peekRef = useRef(0);
@@ -102,7 +104,7 @@ const Sheet = forwardRef(function Sheet({ clip, line, total, waiting, onNudge, o
 
   // Drag by the stick or the fields row. A tap toggles.
   const onDown = (e) => {
-    if (e.button !== 0 || e.target.closest(".slate-line")) return;
+    if (e.button !== 0 || e.target.closest(".slate-line, .sheet-toggle")) return;
     const el = sheetRef.current;
     drag.current = { y0: e.clientY, from: springNow(el).y, hist: [[e.clientY, performance.now()]], moved: false, id: e.pointerId };
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -140,7 +142,8 @@ const Sheet = forwardRef(function Sheet({ clip, line, total, waiting, onNudge, o
 
   const dur = Math.round(clip.end - clip.start);
   const status = clip.status;
-  const long = line.length > 90 ? " is-long" : line.length > 54 ? " is-mid" : "";
+  const why = clip.why || clip.reason || null;
+  const learned = tasteShort(taste);
   const handle = { onPointerDown: onDown, onPointerMove: onMove, onPointerUp: onUp, onPointerCancel: onUp };
 
   return (
@@ -154,30 +157,11 @@ const Sheet = forwardRef(function Sheet({ clip, line, total, waiting, onNudge, o
         </div>
         <div className="slate-board">
           <div className="sheet-head" {...handle}>
-            <dl className="slate-fields">
-              <div>
-                <dt>Clip</dt>
-                <dd>
-                  {clip.rank ?? "+"}
-                  <small> of {total}</small>
-                </dd>
-              </div>
-              <div className={clip.trimmed ? "is-mine" : ""}>
-                <dt>In</dt>
-                <dd>{tc(clip.start)}</dd>
-              </div>
-              <div className={clip.trimmed ? "is-mine" : ""}>
-                <dt>Out</dt>
-                <dd>{tc(clip.end)}</dd>
-              </div>
-              <div className={clip.trimmed ? "is-mine" : ""}>
-                <dt>Length</dt>
-                <dd>
-                  {dur}
-                  <small> s</small>
-                </dd>
-              </div>
-            </dl>
+            <p className="sheet-meta">
+              <span className="mono">{clip.rank ? `Clip ${clip.rank} of ${total}` : "Your clip"}</span>
+              <span aria-hidden="true"> · </span>
+              <span>{learned || `${dur} s`}</span>
+            </p>
             <button
               type="button"
               className="sheet-toggle"
@@ -186,19 +170,38 @@ const Sheet = forwardRef(function Sheet({ clip, line, total, waiting, onNudge, o
               onClick={() => snap(!openRef.current)}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              <span>{open ? "Close" : "Why"}</span>
+              <span>{open ? "Close" : "More"}</span>
             </button>
+            <p className={"sheet-lead" + (why ? "" : " is-quote")}>{why || line}</p>
           </div>
-          <button type="button" className={"slate-line" + long} onClick={onTrim}>
-            {line}
-          </button>
-          {status !== "proposed" && <p className={"slate-mark is-" + status}>{status === "approved" ? "Approved" : "Skipped"}</p>}
+          {status !== "proposed" && <p className={"slate-mark is-" + status}>{status === "approved" ? "Post" : "Skip"}</p>}
         </div>
         <div className="sheet-body" ref={bodyRef} inert={open ? undefined : ""}>
+          {why && (
+            <div className="sheet-opens">
+              <h2 className="why-h">It opens on</h2>
+              <button type="button" className="slate-line" onClick={onTrim}>
+                {line}
+              </button>
+            </div>
+          )}
+          <dl className="sheet-times">
+            <div className={clip.trimmed ? "is-mine" : ""}>
+              <dt>In</dt>
+              <dd>{tc(clip.start)}</dd>
+            </div>
+            <div className={clip.trimmed ? "is-mine" : ""}>
+              <dt>Out</dt>
+              <dd>{tc(clip.end)}</dd>
+            </div>
+            <div className={clip.trimmed ? "is-mine" : ""}>
+              <dt>Length</dt>
+              <dd>{dur} s</dd>
+            </div>
+          </dl>
           {clip.reason ? (
             <div className="slate-why">
-              <h2 className="why-h">Why post it</h2>
-              <Why clip={clip} />
+              <Why clip={clip} lead={false} />
               {clip.scores && (
                 <>
                   <h3 className="why-h">How Gemma scored it, out of 5</h3>
@@ -220,6 +223,7 @@ const Sheet = forwardRef(function Sheet({ clip, line, total, waiting, onNudge, o
           ) : (
             <p className="slate-reason is-yours">{clip.trimmed ? "You trimmed this clip." : "You made this clip."}</p>
           )}
+          <TasteNote taste={taste} onReset={onResetTaste} />
           <div className="nudge" role="group" aria-label="Move the start or the end by one sentence">
             <p className="nudge-h">Move the start or the end by one sentence</p>
             <div className="nudge-row">
