@@ -571,7 +571,8 @@
   .bar-btn.is-approve.is-on { box-shadow: inset 0 0 0 2px var(--on-yellow); }
   .bar-btn:focus-visible { outline-offset: 3px; }
 
-  .reel.is-phone .toast { bottom: calc(var(--bar-h) + var(--peek-h) + 14px + env(safe-area-inset-bottom, 0px)); }
+  /* the sheet now leads with a few lines of why, so the toast sits under the masthead instead */
+  .reel.is-phone .toast { top: calc(var(--mast-h) + env(safe-area-inset-top, 0px) + 10px); bottom: auto; }
 
   /* trim and blur on a phone: a smaller clip on top, the tool below */
   .reel.is-phone.is-trim .reel-stage, .reel.is-phone.is-blur .reel-stage { grid-template-columns: minmax(0, 1fr); grid-template-areas: "deck" "left" "right"; gap: 14px; }

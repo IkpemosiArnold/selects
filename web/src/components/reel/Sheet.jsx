@@ -244,7 +244,7 @@ const Sheet = forwardRef(function Sheet({ clip, line, total, waiting, onNudge, o
           </div>
           <div className="sheet-where">
             <h3 className="why-h">Where the clips are in {fileName || "the video"}</h3>
-            <p className="sheet-left">{waiting ? `${waiting} still to check` : "You've checked every clip"}</p>
+            <p className="sheet-left">{waiting ? `${waiting} still to answer` : "You've answered every clip"}</p>
             {topN}
             {timeline}
           </div>
