@@ -167,7 +167,7 @@ async function report() {
   const res = {};
   for (const [name, scored] of Object.entries(arms)) {
     const { ranked, ranks } = pickRanks(scored, picks);
-    res[name] = { ranks, ...summary(ranks), top10: ranked.slice(0, 10).map((c) => ({ rank: c.rank, start: c.start, end: c.end, total: +c.total.toFixed(3), hook: c.hook, why: judged.get(c.id)?.why ?? null, others: others.filter((o) => matches(c, o)).map((o) => o.id), picks: picks.filter((p) => matches(c, p)).map((p) => p.id) })), hits: summary(ranks) };
+    res[name] = { ranks, ...summary(ranks), list: ranked.slice(0, 10).map((c) => ({ rank: c.rank, start: c.start, end: c.end, total: +c.total.toFixed(3), hook: c.hook, why: judged.get(c.id)?.why ?? null, others: others.filter((o) => matches(c, o)).map((o) => o.id), picks: picks.filter((p) => matches(c, p)).map((p) => p.id) })) };
   }
   const out = { generatedAt: new Date().toISOString(), windows: W.windows.length, judgeN: W.judgeN.n, missingT, blend: HEAR_BLEND, picks: picks.map((p) => ({ id: p.id, title: p.title, start: p.start, end: p.end })), arms: res };
   writeFileSync(join(OUT, "results.json"), JSON.stringify(out, null, 1));
@@ -176,7 +176,7 @@ async function report() {
   for (const [name, r] of Object.entries(res)) L.push(`| ${name} | ${r.ranks.map((x) => x ?? "not found").join(" | ")} | ${r.top5} | ${r.top10} | ${r.mrr} |`);
   for (const [name, r] of Object.entries(res)) {
     L.push("", `Top 10, ${name}:`);
-    for (const c of r.top10) L.push(`${c.rank}. ${mmss(c.start)} to ${mmss(c.end)}${c.picks.length ? ` [${c.picks.join(", ").toUpperCase()}]` : ""}${c.others.length ? ` (also: ${c.others.join(", ")})` : ""}: ${c.why || (c.hook || "").slice(0, 90)}`);
+    for (const c of r.list) L.push(`${c.rank}. ${mmss(c.start)} to ${mmss(c.end)}${c.picks.length ? ` [${c.picks.join(", ").toUpperCase()}]` : ""}${c.others.length ? ` (also: ${c.others.join(", ")})` : ""}: ${c.why || (c.hook || "").slice(0, 90)}`);
   }
   writeFileSync(join(OUT, "ranks.md"), L.join("\n") + "\n");
   console.log(L.slice(0, Object.keys(res).length + 2).join("\n"));

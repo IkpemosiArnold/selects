@@ -231,10 +231,13 @@ export async function loadGemma3n({ dir = gemma3nDir(), threads = null } = {}) {
   const name = path.basename(dir);
   const opts = { executionProviders: ["cpu"], graphOptimizationLevel: "all", ...(threads ? { intraOpNumThreads: threads, interOpNumThreads: 1 } : {}) };
   const sessions = {};
-  for (const [k, f] of Object.entries(GEMMA3N.sessions)) sessions[k] = await ort.InferenceSession.create(path.join(dir, "onnx", f), opts);
+  for (const [k, f] of Object.entries(GEMMA3N.sessions)) {
+    sessions[k] = await ort.InferenceSession.create(path.join(dir, "onnx", f), opts);
+    sessions[k].config = { dtype: /_q4/.test(f) ? "q4" : "quantized", kv_cache_dtype: "float32", device: "cpu" }; // what transformers.js sets
+  }
   const cfg = await T.AutoConfig.from_pretrained(name);
-  const genCfg = new T.GenerationConfig(readJson(path.join(dir, "generation_config.json"), {}));
-  const model = new T.Gemma3nForConditionalGeneration(cfg, sessions, { generation_config: genCfg });
+  // from_pretrained passes the raw generation_config.json the same way
+  const model = new T.Gemma3nForConditionalGeneration(cfg, sessions, { generation_config: readJson(path.join(dir, "generation_config.json"), {}) });
   const processor = await T.AutoProcessor.from_pretrained(name);
   const digitIds = {};
   for (const d of "123456789") {
