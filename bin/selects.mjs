@@ -8,7 +8,9 @@ import { parseArgs } from "node:util";
 import { FONT_PATH, config, ollamaModels, ollamaUrl, resolveModel, selectsHome, whisperBin, whisperModel } from "../src/core/config.mjs";
 import { attributionLine, licenseCheck, mediaReminder, normaliseLicense } from "../src/core/attribution.mjs";
 import { WEIGHTS, measuredSpeeds } from "../src/core/judge.mjs";
-import { createJob, detectJobFaces, jobDir, jobEvents, listJobs, loadJob, renderJob, resumeJob, runJob, updateCandidate, updateJobSettings } from "../src/core/job.mjs";
+import { createJob, detectJobFaces, jobDir, jobEvents, listJobs, loadJob, renderJob, resumeJob, retasteJob, runJob, saveJob, updateCandidate, updateJobSettings } from "../src/core/job.mjs";
+import { labelsFile, readLabels, resetLabels } from "../src/core/taste-node.mjs";
+import { TASTE_RULE, tasteLine, tasteSummary, trainTaste } from "../src/core/taste.mjs";
 import { editCaptions, loadCaptions, parseSubtitles, toSrt } from "../src/core/captions.mjs";
 import { parseRegion } from "../src/core/blur.mjs";
 import { facesAvailable } from "../src/core/faces.mjs";
@@ -29,12 +31,13 @@ Usage
   selects queue run              work through the queue, one video at a time
   selects queue                  show the queue
   selects jobs                   list jobs
+  selects taste [reset]          what Selects has learned from your Post and Skip answers
   selects serve [--port 4317]    start the local review app
   selects doctor [--json]        show the resolved config; check whisper, Ollama, the judge model and disk
 
 Options
   --model <name>    Ollama model for the judge (default: gemma3:4b, else a local gemma3 tag)
-  --k <n>           how many clips to propose (default 5)
+  --k <n>           how many clips to propose (default 10, none overlapping)
   --made-for <p>    where the clips go: shorts (default: Shorts, Reels or TikTok, 20 to 60 s),
                     linkedin (30 to 90 s, subtitles, no hashtag spam), x (15 to 45 s, one short
                     line), story (60 to 90 s with a setup, a turn and a resolution)
@@ -53,7 +56,10 @@ Options
   --credit <text>   who to credit in each post caption, for example "Jenni, EMF 2026"
   --license <id>    the source's licence, for example CC-BY-SA-4.0 (adds the licence link), or own
   --source-url <u>  where the source video lives (added to the credit)
-  --yes             approve every proposed clip without asking
+  --labels <file>   learn your taste from this file of Post and Skip answers, and add this
+                    job's answers to it (default ~/.selects/taste/labels.json). Answers keep
+                    only the numbers each clip was ranked on, never words or audio
+  --yes             approve every proposed clip without asking (not counted as answers)
   --force           judge clips even when the transcript looks unreliable
 
 Speech and captions (clips and caption mode)
@@ -203,7 +209,7 @@ async function askApprovals(job, { yes }) {
   if (yes) {
     // --yes never posts a cut that changes what the speaker meant: misleading clips stay unapproved
     const ok = job.candidates.filter((c) => !c.demoted);
-    for (const c of ok) updateCandidate(job.id, c.id, { status: "approved" });
+    for (const c of ok) updateCandidate(job.id, c.id, { status: "approved" }, { label: false });
     const held = job.candidates.length - ok.length;
     if (job.verdict && !job.verdict.strong) say(yellow(`None of these is a strong clip; rendering the closest ${ok.length} because of --yes.`));
     say(`Approved ${ok.length === job.candidates.length ? "all " : ""}${ok.length} (--yes).${held ? ` Left out ${held} misleading cut${held === 1 ? "" : "s"}; review ${held === 1 ? "it" : "them"} with selects review ${job.id}.` : ""}`);
@@ -215,7 +221,8 @@ async function askApprovals(job, { yes }) {
     process.exit(2);
   }
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  say("Nothing is cut until you approve it. y approves, n skips, q stops asking (the rest are skipped).");
+  say("Nothing is cut until you approve it. y posts, n skips, q stops asking (the rest stay unanswered).");
+  say(dim("Your answers teach Selects what you post. They stay in a file on this laptop (selects taste)."));
   for (const c of job.candidates) {
     if (c.status !== "proposed") continue;
     // a cut that may change what the speaker meant: offer the fix first, never apply it unasked
@@ -225,7 +232,7 @@ async function askApprovals(job, { yes }) {
       else if (c.faithful.verdict === "misleading") updateCandidate(job.id, c.id, { faithful: "accept" });
     }
     const cur = loadJob(job.id).candidates.find((x) => x.id === c.id);
-    const a = (await rl.question(`Approve clip ${cur.rank} (${tc(cur.start)} to ${tc(cur.end)})? [y/n/q] `)).trim().toLowerCase();
+    const a = (await rl.question(`Post clip ${cur.rank} (${tc(cur.start)} to ${tc(cur.end)})? [y/n/q] `)).trim().toLowerCase();
     if (a === "q") break;
     updateCandidate(job.id, c.id, { status: a === "y" || a === "yes" ? "approved" : "skipped" });
   }
@@ -340,6 +347,7 @@ async function cmdClip(video, values) {
     madeFor: values["made-for"],
     faithful: values.faithful,
     hear: values.hear || undefined,
+    labels: values.labels ? path.resolve(values.labels) : undefined,
     kit: values["plain-kit"] ? "plain" : undefined,
     credit: values.credit,
     license: values.license,
@@ -577,6 +585,16 @@ async function cmdReview(id, values) {
     if (!checkLicense(values.license)) process.exit(1);
     job = updateJobSettings(id, credit);
   }
+  if (values.labels && (job.stage === "ready" || job.stage === "done")) {
+    // rank the judged clips again with this labels file (no model calls)
+    job = retasteJob(id, { labels: path.resolve(values.labels) });
+    say(dim(job.taste?.active ? `Ranked again with your taste: ${tasteLine(job.taste)}.` : `Ranked again. ${tasteLine(job.taste) || "No answers in that file yet"}.`));
+  } else if (values.labels) {
+    // not ranked yet: the ranking will learn from (and add to) this file when it resumes
+    job = loadJob(id);
+    job.settings.labels = path.resolve(values.labels);
+    saveJob(job);
+  }
   if (job.stage !== "ready" && job.stage !== "done") {
     say(`Resuming ${id} from ${job.stage}...`);
     const stop = progressReporter(id);
@@ -592,7 +610,7 @@ async function cmdQueue(sub, files, values) {
     const model = values.model || (await resolveModel());
     for (const f of files) {
       try {
-        const job = createJob(f, { model, k: values.k ? +values.k : undefined, judgeN: values["judge-n"] ? +values["judge-n"] : undefined, madeFor: values["made-for"] });
+        const job = createJob(f, { model, k: values.k ? +values.k : undefined, judgeN: values["judge-n"] ? +values["judge-n"] : undefined, madeFor: values["made-for"], labels: values.labels ? path.resolve(values.labels) : undefined });
         enqueue({ jobId: job.id });
         say(`Queued ${job.source.name} as ${job.id}`);
       } catch (e) {
@@ -617,6 +635,26 @@ async function cmdQueue(sub, files, values) {
   const q = queueState();
   if (!q.items.length) say("The queue is empty.");
   for (const i of q.items) say(`${i.jobId}  ${i.kind}  added ${i.addedAt}`);
+}
+
+/** What the taste model has learned, from the labels file (or --labels). `reset` forgets it. */
+function cmdTaste(sub, values) {
+  const file = labelsFile(values.labels ? { labels: path.resolve(values.labels) } : null);
+  if (sub === "reset") {
+    resetLabels(file);
+    return say(`Forgot every answer in ${file}.`);
+  }
+  const model = trainTaste(readLabels(file));
+  const s = tasteSummary(model);
+  say(`${file}`);
+  say(s.n ? `${s.n} answers: ${s.posts} Post, ${s.skips} Skip.` : "No answers yet. Answer Post or Skip in the review (y or n in the terminal) and Selects learns what you post.");
+  if (!s.n) return;
+  say(tasteLine(s) + ".");
+  if (s.active) say(dim(`It counts for ${Math.round(s.weight * 100)}% of the ranking (at most ${Math.round(TASTE_RULE.maxWeight * 100)}%, growing with your answers).`));
+  if (model.w) {
+    const top = model.features.map((f, j) => [f, model.w[j]]).filter(([, w]) => Math.abs(w) >= 0.01).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 6);
+    if (top.length) say(dim(`What it leans on: ${top.map(([f, w]) => `${f} ${w > 0 ? "+" : ""}${w.toFixed(2)}`).join(", ")}`));
+  }
 }
 
 function cmdJobs() {
@@ -695,6 +733,7 @@ async function main() {
       fresh: { type: "boolean" },
       faithful: { type: "string" },
       hear: { type: "string" },
+      labels: { type: "string" },
       out: { type: "string" },
       port: { type: "string" },
       yes: { type: "boolean", short: "y" },
@@ -739,6 +778,7 @@ async function main() {
   }
   if (cmd === "queue") return cmdQueue(rest[0], rest.slice(1), values);
   if (cmd === "jobs") return cmdJobs();
+  if (cmd === "taste") return cmdTaste(rest[0], values);
   if (cmd === "review") return cmdReview(rest[0], values);
   if (cmd === "caption") {
     if (!rest[0]) return say("Usage: selects caption <video or job-id> [--language en] [--edit | --srt fixed.srt] [--blur-faces others]");

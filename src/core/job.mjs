@@ -26,7 +26,9 @@ import { orderByFaithful } from "./faithful-core.mjs";
 import { plainKit, postingKit as realKit } from "./kit.mjs";
 import { kitSourceFromCaptions } from "./kit-core.mjs";
 import { probe as realProbe } from "./probe.mjs";
-import { applyQualityBar, curve, qualityVerdict, rank } from "./rank.mjs";
+import { applyQualityBar, curve, qualityVerdict, rank, REVIEW_FILL, REVIEW_IOU } from "./rank.mjs";
+import { applyTaste, tasteSummary } from "./taste.mjs";
+import { labelsFile, recordDecision, recordPosted, tasteModel } from "./taste-node.mjs";
 import { hwaccelArgs, render as realRender, renderFull as realRenderFull } from "./render.mjs";
 import { restorePunctuation as realRestorePunctuation } from "./punctuate.mjs";
 import { isSparsePunctuation, snapTrim, toSentences } from "./sentences.mjs";
@@ -736,7 +738,9 @@ async function runStages(id, { deps = {}, signal } = {}) {
         job.listwise = { order: lw.order, reasons: lw.reasons, complete: lw.complete ?? true, sec: +((Date.now() - t0) / 1000).toFixed(1) };
       }
       writeJsonAtomic(path.join(dir, "judged.json"), judged);
-      let ranked = rank(judged, { k: job.settings.k, iou: 0.3 });
+      // the person's own Post and Skip answers (taste.mjs), blended in once there are enough
+      judged = applyJobTaste(job, judged);
+      let ranked = rank(judged, { k: job.settings.k, iou: REVIEW_IOU, fill: REVIEW_FILL });
       // Faithful cuts: does each top pick still say what the speaker meant? (about k model calls)
       const fmode = job.settings.faithful ?? "model";
       if (fmode !== "off" && ranked.length) {
@@ -824,7 +828,7 @@ const STAGE_DOING = { probe: "reading the video", language: "the language check"
  * Change a candidate: approve or skip it, or move its in and out points (snapped to
  * sentence boundaries). Returns the updated candidate.
  */
-export function updateCandidate(id, cid, patch = {}) {
+export function updateCandidate(id, cid, patch = {}, { label = true } = {}) {
   const job = loadJob(id);
   const c = job.candidates.find((x) => x.id === cid);
   if (!c) {
@@ -852,6 +856,8 @@ export function updateCandidate(id, cid, patch = {}) {
       err.status = 400;
       throw err;
     }
+    // a Post or Skip is a taste answer (taste-node.mjs); proposed takes it back
+    if (label && c.status !== patch.status) recordDecision(labelsFile(job.settings), id, c, patch.status, { by: job.settings.labels ? "cli" : "review" });
     c.status = patch.status;
   }
   if (patch.blur !== undefined) {
@@ -888,6 +894,56 @@ export function updateCandidate(id, cid, patch = {}) {
   saveJob(job);
   emit(id, "candidates", { ranked: true, candidates: job.candidates, changed: cid });
   return job.candidates.find((x) => x.id === cid);
+}
+
+/**
+ * The taste model for a job: the labels file it names (--labels) or the default one. Off
+ * when the job's `taste` setting is "off". Returns the candidates with `taste` and `order`
+ * (or as they were), and puts a summary on the job for the review's quiet line.
+ */
+export function applyJobTaste(job, judged) {
+  if (job.settings.taste === "off") {
+    job.taste = null;
+    return applyTaste(judged, null);
+  }
+  const model = tasteModel(labelsFile(job.settings));
+  job.taste = tasteSummary(model);
+  return applyTaste(judged, model);
+}
+
+/**
+ * Rank a judged job again with the current taste answers, without judging anything again
+ * (CLI: selects review <job> --labels <file>). The judged windows come from judged.json; a
+ * clip that was ranked before keeps its faithful check, decision and render. A clip new to
+ * the top has no faithful check (none was run for it). Returns the job.
+ */
+export function retasteJob(id, { labels } = {}) {
+  const job = loadJob(id);
+  if (labels !== undefined) job.settings.labels = labels;
+  const judged = readJson(path.join(jobDir(id), "judged.json"), null);
+  if (!judged?.length) throw Object.assign(new Error(`Job ${id} has not been judged yet.`), { status: 409 });
+  const prev = job.candidates || [];
+  const before = new Map(prev.map((c) => [c.id, c]));
+  let ranked = rank(applyJobTaste(job, judged), { k: job.settings.k, iou: REVIEW_IOU, fill: REVIEW_FILL }).map((c) => (before.get(c.id)?.faithful ? { ...c, faithful: before.get(c.id).faithful } : c));
+  if (ranked.some((c) => c.faithful)) ranked = orderByFaithful(ranked);
+  const bar = applyQualityBar(ranked);
+  job.verdict = bar.verdict;
+  job.decisions = captureDecisions(prev, job.decisions);
+  job.candidates = carryRenders(prev, applyDecisions(bar.candidates, job.decisions, { words: speechOnly(loadWords(id)) }).candidates);
+  saveJob(job);
+  emit(id, "candidates", { ranked: true, candidates: job.candidates, curve: job.curve });
+  return job;
+}
+
+/** { n, posts, skips, active, weight, need } for the default labels file (or a job's). */
+export const tasteStatusFor = (settings = null) => tasteSummary(tasteModel(labelsFile(settings)));
+
+/** A rendered clip saved or shared counts as a Post (it may have been posted without an approve). */
+export function markPosted(id, cid) {
+  const job = loadJob(id);
+  const c = job.candidates.find((x) => x.id === cid);
+  if (!c) throw Object.assign(new Error(`No candidate ${cid} in job ${id}.`), { status: 404 });
+  return recordPosted(labelsFile(job.settings), id, c);
 }
 
 /**

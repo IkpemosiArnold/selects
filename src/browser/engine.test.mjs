@@ -345,3 +345,22 @@ test("one-thread computer: ranked without the judge, the note is frozen in the j
   assert.equal(now.judge.backend, "gemma3-wasm", "judged by the model (its answers may come from the answer cache)");
   assert.ok(now.candidates.every((c) => c.judgedOn !== "prescore"));
 });
+
+test("taste: a Post or Skip in the review is kept on this device, and a saved clip counts as a Post", async () => {
+  const s = await seeded(Engine);
+  const one = await runOnce(Engine, s, fakeBackend({ model: "gemma-a" }));
+  assert.equal(one.job.stage, "ready", one.job.error?.message);
+  assert.ok(one.job.candidates.length >= 2);
+  assert.deepEqual(one.job.taste, { n: 0, posts: 0, skips: 0, active: false, weight: 0, need: 8 }, "the job says what the ranking learned from");
+  const [a, b] = one.job.candidates;
+  one.engine.patchCandidate(one.job.id, a.id, { status: "approved" });
+  one.engine.patchCandidate(one.job.id, b.id, { status: "skipped" });
+  await one.engine.idle(one.job.id);
+  const s1 = await one.engine.taste.status();
+  assert.equal(s1.posts, 1);
+  assert.equal(s1.skips, 1);
+  await one.engine.markPosted(one.job.id, b.id);
+  assert.equal((await one.engine.taste.status()).posts, 2, "saving or sharing the render is a Post");
+  const labels = await one.engine.taste.labels();
+  assert.ok(labels.every((x) => !JSON.stringify(x).includes(a.hook)), "no words stored");
+});

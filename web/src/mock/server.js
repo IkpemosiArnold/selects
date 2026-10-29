@@ -11,10 +11,12 @@
 //   lang=yo                a new job's language check disagrees with the setting
 //   clips=50&dur=7316      the demo job has 50 clips over a 2 hour video (either alone works too)
 //   audio=1                the demo job is an audio-only recording (its clips become audiograms)
+//   taste=12               12 Post and Skip answers already given (the review's quiet line)
 import { buildTalk, makeJob, MEASURED, attributionFor, spreadCandidates } from "./fixture.js";
 import { frameSvg } from "./frames.js";
 import { cuesFromWords, applyCueEdits, toSrt, toVtt, accentedWords } from "./captions.js";
 import { needsMediaReminder } from "../lib/licences.js";
+import { labelForStatus, labelRecord, tasteSummary, trainTaste, upsertLabel } from "../../../src/core/taste.mjs";
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -93,6 +95,8 @@ export function createMockApi(params) {
   }
   // a recording with no picture: no filmstrip, and the review shows the audiogram
   const audioDemo = params.get("audio") === "1";
+  // answers already given, for the review's quiet line (?taste=12: 12 answers, both kinds)
+  let tasteLabels = Array.from({ length: Math.max(0, Math.min(200, Math.floor(Number(params.get("taste")) || 0))) }, (_, i) => ({ k: `demo:${i}`, job: "demo", label: i % 3 ? "skip" : "post", by: "review", at: "2026-10-29T00:00:00.000Z", f: { moment: 2 + (i % 4), share: 3, hook: 2 + (i % 3), standalone: 4, pre: 0.4 + (i % 5) / 20, len: 0.5 + (i % 4) / 8, peak: i % 2 } }));
   if (audioDemo) {
     demo.source = { ...demo.source, name: "voice-memo.m4a", hasVideo: false, width: 0, height: 0, uprightWidth: 0, uprightHeight: 0, fps: null };
     demo.thumbs = null;
@@ -527,10 +531,29 @@ export function createMockApi(params) {
       }
       return summary(newJob(id, path, settings));
     },
+    // Taste (src/core/taste.mjs): the demo counts answers in memory. ?taste=12 starts with 12.
+    async taste() {
+      await wait(40);
+      return tasteSummary(trainTaste(tasteLabels));
+    },
+    async resetTaste() {
+      await wait(60);
+      tasteLabels = [];
+      return tasteSummary(trainTaste(tasteLabels));
+    },
+    async markPosted(id, cid) {
+      const c = jobs.get(id)?.candidates.find((x) => x.id === cid);
+      if (c) tasteLabels = upsertLabel(tasteLabels, labelRecord(id, c, "post", { by: "download" }));
+      return tasteSummary(trainTaste(tasteLabels));
+    },
     async patchCandidate(id, cid, body) {
       await wait(140);
       const job = jobs.get(id);
       const c = job.candidates.find((x) => x.id === cid);
+      if (body.status && body.status !== c.status) {
+        const label = labelForStatus(body.status);
+        tasteLabels = upsertLabel(tasteLabels, label ? labelRecord(id, c, label) : { k: `${id}:${c.id}`, label: null });
+      }
       if (body.status) c.status = body.status;
       if (body.faithful === "accept" && c.faithful) c.faithful = { ...c.faithful, accepted: true };
       if (body.faithful === "reset" && c.faithful) {

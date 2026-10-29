@@ -8,7 +8,8 @@ import { fileURLToPath } from "node:url";
 import { REPO, asrModels, ollamaModels, ollamaUrl, selectsHome, whisperBin, whisperModel } from "../core/config.mjs";
 import { measuredSpeeds } from "../core/judge.mjs";
 import { editCaptions, loadCaptions, resetCaptions, toSrt, toVtt } from "../core/captions.mjs";
-import { approveTop, confirmLanguage, createJob, detectJobFaces, jobCoverFile, refreshStale, setJobCover, isRunning, jobDir, jobEvents, listJobs, loadJob, loadWords, resetTranscript, retryKit, saveJob, updateCandidate, updateJobSettings } from "../core/job.mjs";
+import { approveTop, confirmLanguage, createJob, detectJobFaces, jobCoverFile, markPosted, refreshStale, setJobCover, isRunning, jobDir, jobEvents, listJobs, loadJob, loadWords, resetTranscript, retryKit, saveJob, tasteStatusFor, updateCandidate, updateJobSettings } from "../core/job.mjs";
+import { labelsFile, resetLabels } from "../core/taste-node.mjs";
 import { LOW_P } from "../core/quality.mjs";
 import { loadProfiles } from "../core/profiles.mjs";
 import { hwaccelArgs } from "../core/render.mjs";
@@ -106,7 +107,7 @@ function cors(req, res) {
   if (origin && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "content-type");
   }
   return !origin || res.hasHeader("Access-Control-Allow-Origin");
@@ -386,6 +387,18 @@ async function route(req, res) {
     if (isRunning(job.id)) throw new HttpError(409, "This job is still rendering.", "Try the kit again when the render queue is done.");
     retryKit(job.id, c.id).catch(() => {}); // the outcome is in render.kitStatus and the render events
     return sendJson(res, 202, { queued: true, id: c.id });
+  }
+  // Taste (taste.mjs): what the Post and Skip answers in the local labels file add up to, and forgetting them
+  if (p === "/api/taste" && method === "GET") return sendJson(res, 200, tasteStatusFor());
+  if (p === "/api/taste" && method === "DELETE") return sendJson(res, 200, resetLabels(labelsFile()));
+  // a rendered clip saved or shared counts as a Post
+  if ((r = m(/^\/api\/jobs\/([^/]+)\/candidates\/([^/]+)\/posted$/)) && method === "POST") {
+    getJob(r[1]);
+    try {
+      return sendJson(res, 200, markPosted(r[1], r[2]));
+    } catch (e) {
+      throw new HttpError(e.status || 400, e.message, e.hint);
+    }
   }
   if ((r = m(/^\/api\/jobs\/([^/]+)\/candidates\/([^/]+)$/)) && method === "PATCH") {
     getJob(r[1]);

@@ -194,13 +194,15 @@ export const PROMPTS_DIR = path.join(REPO, "src/core/prompts");
 
 export const DEFAULT_SETTINGS = {
   model: null, // resolved at run time by resolveModel()
-  k: 5,
+  k: 10, // about ten distinct clips to answer Post or Skip on (taste.mjs learns from the answers)
   minLen: 20,
   maxLen: 60,
   preset: "shorts",
   madeFor: "shorts", // where the clips go: "shorts" (Shorts, Reels or TikTok), "linkedin", "x" or "story"; sets the length range, the caption style and the kit's format
   judgeN: null, // how many pre-scored windows the LLM judge reads (the slow step on a CPU); null = auto, scaled with k and the length and capped by a time budget (judgeCount in select.mjs)
   listwise: true, // a final side-by-side round on the best few clips (one extra model call)
+  taste: "auto", // the person's own Post and Skip answers join the ranking once there are enough (taste.mjs): "auto" or "off"
+  labels: null, // the labels file to learn from and add to; null is ~/.selects/taste/labels.json (--labels)
   hear: null, // the hearing judge (hear-node.mjs): null (off), "cues" (laughter, overlap, loudness) or "gemma3n" (Gemma 3n listens; opt-in, slow on a CPU)
   faithful: "model", // check each top pick still says what the speaker meant: "model" (one call per pick), "rules" (no model) or "off"
   credit: null, // who to credit in each posting kit, for example "Jenni, EMF 2026"
